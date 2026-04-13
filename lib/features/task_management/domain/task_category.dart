@@ -76,6 +76,54 @@ const taskCategoryIconOptions = [
     label: 'Favorite',
   ),
   TaskCategoryIconOption(key: 'home', icon: TablerIcons.home, label: 'Home'),
+  TaskCategoryIconOption(key: 'bolt', icon: TablerIcons.bolt, label: 'Focus'),
+  TaskCategoryIconOption(
+    key: 'calendar',
+    icon: TablerIcons.calendar_event,
+    label: 'Events',
+  ),
+  TaskCategoryIconOption(
+    key: 'device_laptop',
+    icon: TablerIcons.device_laptop,
+    label: 'Tech',
+  ),
+  TaskCategoryIconOption(
+    key: 'plane',
+    icon: TablerIcons.plane,
+    label: 'Travel',
+  ),
+  TaskCategoryIconOption(
+    key: 'receipt',
+    icon: TablerIcons.receipt,
+    label: 'Bills',
+  ),
+  TaskCategoryIconOption(key: 'movie', icon: TablerIcons.movie, label: 'Media'),
+  TaskCategoryIconOption(
+    key: 'palette',
+    icon: TablerIcons.palette,
+    label: 'Creative',
+  ),
+  TaskCategoryIconOption(
+    key: 'barbell',
+    icon: TablerIcons.barbell,
+    label: 'Fitness',
+  ),
+  TaskCategoryIconOption(
+    key: 'friends',
+    icon: TablerIcons.friends,
+    label: 'Social',
+  ),
+  TaskCategoryIconOption(
+    key: 'chef_hat',
+    icon: TablerIcons.chef_hat,
+    label: 'Food',
+  ),
+  TaskCategoryIconOption(
+    key: 'plant',
+    icon: TablerIcons.plant_2,
+    label: 'Garden',
+  ),
+  TaskCategoryIconOption(key: 'tools', icon: TablerIcons.tools, label: 'Fixes'),
 ];
 
 IconData resolveTaskCategoryIcon(String iconKey) {
@@ -89,10 +137,11 @@ IconData resolveTaskCategoryIcon(String iconKey) {
 }
 
 const taskCategoryColorOptions = [
-  Color(0xFF1E88E5),
+  Color(0xFF066FD1),
+  Color(0xFF90CAF9),
+  Color(0xFFE6F0FA),
   Color(0xFF0CA678),
   Color(0xFFF59F00),
   Color(0xFFD63939),
   Color(0xFF6B7280),
-  Color(0xFF7C3AED),
 ];

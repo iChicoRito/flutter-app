@@ -6,13 +6,7 @@ import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 import 'task_editor_screen.dart';
 import 'task_management_controller.dart';
-
-const _primaryBlue = Color(0xFF066FD1);
-const _accentBlue = Color(0xFFE6F0FA);
-const _badgeSecondaryText = Color(0xFF999999);
-const _dangerText = Color(0xFFD63939);
-const _darkText = Color(0xFF333333);
-const _borderColor = Color(0xFFE5E8EC);
+import 'task_management_ui.dart';
 
 class TaskManagementScreen extends StatefulWidget {
   const TaskManagementScreen({super.key, required this.repository});
@@ -105,21 +99,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete task?'),
-          content: Text('Remove "${task.title}" from your local task list?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: _dangerText),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
+        return _DeleteTaskDialog(taskTitle: task.title);
       },
     );
 
@@ -142,7 +122,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: TaskManagementScreen.markerKey,
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: taskSurface,
       body: SafeArea(
         child: AnimatedBuilder(
           animation: _controller,
@@ -161,7 +141,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             }
 
             return RefreshIndicator(
-              color: _primaryBlue,
+              color: taskPrimaryBlue,
               onRefresh: _controller.load,
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
@@ -170,68 +150,76 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                     controller: _searchController,
                     onChanged: _controller.updateSearchQuery,
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Filter',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: _darkText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _CompactDropdown<String?>(
-                          buttonKey: TaskManagementScreen.categoryDropdownKey,
-                          menuKeyBuilder: (value) =>
-                              Key('task-category-dropdown-${value ?? 'all'}'),
-                          currentValue: _controller.categoryFilterId,
-                          currentLabel: _controller.categoryFilterId == null
-                              ? 'All Categories'
-                              : (_controller
-                                        .categoryFor(
-                                          _controller.categoryFilterId!,
-                                        )
-                                        ?.name ??
-                                    'All Categories'),
-                          onSelected: _controller.updateCategoryFilter,
-                          items: [
-                            null,
-                            ..._controller.categories.map((item) => item.id),
-                          ],
-                          labelBuilder: (value) => value == null
-                              ? 'All Categories'
-                              : (_controller.categoryFor(value)?.name ??
-                                    'All Categories'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _CompactDropdown<TaskPriority?>(
-                          buttonKey: TaskManagementScreen.priorityDropdownKey,
-                          menuKeyBuilder: (value) =>
-                              TaskManagementScreen.priorityFilterKey(
-                                value?.name ?? 'all',
+                  const SizedBox(height: 16),
+                  TaskSectionCard(
+                    title: 'Filters',
+                    subtitle: 'Narrow the task list by category or urgency.',
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TaskCompactDropdown<String?>(
+                                buttonKey:
+                                    TaskManagementScreen.categoryDropdownKey,
+                                menuKeyBuilder: (value) => Key(
+                                  'task-category-dropdown-${value ?? 'all'}',
+                                ),
+                                currentValue: _controller.categoryFilterId,
+                                currentLabel:
+                                    _controller.categoryFilterId == null
+                                    ? 'All Categories'
+                                    : (_controller
+                                              .categoryFor(
+                                                _controller.categoryFilterId!,
+                                              )
+                                              ?.name ??
+                                          'All Categories'),
+                                onSelected: _controller.updateCategoryFilter,
+                                items: [
+                                  null,
+                                  ..._controller.categories.map(
+                                    (item) => item.id,
+                                  ),
+                                ],
+                                labelBuilder: (value) => value == null
+                                    ? 'All Categories'
+                                    : (_controller.categoryFor(value)?.name ??
+                                          'All Categories'),
                               ),
-                          currentValue: _controller.priorityFilter,
-                          currentLabel: _controller.priorityFilter == null
-                              ? 'Priority'
-                              : _priorityLabel(_controller.priorityFilter!),
-                          onSelected: _controller.updatePriorityFilter,
-                          items: [null, ...TaskPriority.values],
-                          labelBuilder: (value) => value == null
-                              ? 'Priority'
-                              : _priorityLabel(value),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TaskCompactDropdown<TaskPriority?>(
+                                buttonKey:
+                                    TaskManagementScreen.priorityDropdownKey,
+                                menuKeyBuilder: (value) =>
+                                    TaskManagementScreen.priorityFilterKey(
+                                      value?.name ?? 'all',
+                                    ),
+                                currentValue: _controller.priorityFilter,
+                                currentLabel: _controller.priorityFilter == null
+                                    ? 'Priority'
+                                    : _priorityLabel(
+                                        _controller.priorityFilter!,
+                                      ),
+                                onSelected: _controller.updatePriorityFilter,
+                                items: [null, ...TaskPriority.values],
+                                labelBuilder: (value) => value == null
+                                    ? 'Priority'
+                                    : _priorityLabel(value),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _CategoryFilterRow(
-                    categories: _controller.categories,
-                    selectedCategoryId: _controller.categoryFilterId,
-                    onSelected: _controller.updateCategoryFilter,
+                        const SizedBox(height: 12),
+                        _CategoryFilterRow(
+                          categories: _controller.categories,
+                          selectedCategoryId: _controller.categoryFilterId,
+                          onSelected: _controller.updateCategoryFilter,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (filteredTasks.isEmpty)
@@ -269,7 +257,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       floatingActionButton: FloatingActionButton.extended(
         key: TaskManagementScreen.addTaskFabKey,
         onPressed: _controller.isSaving ? null : _openEditor,
-        backgroundColor: _primaryBlue,
+        backgroundColor: taskPrimaryBlue,
         foregroundColor: Colors.white,
         elevation: 2,
         icon: const Icon(TablerIcons.plus, size: 18),
@@ -278,7 +266,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     );
   }
 
-  String _priorityLabel(TaskPriority priority) {
+  static String _priorityLabel(TaskPriority priority) {
     return switch (priority) {
       TaskPriority.low => 'Low',
       TaskPriority.medium => 'Medium',
@@ -300,96 +288,13 @@ class _SearchField extends StatelessWidget {
       key: TaskManagementScreen.searchFieldKey,
       controller: controller,
       onChanged: onChanged,
-      decoration: InputDecoration(
+      decoration: taskInputDecoration(
+        context: context,
         hintText: 'Search tasks, notes, categories',
-        hintStyle: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: _badgeSecondaryText),
         prefixIcon: const Icon(
           TablerIcons.search,
           size: 18,
-          color: _badgeSecondaryText,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: _borderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: _borderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: _primaryBlue),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactDropdown<T> extends StatelessWidget {
-  const _CompactDropdown({
-    required this.buttonKey,
-    required this.menuKeyBuilder,
-    required this.currentValue,
-    required this.currentLabel,
-    required this.onSelected,
-    required this.items,
-    required this.labelBuilder,
-  });
-
-  final Key buttonKey;
-  final Key Function(T value) menuKeyBuilder;
-  final T currentValue;
-  final String currentLabel;
-  final ValueChanged<T> onSelected;
-  final List<T> items;
-  final String Function(T value) labelBuilder;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<T>(
-      key: buttonKey,
-      initialValue: currentValue,
-      onSelected: onSelected,
-      itemBuilder: (context) {
-        return items.map((item) {
-          return PopupMenuItem<T>(
-            key: menuKeyBuilder(item),
-            value: item,
-            child: Text(labelBuilder(item)),
-          );
-        }).toList();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _borderColor),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                currentLabel,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: _darkText,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              TablerIcons.chevron_down,
-              size: 14,
-              color: _badgeSecondaryText,
-            ),
-          ],
+          color: taskMutedText,
         ),
       ),
     );
@@ -421,7 +326,7 @@ class _CategoryFilterRow extends StatelessWidget {
               icon: TablerIcons.check,
               iconColor: selectedCategoryId == null
                   ? Colors.white
-                  : _badgeSecondaryText,
+                  : taskMutedText,
               selected: selectedCategoryId == null,
               onTap: () => onSelected(null),
             ),
@@ -435,7 +340,7 @@ class _CategoryFilterRow extends StatelessWidget {
                 icon: resolveTaskCategoryIcon(category.iconKey),
                 iconColor: selectedCategoryId == category.id
                     ? Colors.white
-                    : _badgeSecondaryText,
+                    : taskMutedText,
                 selected: selectedCategoryId == category.id,
                 onTap: () {
                   onSelected(
@@ -473,24 +378,26 @@ class _CategoryChip extends StatelessWidget {
     return InkWell(
       key: chipKey,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? _primaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? _primaryBlue : _borderColor),
+          color: selected ? taskPrimaryBlue : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? taskPrimaryBlue : taskBorderColor,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 12, color: iconColor),
+            Icon(icon, size: 13, color: iconColor),
             const SizedBox(width: 6),
             Text(
               label,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected ? Colors.white : _badgeSecondaryText,
-                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : taskSecondaryText,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -518,23 +425,26 @@ class _TaskCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  static const double _contentSpacing = 8;
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = category?.color ?? _primaryBlue;
+    final accentColor = category?.color ?? taskPrimaryBlue;
     final description = (task.description?.trim().isNotEmpty ?? false)
         ? task.description!.trim()
         : 'No additional notes yet.';
+    final scheduleLabel = _scheduleLabel(task, context);
+    final borderColor = showCheckbox ? taskPrimaryBlue : taskBorderColor;
 
     return GestureDetector(
       onLongPress: onLongPress,
       child: Container(
         key: TaskManagementScreen.taskTileKey(task.id),
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: _borderColor),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: borderColor, width: showCheckbox ? 1.6 : 1),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,16 +454,16 @@ class _TaskCard extends StatelessWidget {
               child: showCheckbox
                   ? Padding(
                       key: ValueKey(task.id),
-                      padding: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.only(top: 6, right: 14),
                       child: Theme(
                         data: Theme.of(context).copyWith(
                           checkboxTheme: CheckboxThemeData(
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             side: const BorderSide(
-                              color: _badgeSecondaryText,
-                              width: 1.3,
+                              color: taskMutedText,
+                              width: 1.6,
                             ),
                           ),
                         ),
@@ -570,22 +480,25 @@ class _TaskCard extends StatelessWidget {
                     )
                   : const SizedBox.shrink(key: ValueKey('hidden-checkbox')),
             ),
-            if (showCheckbox) const SizedBox(width: 12),
+            if (showCheckbox) const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: Text(
                           task.title,
-                          style: Theme.of(context).textTheme.headlineMedium
+                          style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
-                                color: _darkText,
+                                color: taskDarkText,
                                 fontWeight: FontWeight.w700,
-                                height: 1,
+                                height: 1.05,
+                                decoration: task.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
                               ),
                         ),
                       ),
@@ -596,10 +509,16 @@ class _TaskCard extends StatelessWidget {
                           minHeight: 24,
                         ),
                         padding: EdgeInsets.zero,
-                        icon: const Icon(
-                          TablerIcons.dots_vertical,
-                          size: 20,
-                          color: _badgeSecondaryText,
+                        position: PopupMenuPosition.under,
+                        color: Colors.white,
+                        surfaceTintColor: Colors.white,
+                        child: const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Icon(
+                            TablerIcons.dots_vertical,
+                            size: 20,
+                            color: taskMutedText,
+                          ),
                         ),
                         onSelected: (value) {
                           switch (value) {
@@ -632,53 +551,51 @@ class _TaskCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                if (category != null)
-                  Transform.translate(
-                    offset: const Offset(0, -5),
-                    child: _CategoryBadge(category: category!),
-                  ),
-                const SizedBox(height: 2),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 3,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: accentColor,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        description,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _badgeSecondaryText,
-                          height: 1.1,
-                          fontWeight: FontWeight.w500,
+                  if (category != null) ...[
+                    const SizedBox(height: _contentSpacing),
+                    _CategoryBadge(category: category!),
+                  ],
+                  const SizedBox(height: _contentSpacing),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: BorderRadius.circular(999),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    task.dueDateTime != null
-                        ? _dueLabel(task.dueDateTime!, context)
-                        : 'No due date',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: _badgeSecondaryText,
-                      fontWeight: FontWeight.w700,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          description,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: taskMutedText,
+                                height: 1.2,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      scheduleLabel,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: taskMutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             ),
           ],
         ),
@@ -686,13 +603,46 @@ class _TaskCard extends StatelessWidget {
     );
   }
 
-  String _dueLabel(DateTime value, BuildContext context) {
-    final localizations = MaterialLocalizations.of(context);
-    final time = localizations.formatTimeOfDay(
+  String _scheduleLabel(TaskItem task, BuildContext context) {
+    final start = task.startDateTime;
+    final end = task.endDateTime;
+    if (start == null && end == null) {
+      return 'No schedule';
+    }
+
+    if (start != null && end != null) {
+      if (_isSameDate(start, end)) {
+        return '${_formatDate(start)} • ${_formatTime(end, context)}';
+      }
+      return '${_formatDate(start)} - ${_formatDateTime(end, context)}';
+    }
+
+    if (start != null) {
+      return 'Starts ${_formatDateTime(start, context)}';
+    }
+
+    return 'Ends ${_formatDateTime(end!, context)}';
+  }
+
+  bool _isSameDate(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  String _formatDate(DateTime value) {
+    return '${value.month}/${value.day}/${value.year % 100}';
+  }
+
+  String _formatTime(DateTime value, BuildContext context) {
+    return MaterialLocalizations.of(context).formatTimeOfDay(
       TimeOfDay(hour: value.hour, minute: value.minute),
       alwaysUse24HourFormat: false,
     );
-    return '${value.month}/${value.day}/${value.year} - $time';
+  }
+
+  String _formatDateTime(DateTime value, BuildContext context) {
+    return '${_formatDate(value)} • ${_formatTime(value, context)}';
   }
 }
 
@@ -706,7 +656,7 @@ class _CategoryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: category.color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
@@ -716,13 +666,13 @@ class _CategoryBadge extends StatelessWidget {
         children: [
           Icon(
             resolveTaskCategoryIcon(category.iconKey),
-            size: 11,
+            size: 12,
             color: category.color,
           ),
-          const SizedBox(width: 5),
+          const SizedBox(width: 6),
           Text(
             '${category.name} Category',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: category.color,
               fontWeight: FontWeight.w700,
             ),
@@ -744,7 +694,7 @@ class _EmptyState extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: taskBorderColor),
       ),
       child: Column(
         children: [
@@ -752,27 +702,171 @@ class _EmptyState extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: _accentBlue,
+              color: taskAccentBlue,
               borderRadius: BorderRadius.circular(24),
             ),
-            child: const Icon(TablerIcons.notes, size: 34, color: _primaryBlue),
+            child: const Icon(
+              TablerIcons.notes,
+              size: 34,
+              color: taskPrimaryBlue,
+            ),
           ),
           const SizedBox(height: 18),
           Text(
             'No tasks yet',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: _darkText,
+              color: taskDarkText,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             'Start by adding your first task to build your offline productivity hub.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: _badgeSecondaryText,
-              height: 1.5,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: taskMutedText, height: 1.5),
             textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteTaskDialog extends StatelessWidget {
+  const _DeleteTaskDialog({required this.taskTitle});
+
+  final String taskTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Delete Task',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: taskDarkText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Review the action before removing this task from your local list.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: taskSecondaryText,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  icon: const Icon(
+                    TablerIcons.x,
+                    size: 18,
+                    color: taskMutedText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: taskBorderColor),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: taskSurface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: taskBorderColor),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Task',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: taskSecondaryText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        taskTitle,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: taskDarkText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'This action will permanently remove the task from your device.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: taskSecondaryText,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: taskBorderColor),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: taskSecondaryText,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: taskDangerText,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Delete'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -794,19 +888,23 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(TablerIcons.alert_circle, size: 36, color: _dangerText),
+            const Icon(
+              TablerIcons.alert_circle,
+              size: 36,
+              color: taskDangerText,
+            ),
             const SizedBox(height: 12),
             Text(
               message,
               style: Theme.of(
                 context,
-              ).textTheme.bodyLarge?.copyWith(color: _darkText),
+              ).textTheme.bodyLarge?.copyWith(color: taskDarkText),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             FilledButton(
               key: TaskManagementScreen.retryButtonKey,
-              style: FilledButton.styleFrom(backgroundColor: _primaryBlue),
+              style: FilledButton.styleFrom(backgroundColor: taskPrimaryBlue),
               onPressed: onRetry,
               child: const Text('Retry'),
             ),

@@ -7,9 +7,9 @@ import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dar
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/splash/presentation/splash_screen.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
+import 'package:flutter_app/features/task_management/domain/task_item.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
-import 'package:flutter_app/features/task_management/domain/task_item.dart';
 
 void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
@@ -82,10 +82,7 @@ void main() {
     expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(DashboardScreen.nameFieldKey),
-      'Mark',
-    );
+    await tester.enterText(find.byKey(DashboardScreen.nameFieldKey), 'Mark');
     await tester.pump();
     await tester.tap(find.byKey(DashboardScreen.nameSaveButtonKey));
     await tester.pumpAndSettle();
@@ -194,6 +191,8 @@ void main() {
       find.byKey(TaskEditorScreen.descriptionFieldKey),
       'Review metrics and send the summary.',
     );
+    expect(find.byKey(TaskEditorScreen.startDateButtonKey), findsOneWidget);
+    expect(find.byKey(TaskEditorScreen.endDateButtonKey), findsOneWidget);
     await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
     await tester.pumpAndSettle();
 
@@ -287,7 +286,7 @@ void main() {
           categoryId: 'personal',
           createdAt: now.subtract(const Duration(days: 1)),
           updatedAt: now.subtract(const Duration(days: 1)),
-          dueDate: now.subtract(const Duration(days: 1)),
+          endDate: now.subtract(const Duration(days: 1)),
         ),
       ],
     );
@@ -326,6 +325,104 @@ void main() {
     await tester.tap(find.byKey(TaskManagementScreen.allCategoriesKey));
     await tester.pumpAndSettle();
     expect(find.text('Book annual checkup'), findsOneWidget);
+  });
+
+  testWidgets('task editor shows saved schedule values for editing', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime(2026, 4, 13, 9);
+    final task = TaskItem(
+      id: 'scheduled-task',
+      title: 'Run workshop',
+      description: 'Finalize the prep list.',
+      priority: TaskPriority.high,
+      categoryId: 'work',
+      createdAt: now,
+      updatedAt: now,
+      startDate: DateTime(2026, 4, 15),
+      startMinutes: 9 * 60,
+      endDate: DateTime(2026, 4, 15),
+      endMinutes: 11 * 60,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TaskEditorScreen(
+          repository: taskRepository,
+          categories: await taskRepository.getCategories(),
+          initialTask: task,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apr 15, 2026'), findsNWidgets(2));
+    expect(find.text('9:00 AM'), findsOneWidget);
+    expect(find.text('11:00 AM'), findsOneWidget);
+  });
+
+  testWidgets('task editor blocks save when end schedule is before start', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime(2026, 4, 13, 9);
+    final task = TaskItem(
+      id: 'invalid-schedule',
+      title: 'Broken schedule',
+      priority: TaskPriority.medium,
+      categoryId: 'work',
+      createdAt: now,
+      updatedAt: now,
+      startDate: DateTime(2026, 4, 15),
+      startMinutes: 10 * 60,
+      endDate: DateTime(2026, 4, 15),
+      endMinutes: 9 * 60,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TaskEditorScreen(
+          repository: taskRepository,
+          categories: await taskRepository.getCategories(),
+          initialTask: task,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+    await tester.pump();
+
+    expect(
+      find.text(
+        'End schedule must be later than or equal to the start schedule.',
+      ),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('create category dialog uses structured modal sections', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TaskEditorScreen(
+          repository: taskRepository,
+          categories: await taskRepository.getCategories(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskEditorScreen.addCategoryButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Category'), findsOneWidget);
+    expect(find.text('Category Name'), findsOneWidget);
+    expect(find.text('Icon'), findsOneWidget);
+    expect(find.text('Color Selection'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Create'), findsOneWidget);
+    expect(find.text('Work'), findsNothing);
   });
 }
 

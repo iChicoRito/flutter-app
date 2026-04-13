@@ -6,7 +6,7 @@ import '../domain/task_repository.dart';
 
 enum TaskListStatusFilter { all, pending, completed, overdue }
 
-enum TaskSortOption { createdNewest, dueDate, priority }
+enum TaskSortOption { createdNewest, endDate, priority }
 
 class TaskManagementController extends ChangeNotifier {
   TaskManagementController(this._repository);

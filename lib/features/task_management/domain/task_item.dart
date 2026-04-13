@@ -11,8 +11,10 @@ class TaskItem {
     required this.createdAt,
     required this.updatedAt,
     this.description,
-    this.dueDate,
-    this.dueMinutes,
+    this.startDate,
+    this.startMinutes,
+    this.endDate,
+    this.endMinutes,
     this.isCompleted = false,
     this.completedAt,
   });
@@ -20,8 +22,10 @@ class TaskItem {
   final String id;
   final String title;
   final String? description;
-  final DateTime? dueDate;
-  final int? dueMinutes;
+  final DateTime? startDate;
+  final int? startMinutes;
+  final DateTime? endDate;
+  final int? endMinutes;
   final TaskPriority priority;
   final String categoryId;
   final bool isCompleted;
@@ -29,16 +33,31 @@ class TaskItem {
   final DateTime updatedAt;
   final DateTime? completedAt;
 
-  DateTime? get dueDateTime {
-    if (dueDate == null) {
+  DateTime? get startDateTime {
+    if (startDate == null) {
       return null;
     }
 
-    final minutes = dueMinutes ?? 0;
+    final minutes = startMinutes ?? 0;
     return DateTime(
-      dueDate!.year,
-      dueDate!.month,
-      dueDate!.day,
+      startDate!.year,
+      startDate!.month,
+      startDate!.day,
+      minutes ~/ 60,
+      minutes % 60,
+    );
+  }
+
+  DateTime? get endDateTime {
+    if (endDate == null) {
+      return null;
+    }
+
+    final minutes = endMinutes ?? 0;
+    return DateTime(
+      endDate!.year,
+      endDate!.month,
+      endDate!.day,
       minutes ~/ 60,
       minutes % 60,
     );
@@ -49,8 +68,8 @@ class TaskItem {
       return TaskStatus.completed;
     }
 
-    final due = dueDateTime;
-    if (due != null && due.isBefore(now)) {
+    final end = endDateTime;
+    if (end != null && end.isBefore(now)) {
       return TaskStatus.overdue;
     }
 
@@ -61,10 +80,14 @@ class TaskItem {
     String? id,
     String? title,
     String? description,
-    DateTime? dueDate,
-    int? dueMinutes,
-    bool clearDueDate = false,
-    bool clearDueMinutes = false,
+    DateTime? startDate,
+    int? startMinutes,
+    bool clearStartDate = false,
+    bool clearStartMinutes = false,
+    DateTime? endDate,
+    int? endMinutes,
+    bool clearEndDate = false,
+    bool clearEndMinutes = false,
     TaskPriority? priority,
     String? categoryId,
     bool? isCompleted,
@@ -77,8 +100,12 @@ class TaskItem {
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
-      dueDate: clearDueDate ? null : dueDate ?? this.dueDate,
-      dueMinutes: clearDueMinutes ? null : dueMinutes ?? this.dueMinutes,
+      startDate: clearStartDate ? null : startDate ?? this.startDate,
+      startMinutes: clearStartMinutes
+          ? null
+          : startMinutes ?? this.startMinutes,
+      endDate: clearEndDate ? null : endDate ?? this.endDate,
+      endMinutes: clearEndMinutes ? null : endMinutes ?? this.endMinutes,
       priority: priority ?? this.priority,
       categoryId: categoryId ?? this.categoryId,
       isCompleted: isCompleted ?? this.isCompleted,

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
 
 void main() {
-  test('returns pending when no due date is set', () {
+  test('returns pending when no schedule is set', () {
     final now = DateTime(2026, 4, 13, 9);
     final task = TaskItem(
       id: 'pending',
@@ -17,7 +17,7 @@ void main() {
     expect(task.statusAt(now), TaskStatus.pending);
   });
 
-  test('returns overdue when due date and time already passed', () {
+  test('returns overdue when end date and time already passed', () {
     final now = DateTime(2026, 4, 13, 9);
     final task = TaskItem(
       id: 'overdue',
@@ -26,8 +26,8 @@ void main() {
       categoryId: 'finance',
       createdAt: now,
       updatedAt: now,
-      dueDate: DateTime(2026, 4, 13),
-      dueMinutes: 8 * 60,
+      endDate: DateTime(2026, 4, 13),
+      endMinutes: 8 * 60,
     );
 
     expect(task.statusAt(now), TaskStatus.overdue);
@@ -42,12 +42,28 @@ void main() {
       categoryId: 'work',
       createdAt: now,
       updatedAt: now,
-      dueDate: DateTime(2026, 4, 12),
-      dueMinutes: 18 * 60,
+      endDate: DateTime(2026, 4, 12),
+      endMinutes: 18 * 60,
       isCompleted: true,
       completedAt: now,
     );
 
     expect(task.statusAt(now), TaskStatus.completed);
+  });
+
+  test('start-only schedule stays pending', () {
+    final now = DateTime(2026, 4, 13, 9);
+    final task = TaskItem(
+      id: 'start-only',
+      title: 'Kickoff meeting',
+      priority: TaskPriority.low,
+      categoryId: 'work',
+      createdAt: now,
+      updatedAt: now,
+      startDate: DateTime(2026, 4, 12),
+      startMinutes: 8 * 60,
+    );
+
+    expect(task.statusAt(now), TaskStatus.pending);
   });
 }

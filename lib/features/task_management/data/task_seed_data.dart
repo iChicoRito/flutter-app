@@ -4,9 +4,9 @@ List<TaskCategory> buildDefaultTaskCategories() {
   final now = DateTime.now();
 
   return const [
-    (id: 'personal', name: 'Personal', iconKey: 'user', colorValue: 0xFF1E88E5),
+    (id: 'personal', name: 'Personal', iconKey: 'user', colorValue: 0xFF066FD1),
     (id: 'work', name: 'Work', iconKey: 'briefcase', colorValue: 0xFFF59F00),
-    (id: 'study', name: 'Study', iconKey: 'book', colorValue: 0xFF7C3AED),
+    (id: 'study', name: 'Study', iconKey: 'book', colorValue: 0xFF90CAF9),
     (
       id: 'shopping',
       name: 'Shopping',

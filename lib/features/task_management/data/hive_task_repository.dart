@@ -140,18 +140,37 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
 
   @override
   TaskItem read(BinaryReader reader) {
+    final values = <dynamic>[];
+    while (reader.availableBytes > 0) {
+      values.add(reader.read());
+    }
+
+    final legacyDueDate = values.length > 3 ? values[3] as DateTime? : null;
+    final legacyDueMinutes = values.length > 4 ? values[4] as int? : null;
+    final completedAt = values.length > 10 ? values[10] as DateTime? : null;
+    final startDate = values.length > 11 ? values[11] as DateTime? : null;
+    final startMinutes = values.length > 12 ? values[12] as int? : null;
+    final endDate = values.length > 13
+        ? values[13] as DateTime?
+        : legacyDueDate;
+    final endMinutes = values.length > 14
+        ? values[14] as int?
+        : legacyDueMinutes;
+
     return TaskItem(
-      id: reader.readString(),
-      title: reader.readString(),
-      description: reader.read(),
-      dueDate: reader.read(),
-      dueMinutes: reader.read(),
-      priority: TaskPriority.values[reader.readInt()],
-      categoryId: reader.readString(),
-      isCompleted: reader.readBool(),
-      createdAt: reader.read(),
-      updatedAt: reader.read(),
-      completedAt: reader.read(),
+      id: values[0] as String,
+      title: values[1] as String,
+      description: values[2] as String?,
+      startDate: startDate,
+      startMinutes: startMinutes,
+      endDate: endDate,
+      endMinutes: endMinutes,
+      priority: TaskPriority.values[values[5] as int],
+      categoryId: values[6] as String,
+      isCompleted: values[7] as bool,
+      createdAt: values[8] as DateTime,
+      updatedAt: values[9] as DateTime,
+      completedAt: completedAt,
     );
   }
 
@@ -161,14 +180,18 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..writeString(obj.id)
       ..writeString(obj.title)
       ..write(obj.description)
-      ..write(obj.dueDate)
-      ..write(obj.dueMinutes)
+      ..write(null)
+      ..write(null)
       ..writeInt(obj.priority.index)
       ..writeString(obj.categoryId)
       ..writeBool(obj.isCompleted)
       ..write(obj.createdAt)
       ..write(obj.updatedAt)
-      ..write(obj.completedAt);
+      ..write(obj.completedAt)
+      ..write(obj.startDate)
+      ..write(obj.startMinutes)
+      ..write(obj.endDate)
+      ..write(obj.endMinutes);
   }
 }
 

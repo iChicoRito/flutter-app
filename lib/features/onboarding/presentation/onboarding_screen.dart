@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/display_name_store.dart';
 import '../../../core/services/onboarding_status_store.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../domain/onboarding_step_data.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key, required this.onboardingStatusStore});
+  const OnboardingScreen({
+    super.key,
+    required this.onboardingStatusStore,
+    required this.displayNameStore,
+  });
 
   static const Key markerKey = Key('onboarding-screen');
   static const Key contentKey = Key('onboarding-content');
 
   final OnboardingStatusStore onboardingStatusStore;
+  final DisplayNameStore displayNameStore;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -95,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 450),
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const DashboardScreen(),
+            DashboardScreen(displayNameStore: widget.displayNameStore),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curved = CurvedAnimation(
             parent: animation,
@@ -124,9 +130,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF1E88E5);
+    const primary = Color(0xFF066FD1);
     const secondary = Color(0xFF90CAF9);
-    const accent = Color(0xFFE3F2FD);
+    const accent = Color(0xFFE6F0FA);
+    const primaryText = Color(0xFF333333);
+    const mutedText = Color(0xFF999999);
     final theme = Theme.of(context);
     final step = onboardingSteps[_currentIndex];
 
@@ -197,7 +205,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 step.title,
                                 key: ValueKey('title-$_currentIndex'),
                                 style: theme.textTheme.headlineSmall?.copyWith(
-                                  color: const Color(0xFF0F172A),
+                                  color: primaryText,
                                   fontWeight: FontWeight.w700,
                                 ),
                                 textAlign: TextAlign.center,
@@ -228,7 +236,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 step.description,
                                 key: ValueKey('desc-$_currentIndex'),
                                 style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: const Color(0xFF475569),
+                                  color: mutedText,
                                   height: 1.5,
                                 ),
                                 textAlign: TextAlign.center,
@@ -282,7 +290,7 @@ class _OnboardingBackdrop extends StatelessWidget {
               height: 160,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(48),
-                border: Border.all(color: const Color(0x331E88E5), width: 1.6),
+                border: Border.all(color: const Color(0x33066FD1), width: 1.6),
               ),
             ),
           ),
@@ -356,7 +364,7 @@ class _StepIndicator extends StatelessWidget {
                   right: index == totalSteps - 1 ? 0 : gap,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFBFDBFE),
+                  color: const Color(0x33066FD1),
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -370,7 +378,7 @@ class _StepIndicator extends StatelessWidget {
               width: dotSize,
               height: dotSize,
               decoration: BoxDecoration(
-                color: const Color(0xFF1E88E5),
+                color: const Color(0xFF066FD1),
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -408,7 +416,7 @@ class _OnboardingActions extends StatelessWidget {
       onPressed: isCompleting ? null : () => onPrimary(),
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(54),
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: const Color(0xFF066FD1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       child: isCompleting
@@ -432,7 +440,7 @@ class _OnboardingActions extends StatelessWidget {
             onPressed: isCompleting ? null : () => onBack(),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(54),
-              side: const BorderSide(color: Color(0xFFBFDBFE)),
+              side: const BorderSide(color: Color(0xFFE5E8EC)),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
               ),

@@ -2,16 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/display_name_store.dart';
 import '../../../core/services/onboarding_status_store.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key, required this.onboardingStatusStore});
+  const SplashScreen({
+    super.key,
+    required this.onboardingStatusStore,
+    required this.displayNameStore,
+  });
 
   static const Key markerKey = Key('splash-screen');
 
   final OnboardingStatusStore onboardingStatusStore;
+  final DisplayNameStore displayNameStore;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -72,9 +78,10 @@ class _SplashScreenState extends State<SplashScreen>
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 700),
         pageBuilder: (context, animation, secondaryAnimation) => isCompleted
-            ? const DashboardScreen()
+            ? DashboardScreen(displayNameStore: widget.displayNameStore)
             : OnboardingScreen(
                 onboardingStatusStore: widget.onboardingStatusStore,
+                displayNameStore: widget.displayNameStore,
               ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final fade = CurvedAnimation(
@@ -104,9 +111,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF1E88E5);
+    const primary = Color(0xFF066FD1);
     const secondary = Color(0xFF90CAF9);
-    const accent = Color(0xFFE3F2FD);
+    const accent = Color(0xFFE6F0FA);
 
     final textTheme = Theme.of(context).textTheme;
 
@@ -284,7 +291,7 @@ class _SplashBackdrop extends StatelessWidget {
               height: 220,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0x1FE3F2FD),
+                color: Color(0x1FE6F0FA),
               ),
             ),
           ),
@@ -298,7 +305,7 @@ class _SplashBackdrop extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(34),
                   border: Border.all(
-                    color: const Color(0x4DE3F2FD),
+                    color: const Color(0x4DE6F0FA),
                     width: 1.4,
                   ),
                 ),

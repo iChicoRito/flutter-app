@@ -1,14 +1,18 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../../core/services/display_name_store.dart';
 import '../../../core/services/task_repository_scope.dart';
 import '../../task_management/presentation/task_management_screen.dart';
 import '../domain/dashboard_task.dart';
 import '../domain/dashboard_task_seed.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, required this.displayNameStore});
 
   static const Key markerKey = Key('dashboard-screen');
   static const Key homeTabKey = Key('dashboard-home-tab');
@@ -19,9 +23,16 @@ class DashboardScreen extends StatefulWidget {
   static const Key overdueHeaderKey = Key('dashboard-overdue-header');
   static const Key completedHeaderKey = Key('dashboard-completed-header');
   static const Key progressLabelKey = Key('dashboard-progress-label');
+  static const Key namePromptKey = Key('dashboard-name-prompt');
+  static const Key nameFieldKey = Key('dashboard-name-field');
+  static const Key nameSaveButtonKey = Key('dashboard-name-save');
+  static const Key welcomeScreenKey = Key('dashboard-welcome-screen');
+  static const Key welcomeButtonKey = Key('dashboard-welcome-start');
 
   static Key taskToggleKey(String taskId) => Key('task-toggle-$taskId');
   static Key summaryCountKey(String label) => Key('summary-count-$label');
+
+  final DisplayNameStore displayNameStore;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -29,18 +40,19 @@ class DashboardScreen extends StatefulWidget {
 
 enum DashboardFilter { all, pending, completed, overdue }
 
-const _primaryBlue = Color(0xFF1E88E5);
+const _primaryBlue = Color(0xFF066FD1);
 const _secondaryBlue = Color(0xFF90CAF9);
 const _badgePrimaryBg = Color(0xFFE6F0FA);
 const _badgePrimaryText = Color(0xFF066FD1);
-const _badgeSecondaryText = Color(0xFF6B7280);
+const _badgeSecondaryBg = Color(0xFFF9FAFB);
+const _badgeSecondaryText = Color(0xFF999999);
 const _successBg = Color(0xFFE6F6F1);
 const _successText = Color(0xFF0CA678);
 const _warningBg = Color(0xFFFEF5E5);
 const _warningText = Color(0xFFF59F00);
 const _dangerBg = Color(0xFFFBEBEB);
 const _dangerText = Color(0xFFD63939);
-const _darkText = Color(0xFF1F2937);
+const _darkText = Color(0xFF333333);
 const _borderColor = Color(0xFFE5E8EC);
 
 class _DashboardScreenState extends State<DashboardScreen> {
@@ -50,6 +62,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isOverdueExpanded = true;
   bool _isCompletedExpanded = false;
   late List<DashboardTask> _tasks = seededDashboardTasks;
+  String? _displayName;
+  bool _isPromptOpen = false;
 
   static const List<_DashboardTab> _tabs = [
     _DashboardTab(
@@ -95,6 +109,89 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadDisplayName();
+  }
+
+  Future<void> _loadDisplayName() async {
+    final value = await widget.displayNameStore.readDisplayName();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _displayName = value;
+    });
+
+    if ((value == null || value.isEmpty) && !_isPromptOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showNamePrompt();
+        }
+      });
+    }
+  }
+
+  Future<void> _showNamePrompt() async {
+    if (_isPromptOpen) {
+      return;
+    }
+
+    _isPromptOpen = true;
+    final enteredName = await _showOverlayDialog<String>(
+      child: const _DisplayNamePromptDialog(),
+    );
+    _isPromptOpen = false;
+
+    final trimmed = enteredName?.trim();
+    if (trimmed == null || trimmed.isEmpty || !mounted) {
+      return;
+    }
+
+    await widget.displayNameStore.saveDisplayName(trimmed);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _displayName = trimmed;
+    });
+
+    await _showOverlayDialog<void>(
+      child: _WelcomeHandoffDialog(displayName: trimmed),
+    );
+  }
+
+  Future<T?> _showOverlayDialog<T>({required Widget child}) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'dashboard-overlay',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _OverlayDialogScaffold(child: child);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, dialogChild) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+            child: dialogChild,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tab = _tabs[_currentIndex];
@@ -108,6 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? _DashboardHomeTab(
                 key: DashboardScreen.homeTabKey,
                 theme: theme,
+                displayName: _displayName,
                 tasks: _tasks,
                 isTodayExpanded: _isTodayExpanded,
                 isUpcomingExpanded: _isUpcomingExpanded,
@@ -201,6 +299,7 @@ class _DashboardHomeTab extends StatelessWidget {
   const _DashboardHomeTab({
     super.key,
     required this.theme,
+    required this.displayName,
     required this.tasks,
     required this.isTodayExpanded,
     required this.isUpcomingExpanded,
@@ -214,6 +313,7 @@ class _DashboardHomeTab extends StatelessWidget {
   });
 
   final ThemeData theme;
+  final String? displayName;
   final List<DashboardTask> tasks;
   final bool isTodayExpanded;
   final bool isUpcomingExpanded;
@@ -253,20 +353,16 @@ class _DashboardHomeTab extends StatelessWidget {
         : todayCompleted / todayProgressTotal;
 
     return ColoredBox(
-      color: const Color(0xFFF8FAFC),
+      color: _badgeSecondaryBg,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
         children: [
           _HeaderRow(
             theme: theme,
+            displayName: displayName,
             dateLabel: _formatDate(DateTime.now()),
-            message: _buildContextMessage(
-              DateTime.now(),
-              pendingCount + overdueCount,
-              overdueCount,
-            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           _ProgressCard(
             completedCount: todayCompleted,
             totalCount: todayProgressTotal,
@@ -474,18 +570,6 @@ class _DashboardHomeTab extends StatelessWidget {
     };
   }
 
-  String _buildContextMessage(DateTime now, int taskCount, int overdueCount) {
-    if (overdueCount > 0) {
-      return 'You have $overdueCount overdue ${overdueCount == 1 ? 'task' : 'tasks'} to rescue first.';
-    }
-
-    if (now.hour < 12) {
-      return 'You have $taskCount ${taskCount == 1 ? 'task' : 'tasks'} today.';
-    }
-
-    return '$taskCount ${taskCount == 1 ? 'task is' : 'tasks are'} left before you can wrap up.';
-  }
-
   String _formatDate(DateTime date) {
     const weekdays = [
       'Monday',
@@ -518,34 +602,28 @@ class _DashboardHomeTab extends StatelessWidget {
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
     required this.theme,
+    required this.displayName,
     required this.dateLabel,
-    required this.message,
   });
 
   final ThemeData theme;
+  final String? displayName;
   final String dateLabel;
-  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: _badgePrimaryBg,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Icon(TablerIcons.checklist, color: _badgePrimaryText),
-        ),
+        const _UserAvatar(),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hi, Mark',
+                displayName == null || displayName!.isEmpty
+                    ? 'Hi!'
+                    : 'Hi, $displayName',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: _darkText,
                   fontWeight: FontWeight.w700,
@@ -558,28 +636,343 @@ class _HeaderRow extends StatelessWidget {
                   color: _badgeSecondaryText,
                 ),
               ),
-              const SizedBox(height: 6),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.all(6),
+          child: Icon(
+            TablerIcons.bell,
+            color: _badgeSecondaryText,
+            size: 24,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  const _UserAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: _badgePrimaryBg,
+      child: const Icon(
+        TablerIcons.user,
+        color: _badgePrimaryText,
+        size: 24,
+      ),
+    );
+  }
+}
+
+class _DisplayNamePromptDialog extends StatefulWidget {
+  const _DisplayNamePromptDialog();
+
+  @override
+  State<_DisplayNamePromptDialog> createState() =>
+      _DisplayNamePromptDialogState();
+}
+
+class _DisplayNamePromptDialogState extends State<_DisplayNamePromptDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSave = _controller.text.trim().isNotEmpty;
+    final theme = Theme.of(context);
+
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        key: DashboardScreen.namePromptKey,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 320),
+          padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                message,
-                style: theme.textTheme.bodySmall?.copyWith(
+                'Hello! What Should I Call You?',
+                style: theme.textTheme.headlineSmall?.copyWith(
                   color: _darkText,
-                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Let's personalize your workspace before you start creating tasks.",
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: _badgeSecondaryText,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                key: DashboardScreen.nameFieldKey,
+                controller: _controller,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                style: theme.textTheme.bodyMedium?.copyWith(color: _darkText),
+                decoration: InputDecoration(
+                  hintText: 'Enter your name',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: _badgeSecondaryText,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 15,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _primaryBlue),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (value) {
+                  final trimmed = value.trim();
+                  if (trimmed.isNotEmpty) {
+                    Navigator.of(context).pop(trimmed);
+                  }
+                },
+              ),
+              const SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  key: DashboardScreen.nameSaveButtonKey,
+                  onPressed: canSave
+                      ? () => Navigator.of(context).pop(_controller.text.trim())
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _primaryBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 13,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Text('Submit Name'),
+                        SizedBox(width: 6),
+                        Icon(TablerIcons.chevron_right, size: 16),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        Container(
-          width: 40,
-          height: 40,
+      ),
+    );
+  }
+}
+
+class _WelcomeHandoffDialog extends StatefulWidget {
+  const _WelcomeHandoffDialog({required this.displayName});
+
+  final String displayName;
+
+  @override
+  State<_WelcomeHandoffDialog> createState() => _WelcomeHandoffDialogState();
+}
+
+class _WelcomeHandoffDialogState extends State<_WelcomeHandoffDialog> {
+  bool _showButton = false;
+  Timer? _buttonTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _buttonTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _showButton = true;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _buttonTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        key: DashboardScreen.welcomeScreenKey,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 320),
+          padding: const EdgeInsets.fromLTRB(26, 30, 26, 26),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _borderColor),
+            borderRadius: BorderRadius.circular(34),
           ),
-          child: const Icon(TablerIcons.bell, color: _badgeSecondaryText),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: _badgePrimaryBg,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.verified_rounded,
+                  color: _primaryBlue,
+                  size: 38,
+                ),
+              ),
+              const SizedBox(height: 20),
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: _darkText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Welcome, '),
+                    TextSpan(
+                      text: widget.displayName,
+                      style: const TextStyle(color: _primaryBlue),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "You're All Set. Start Creating Tasks Whenever You're Ready.",
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: _badgeSecondaryText,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 22),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                child: _showButton
+                    ? FilledButton(
+                        key: DashboardScreen.welcomeButtonKey,
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _primaryBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 13,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Text('Start creating tasks'),
+                              SizedBox(width: 6),
+                              Icon(TablerIcons.chevron_right, size: 16),
+                            ],
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey('welcome-button-hidden'),
+                      ),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _OverlayDialogScaffold extends StatelessWidget {
+  const _OverlayDialogScaffold({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 2.2, sigmaY: 2.2),
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.42),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Center(child: child),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1127,7 +1520,7 @@ class _PlaceholderTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFF8FAFC),
+      color: _badgeSecondaryBg,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1195,8 +1588,8 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const activeColor = Color(0xFF1E88E5);
-    const inactiveColor = Color(0xFF9AA9C4);
+    const activeColor = _primaryBlue;
+    const inactiveColor = _badgeSecondaryText;
 
     return SafeArea(
       top: false,
@@ -1284,3 +1677,4 @@ class _BottomNavBar extends StatelessWidget {
     );
   }
 }
+

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/app/app.dart';
+import 'package:flutter_app/core/services/display_name_store.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
@@ -12,10 +13,12 @@ import 'package:flutter_app/features/task_management/domain/task_item.dart';
 
 void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
+  late FakeDisplayNameStore displayNameStore;
   late InMemoryTaskRepository taskRepository;
 
   setUp(() {
     onboardingStatusStore = FakeOnboardingStatusStore();
+    displayNameStore = FakeDisplayNameStore();
     taskRepository = InMemoryTaskRepository();
   });
 
@@ -24,6 +27,7 @@ void main() {
     await tester.pumpWidget(
       MyApp(
         onboardingStatusStore: onboardingStatusStore,
+        displayNameStore: displayNameStore,
         taskRepository: taskRepository,
       ),
     );
@@ -31,6 +35,7 @@ void main() {
 
   Future<void> openDashboard(WidgetTester tester) async {
     onboardingStatusStore.completed = true;
+    displayNameStore.displayName = 'Mark';
     await pumpApp(tester);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
@@ -75,7 +80,61 @@ void main() {
 
     expect(onboardingStatusStore.completed, isTrue);
     expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(DashboardScreen.nameFieldKey),
+      'Mark',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(DashboardScreen.nameSaveButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(displayNameStore.displayName, 'Mark');
+    expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.welcomeButtonKey), findsNothing);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.welcomeButtonKey), findsOneWidget);
+
+    await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.welcomeScreenKey), findsNothing);
     expect(find.byKey(DashboardScreen.homeTabKey), findsOneWidget);
+    expect(find.text('Hi, Mark'), findsOneWidget);
+  });
+
+  testWidgets('dashboard asks for a name when none is saved', (
+    WidgetTester tester,
+  ) async {
+    onboardingStatusStore.completed = true;
+
+    await pumpApp(tester);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
+
+    await tester.enterText(find.byKey(DashboardScreen.nameFieldKey), 'Jamie');
+    await tester.pump();
+    await tester.tap(find.byKey(DashboardScreen.nameSaveButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(displayNameStore.displayName, 'Jamie');
+    expect(find.byKey(DashboardScreen.namePromptKey), findsNothing);
+    expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hi, Jamie'), findsOneWidget);
   });
 
   testWidgets('dashboard home still shows task-first overview content', (
@@ -162,6 +221,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Prepare monthly report'), findsOneWidget);
+
+    await tester.longPress(
+      find.byKey(TaskManagementScreen.taskTileKey(createdTaskId)),
+    );
+    await tester.pumpAndSettle();
 
     await tester.tap(
       find.byKey(TaskManagementScreen.taskToggleKey(createdTaskId)),
@@ -274,5 +338,17 @@ class FakeOnboardingStatusStore implements OnboardingStatusStore {
   @override
   Future<void> markCompleted() async {
     completed = true;
+  }
+}
+
+class FakeDisplayNameStore implements DisplayNameStore {
+  String? displayName;
+
+  @override
+  Future<String?> readDisplayName() async => displayName;
+
+  @override
+  Future<void> saveDisplayName(String value) async {
+    displayName = value;
   }
 }

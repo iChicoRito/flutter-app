@@ -7,11 +7,11 @@ import '../domain/task_repository.dart';
 import 'task_editor_screen.dart';
 import 'task_management_controller.dart';
 
-const _primaryBlue = Color(0xFF1E88E5);
-const _accentBlue = Color(0xFFE3F2FD);
-const _badgeSecondaryText = Color(0xFF6B7280);
+const _primaryBlue = Color(0xFF066FD1);
+const _accentBlue = Color(0xFFE6F0FA);
+const _badgeSecondaryText = Color(0xFF999999);
 const _dangerText = Color(0xFFD63939);
-const _darkText = Color(0xFF1F2937);
+const _darkText = Color(0xFF333333);
 const _borderColor = Color(0xFFE5E8EC);
 
 class TaskManagementScreen extends StatefulWidget {
@@ -53,6 +53,7 @@ class TaskManagementScreen extends StatefulWidget {
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
   late final TaskManagementController _controller;
   final TextEditingController _searchController = TextEditingController();
+  String? _revealedCheckboxTaskId;
 
   @override
   void initState() {
@@ -173,7 +174,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   Text(
                     'Filter',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: const Color(0xFF55585F),
+                      color: _darkText,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -243,6 +244,15 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                         child: _TaskCard(
                           task: task,
                           category: category,
+                          showCheckbox: _revealedCheckboxTaskId == task.id,
+                          onLongPress: () {
+                            setState(() {
+                              _revealedCheckboxTaskId =
+                                  _revealedCheckboxTaskId == task.id
+                                  ? null
+                                  : task.id;
+                            });
+                          },
                           onToggle: () =>
                               _controller.toggleTaskCompletion(task),
                           onEdit: () => _openEditor(task: task),
@@ -294,26 +304,26 @@ class _SearchField extends StatelessWidget {
         hintText: 'Search tasks, notes, categories',
         hintStyle: Theme.of(
           context,
-        ).textTheme.bodyMedium?.copyWith(color: const Color(0xFFB0B5BD)),
+        ).textTheme.bodyMedium?.copyWith(color: _badgeSecondaryText),
         prefixIcon: const Icon(
           TablerIcons.search,
           size: 18,
-          color: Color(0xFFB0B5BD),
+          color: _badgeSecondaryText,
         ),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFD9DDE3)),
+          borderSide: const BorderSide(color: _borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFD9DDE3)),
+          borderSide: const BorderSide(color: _borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: Color(0xFFD9DDE3)),
+          borderSide: const BorderSide(color: _primaryBlue),
         ),
       ),
     );
@@ -359,7 +369,7 @@ class _CompactDropdown<T> extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE1E5EA)),
+          border: Border.all(color: _borderColor),
         ),
         child: Row(
           children: [
@@ -368,7 +378,7 @@ class _CompactDropdown<T> extends StatelessWidget {
                 currentLabel,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF55585F),
+                  color: _darkText,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -377,7 +387,7 @@ class _CompactDropdown<T> extends StatelessWidget {
             const Icon(
               TablerIcons.chevron_down,
               size: 14,
-              color: Color(0xFF9CA3AF),
+              color: _badgeSecondaryText,
             ),
           ],
         ),
@@ -469,9 +479,7 @@ class _CategoryChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? _primaryBlue : Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? _primaryBlue : const Color(0xFFE7EBF0),
-          ),
+          border: Border.all(color: selected ? _primaryBlue : _borderColor),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -496,6 +504,8 @@ class _TaskCard extends StatelessWidget {
   const _TaskCard({
     required this.task,
     required this.category,
+    required this.showCheckbox,
+    required this.onLongPress,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -503,6 +513,8 @@ class _TaskCard extends StatelessWidget {
 
   final TaskItem task;
   final TaskCategory? category;
+  final bool showCheckbox;
+  final VoidCallback onLongPress;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -514,106 +526,118 @@ class _TaskCard extends StatelessWidget {
         ? task.description!.trim()
         : 'No additional notes yet.';
 
-    return Container(
-      key: TaskManagementScreen.taskTileKey(task.id),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _borderColor),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                checkboxTheme: CheckboxThemeData(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  side: const BorderSide(
-                    color: _badgeSecondaryText,
-                    width: 1.3,
-                  ),
-                ),
-              ),
-              child: Checkbox(
-                key: TaskManagementScreen.taskToggleKey(task.id),
-                value: task.isCompleted,
-                onChanged: (_) => onToggle(),
-                activeColor: accentColor,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Container(
+        key: TaskManagementScreen.taskTileKey(task.id),
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: _borderColor),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: showCheckbox
+                  ? Padding(
+                      key: ValueKey(task.id),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          checkboxTheme: CheckboxThemeData(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            side: const BorderSide(
+                              color: _badgeSecondaryText,
+                              width: 1.3,
+                            ),
+                          ),
+                        ),
+                        child: Checkbox(
+                          key: TaskManagementScreen.taskToggleKey(task.id),
+                          value: task.isCompleted,
+                          onChanged: (_) => onToggle(),
+                          activeColor: accentColor,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('hidden-checkbox')),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        task.title,
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: const Color(0xFF5F636C),
-                              fontWeight: FontWeight.w700,
-                              height: 1,
-                            ),
+            if (showCheckbox) const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          task.title,
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                color: _darkText,
+                                fontWeight: FontWeight.w700,
+                                height: 1,
+                              ),
+                        ),
                       ),
-                    ),
-                    PopupMenuButton<_TaskCardAction>(
-                      key: TaskManagementScreen.taskMenuButtonKey(task.id),
-                      constraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
-                      ),
-                      padding: EdgeInsets.zero,
-                      icon: const Icon(
-                        TablerIcons.dots_vertical,
-                        size: 20,
-                        color: Color(0xFF5F636C),
-                      ),
-                      onSelected: (value) {
-                        switch (value) {
-                          case _TaskCardAction.edit:
-                            onEdit();
-                          case _TaskCardAction.delete:
-                            onDelete();
-                        }
-                      },
-                      itemBuilder: (context) {
-                        return [
-                          PopupMenuItem<_TaskCardAction>(
-                            key: TaskManagementScreen.taskMenuActionKey(
-                              task.id,
-                              'edit',
+                      PopupMenuButton<_TaskCardAction>(
+                        key: TaskManagementScreen.taskMenuButtonKey(task.id),
+                        constraints: const BoxConstraints(
+                          minWidth: 24,
+                          minHeight: 24,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(
+                          TablerIcons.dots_vertical,
+                          size: 20,
+                          color: _badgeSecondaryText,
+                        ),
+                        onSelected: (value) {
+                          switch (value) {
+                            case _TaskCardAction.edit:
+                              onEdit();
+                            case _TaskCardAction.delete:
+                              onDelete();
+                          }
+                        },
+                        itemBuilder: (context) {
+                          return [
+                            PopupMenuItem<_TaskCardAction>(
+                              key: TaskManagementScreen.taskMenuActionKey(
+                                task.id,
+                                'edit',
+                              ),
+                              value: _TaskCardAction.edit,
+                              child: const Text('Edit'),
                             ),
-                            value: _TaskCardAction.edit,
-                            child: const Text('Edit'),
-                          ),
-                          PopupMenuItem<_TaskCardAction>(
-                            key: TaskManagementScreen.taskMenuActionKey(
-                              task.id,
-                              'delete',
+                            PopupMenuItem<_TaskCardAction>(
+                              key: TaskManagementScreen.taskMenuActionKey(
+                                task.id,
+                                'delete',
+                              ),
+                              value: _TaskCardAction.delete,
+                              child: const Text('Delete'),
                             ),
-                            value: _TaskCardAction.delete,
-                            child: const Text('Delete'),
-                          ),
-                        ];
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 0),
-                if (category != null) _CategoryBadge(category: category!),
-                const SizedBox(height: 10),
+                          ];
+                        },
+                      ),
+                    ],
+                  ),
+                if (category != null)
+                  Transform.translate(
+                    offset: const Offset(0, -5),
+                    child: _CategoryBadge(category: category!),
+                  ),
+                const SizedBox(height: 2),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -632,7 +656,7 @@ class _TaskCard extends StatelessWidget {
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF8D939C),
+                          color: _badgeSecondaryText,
                           height: 1.1,
                           fontWeight: FontWeight.w500,
                         ),
@@ -648,15 +672,16 @@ class _TaskCard extends StatelessWidget {
                         ? _dueLabel(task.dueDateTime!, context)
                         : 'No due date',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: const Color(0xFFB0B5BD),
+                      color: _badgeSecondaryText,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

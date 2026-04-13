@@ -1,0 +1,71 @@
+import 'dashboard_task.dart';
+
+const List<DashboardTask> seededDashboardTasks = [
+  DashboardTask(
+    id: 'today-design',
+    title: 'Review onboarding illustrations',
+    timeLabel: '8:30 AM',
+    priority: TaskPriority.high,
+    bucket: TaskBucket.today,
+    isPinned: true,
+  ),
+  DashboardTask(
+    id: 'today-standup',
+    title: 'Team stand-up',
+    timeLabel: '10:00 AM',
+    priority: TaskPriority.medium,
+    bucket: TaskBucket.today,
+  ),
+  DashboardTask(
+    id: 'today-budget',
+    title: 'Finalize grocery budget',
+    timeLabel: '6:00 PM',
+    priority: TaskPriority.low,
+    bucket: TaskBucket.today,
+  ),
+  DashboardTask(
+    id: 'tomorrow-dentist',
+    title: 'Confirm dentist appointment',
+    timeLabel: 'Tomorrow',
+    priority: TaskPriority.medium,
+    bucket: TaskBucket.tomorrow,
+  ),
+  DashboardTask(
+    id: 'week-workout',
+    title: 'Plan workout sessions',
+    timeLabel: 'This Week',
+    priority: TaskPriority.low,
+    bucket: TaskBucket.thisWeek,
+  ),
+  DashboardTask(
+    id: 'later-renewal',
+    title: 'Renew car registration',
+    timeLabel: 'Later',
+    priority: TaskPriority.medium,
+    bucket: TaskBucket.later,
+  ),
+  DashboardTask(
+    id: 'overdue-bill',
+    title: 'Pay electricity bill',
+    timeLabel: 'Due yesterday',
+    priority: TaskPriority.high,
+    bucket: TaskBucket.overdue,
+    isPinned: true,
+  ),
+  DashboardTask(
+    id: 'completed-email',
+    title: 'Send status update email',
+    timeLabel: 'Completed',
+    priority: TaskPriority.medium,
+    bucket: TaskBucket.completed,
+    isCompleted: true,
+  ),
+  DashboardTask(
+    id: 'completed-desk',
+    title: 'Declutter work desk',
+    timeLabel: 'Completed',
+    priority: TaskPriority.low,
+    bucket: TaskBucket.completed,
+    isCompleted: true,
+  ),
+];

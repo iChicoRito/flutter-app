@@ -231,11 +231,12 @@ class TaskPickerButton extends StatelessWidget {
       key: buttonKey,
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
-      child: Ink(
+      child: Container(
+        width: double.infinity,
         decoration: BoxDecoration(
-          color: taskSurface,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: taskBorderColor),
+          border: Border.all(color: taskBorderColor, width: 1),
         ),
         padding: const EdgeInsets.all(14),
         child: Row(

@@ -1,5 +1,6 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
@@ -29,14 +30,30 @@ class HiveTaskRepository implements TaskRepository {
       _adaptersRegistered = true;
     }
 
-    final taskBox = await Hive.openBox<TaskItem>(_taskBoxName);
+    final taskBox = await _openTaskBoxWithRecovery();
     final categoryBox = await Hive.openBox<TaskCategory>(_categoryBoxName);
     final repository = HiveTaskRepository._(
       taskBox: taskBox,
       categoryBox: categoryBox,
     );
     await repository.seedDefaultCategoriesIfNeeded();
+    await repository.migrateLegacyTasksIfNeeded();
     return repository;
+  }
+
+  static Future<Box<TaskItem>> _openTaskBoxWithRecovery() async {
+    try {
+      return await Hive.openBox<TaskItem>(_taskBoxName);
+    } on HiveError catch (error) {
+      final isLegacyTypeFailure = error.toString().contains('unknown typeId');
+      if (!isLegacyTypeFailure) {
+        rethrow;
+      }
+
+      // Recover from incompatible legacy task payloads so the app can boot.
+      await Hive.deleteBoxFromDisk(_taskBoxName);
+      return Hive.openBox<TaskItem>(_taskBoxName);
+    }
   }
 
   @override
@@ -52,10 +69,29 @@ class HiveTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<TaskItem?> getTaskById(String taskId) async {
+    final task = _taskBox.get(taskId);
+    if (task == null) {
+      return null;
+    }
+
+    return normalizeTaskNoteFields(task);
+  }
+
+  @override
   Future<List<TaskItem>> getTasks() async {
-    final tasks = _taskBox.values.toList()
+    final tasks = _taskBox.values.map(normalizeTaskNoteFields).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return tasks;
+  }
+
+  Future<void> migrateLegacyTasksIfNeeded() async {
+    for (final task in _taskBox.values) {
+      final normalized = normalizeTaskNoteFields(task);
+      if (normalized != task) {
+        await _taskBox.put(task.id, normalized);
+      }
+    }
   }
 
   Future<void> seedDefaultCategoriesIfNeeded() async {
@@ -75,7 +111,7 @@ class HiveTaskRepository implements TaskRepository {
 
   @override
   Future<void> upsertTask(TaskItem task) async {
-    await _taskBox.put(task.id, task);
+    await _taskBox.put(task.id, normalizeTaskNoteFields(task));
   }
 }
 
@@ -105,8 +141,20 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<TaskItem?> getTaskById(String taskId) async {
+    final index = _tasks.indexWhere((task) => task.id == taskId);
+    if (index < 0) {
+      return null;
+    }
+
+    final normalized = normalizeTaskNoteFields(_tasks[index]);
+    _tasks[index] = normalized;
+    return normalized;
+  }
+
+  @override
   Future<List<TaskItem>> getTasks() async {
-    final tasks = [..._tasks]
+    final tasks = _tasks.map(normalizeTaskNoteFields).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return tasks;
   }
@@ -124,13 +172,14 @@ class InMemoryTaskRepository implements TaskRepository {
 
   @override
   Future<void> upsertTask(TaskItem task) async {
+    final normalizedTask = normalizeTaskNoteFields(task);
     final index = _tasks.indexWhere((item) => item.id == task.id);
     if (index >= 0) {
-      _tasks[index] = task;
+      _tasks[index] = normalizedTask;
       return;
     }
 
-    _tasks.add(task);
+    _tasks.add(normalizedTask);
   }
 }
 
@@ -161,6 +210,8 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       id: values[0] as String,
       title: values[1] as String,
       description: values[2] as String?,
+      noteDocumentJson: values.length > 15 ? values[15] as String? : null,
+      notePlainText: values.length > 16 ? values[16] as String? : null,
       startDate: startDate,
       startMinutes: startMinutes,
       endDate: endDate,
@@ -191,7 +242,9 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(obj.startDate)
       ..write(obj.startMinutes)
       ..write(obj.endDate)
-      ..write(obj.endMinutes);
+      ..write(obj.endMinutes)
+      ..write(obj.noteDocumentJson)
+      ..write(obj.notePlainText);
   }
 }
 

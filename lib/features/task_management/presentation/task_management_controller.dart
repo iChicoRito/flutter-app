@@ -1,17 +1,16 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
+import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 
-enum TaskListStatusFilter { all, pending, completed, overdue }
-
-enum TaskSortOption { createdNewest, endDate, priority }
-
 class TaskManagementController extends ChangeNotifier {
-  TaskManagementController(this._repository);
+  TaskManagementController(this._repository, {Uuid? uuid}) : _uuid = uuid ?? const Uuid();
 
   final TaskRepository _repository;
+  final Uuid _uuid;
 
   bool isLoading = true;
   bool isSaving = false;
@@ -44,22 +43,64 @@ class TaskManagementController extends ChangeNotifier {
     }
   }
 
+  Future<TaskItem?> getTaskById(String taskId) {
+    return _repository.getTaskById(taskId);
+  }
+
+  Future<TaskItem> createTask({
+    required String title,
+    String? description,
+    required String categoryId,
+    required TaskPriority priority,
+    DateTime? startDate,
+    int? startMinutes,
+    DateTime? endDate,
+    int? endMinutes,
+  }) async {
+    final now = DateTime.now();
+    final task = TaskItem(
+      id: _uuid.v4(),
+      title: title.trim(),
+      description: description?.trim().isEmpty ?? true
+          ? null
+          : description!.trim(),
+      noteDocumentJson: buildPlainTextNoteDocumentJson(null),
+      notePlainText: null,
+      priority: priority,
+      categoryId: categoryId,
+      startDate: startDate,
+      startMinutes: startMinutes,
+      endDate: endDate,
+      endMinutes: endMinutes,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await saveTask(task);
+    return task;
+  }
+
   Future<void> saveTask(TaskItem task) async {
     isSaving = true;
     notifyListeners();
-    await _repository.upsertTask(task);
-    await load();
-    isSaving = false;
-    notifyListeners();
+    try {
+      await _repository.upsertTask(task);
+      await load();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
   }
 
   Future<void> deleteTask(String taskId) async {
     isSaving = true;
     notifyListeners();
-    await _repository.deleteTask(taskId);
-    await load();
-    isSaving = false;
-    notifyListeners();
+    try {
+      await _repository.deleteTask(taskId);
+      await load();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
   }
 
   Future<void> toggleTaskCompletion(TaskItem task) async {
@@ -90,18 +131,29 @@ class TaskManagementController extends ChangeNotifier {
     notifyListeners();
   }
 
+  TaskCategory? categoryFor(String categoryId) {
+    for (final category in _categories) {
+      if (category.id == categoryId) {
+        return category;
+      }
+    }
+    return null;
+  }
+
   List<TaskItem> filteredTasks(DateTime now) {
     final categoryLookup = {
       for (final category in _categories) category.id: category.name,
     };
     final query = searchQuery.trim().toLowerCase();
     final filtered = _tasks.where((task) {
+      final noteText = taskNotePreview(task).toLowerCase();
+      final descriptionText = (task.description ?? '').toLowerCase();
       final matchesSearch =
           query.isEmpty ||
           task.title.toLowerCase().contains(query) ||
-          (task.description?.toLowerCase().contains(query) ?? false) ||
-          (categoryLookup[task.categoryId]?.toLowerCase().contains(query) ??
-              false);
+          descriptionText.contains(query) ||
+          noteText.contains(query) ||
+          (categoryLookup[task.categoryId]?.toLowerCase().contains(query) ?? false);
       final matchesCategory =
           categoryFilterId == null || task.categoryId == categoryFilterId;
       final matchesPriority =
@@ -110,26 +162,15 @@ class TaskManagementController extends ChangeNotifier {
     }).toList();
 
     filtered.sort((a, b) {
-      final priorityDiff =
-          _priorityWeight(b.priority) - _priorityWeight(a.priority);
+      final priorityDiff = _priorityWeight(b.priority) - _priorityWeight(a.priority);
       if (priorityDiff != 0) {
         return priorityDiff;
       }
 
-      return b.createdAt.compareTo(a.createdAt);
+      return b.updatedAt.compareTo(a.updatedAt);
     });
 
     return filtered;
-  }
-
-  TaskCategory? categoryFor(String categoryId) {
-    for (final category in _categories) {
-      if (category.id == categoryId) {
-        return category;
-      }
-    }
-
-    return null;
   }
 
   static int _priorityWeight(TaskPriority priority) {

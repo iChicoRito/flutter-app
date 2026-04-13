@@ -4,6 +4,8 @@ import 'task_item.dart';
 abstract class TaskRepository {
   Future<List<TaskItem>> getTasks();
 
+  Future<TaskItem?> getTaskById(String taskId);
+
   Future<List<TaskCategory>> getCategories();
 
   Future<void> upsertTask(TaskItem task);

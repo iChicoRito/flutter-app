@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -7,9 +6,12 @@ import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/display_name_store.dart';
 import '../../../core/services/task_repository_scope.dart';
+import '../../task_management/domain/task_item.dart';
+import '../../task_management/presentation/task_creation_sheet.dart';
+import '../../task_management/presentation/task_editor_screen.dart';
+import '../../task_management/presentation/task_management_controller.dart';
 import '../../task_management/presentation/task_management_screen.dart';
-import '../domain/dashboard_task.dart';
-import '../domain/dashboard_task_seed.dart';
+import '../../task_management/presentation/task_management_ui.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.displayNameStore});
@@ -38,30 +40,13 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-enum DashboardFilter { all, pending, completed, overdue }
-
-const _primaryBlue = Color(0xFF066FD1);
-const _secondaryBlue = Color(0xFF90CAF9);
-const _badgePrimaryBg = Color(0xFFE6F0FA);
-const _badgePrimaryText = Color(0xFF066FD1);
-const _badgeSecondaryBg = Color(0xFFF9FAFB);
-const _badgeSecondaryText = Color(0xFF999999);
-const _successBg = Color(0xFFE6F6F1);
-const _successText = Color(0xFF0CA678);
-const _warningBg = Color(0xFFFEF5E5);
-const _warningText = Color(0xFFF59F00);
-const _dangerBg = Color(0xFFFBEBEB);
-const _dangerText = Color(0xFFD63939);
-const _darkText = Color(0xFF333333);
-const _borderColor = Color(0xFFE5E8EC);
-
 class _DashboardScreenState extends State<DashboardScreen> {
+  TaskManagementController? _taskController;
   int _currentIndex = 0;
   bool _isTodayExpanded = true;
   bool _isUpcomingExpanded = true;
   bool _isOverdueExpanded = true;
   bool _isCompletedExpanded = false;
-  late List<DashboardTask> _tasks = seededDashboardTasks;
   String? _displayName;
   bool _isPromptOpen = false;
 
@@ -70,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       label: 'Home',
       assetPath: 'assets/icons/home_filled.svg',
       title: 'Dashboard Home',
-      description: 'Placeholder content for the main dashboard view.',
+      description: 'Your live task and notes overview.',
     ),
     _DashboardTab(
       label: 'Tasks',
@@ -82,36 +67,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       label: 'Analysis',
       assetPath: 'assets/icons/chart_pie_filled.svg',
       title: 'Analysis',
-      description: 'Placeholder content for insights and trends.',
+      description: 'Insights will appear here as your task history grows.',
     ),
     _DashboardTab(
       label: 'Profile',
       assetPath: 'assets/icons/user_filled.svg',
       title: 'Profile',
-      description: 'Placeholder content for user profile and settings.',
+      description: 'Profile and settings will live here next.',
     ),
   ];
-
-  void _toggleTaskCompletion(String taskId) {
-    setState(() {
-      _tasks = _tasks.map((task) {
-        if (task.id != taskId) {
-          return task;
-        }
-
-        final nextCompleted = !task.isCompleted;
-        return task.copyWith(
-          isCompleted: nextCompleted,
-          bucket: nextCompleted ? TaskBucket.completed : TaskBucket.today,
-        );
-      }).toList();
-    });
-  }
 
   @override
   void initState() {
     super.initState();
     _loadDisplayName();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _taskController ??=
+        TaskManagementController(TaskRepositoryScope.of(context))..load();
+  }
+
+  @override
+  void dispose() {
+    _taskController?.dispose();
+    super.dispose();
   }
 
   Future<void> _loadDisplayName() async {
@@ -139,8 +121,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     _isPromptOpen = true;
-    final enteredName = await _showOverlayDialog<String>(
-      child: const _DisplayNamePromptDialog(),
+    final enteredName = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _DisplayNamePromptDialog(),
     );
     _isPromptOpen = false;
 
@@ -150,7 +134,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     await widget.displayNameStore.saveDisplayName(trimmed);
-
     if (!mounted) {
       return;
     }
@@ -159,110 +142,142 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _displayName = trimmed;
     });
 
-    await _showOverlayDialog<void>(
-      child: _WelcomeHandoffDialog(displayName: trimmed),
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _WelcomeHandoffDialog(displayName: trimmed),
     );
   }
 
-  Future<T?> _showOverlayDialog<T>({required Widget child}) {
-    return showGeneralDialog<T>(
-      context: context,
-      barrierDismissible: false,
-      barrierLabel: 'dashboard-overlay',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _OverlayDialogScaffold(child: child);
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, dialogChild) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
+  Future<void> _openCreateFlow() async {
+    final taskController = _taskController;
+    if (taskController == null) {
+      return;
+    }
+    if (taskController.categories.isEmpty) {
+      await taskController.load();
+      if (!mounted) {
+        return;
+      }
+    }
 
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-            child: dialogChild,
-          ),
-        );
-      },
+    final request = await Navigator.of(context).push<TaskCreationRequest>(
+      MaterialPageRoute<TaskCreationRequest>(
+        builder: (context) => TaskCreationScreen(
+          repository: TaskRepositoryScope.of(context),
+          categories: taskController.categories,
+        ),
+      ),
     );
+    if (request == null || !mounted) {
+      return;
+    }
+
+    final task = await taskController.createTask(
+      title: request.title,
+      description: request.description,
+      categoryId: request.categoryId,
+      priority: request.priority,
+      startDate: request.startDate,
+      startMinutes: request.startMinutes,
+      endDate: request.endDate,
+      endMinutes: request.endMinutes,
+    );
+
+    if (!mounted) {
+      return;
+    }
+    await _openEditor(task.id);
+  }
+
+  Future<void> _openEditor(String taskId) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => TaskEditorScreen(
+          repository: TaskRepositoryScope.of(context),
+          taskId: taskId,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    await _taskController?.load();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tab = _tabs[_currentIndex];
-    final taskRepository = TaskRepositoryScope.of(context);
+    final repository = TaskRepositoryScope.of(context);
+    final taskController = _taskController;
 
     return Scaffold(
       key: DashboardScreen.markerKey,
       backgroundColor: Colors.white,
       body: SafeArea(
         child: _currentIndex == 0
-            ? _DashboardHomeTab(
+            ? KeyedSubtree(
                 key: DashboardScreen.homeTabKey,
-                theme: theme,
-                displayName: _displayName,
-                tasks: _tasks,
-                isTodayExpanded: _isTodayExpanded,
-                isUpcomingExpanded: _isUpcomingExpanded,
-                isOverdueExpanded: _isOverdueExpanded,
-                isCompletedExpanded: _isCompletedExpanded,
-                onTaskToggled: _toggleTaskCompletion,
-                onTodayExpandedChanged: () {
-                  setState(() {
-                    _isTodayExpanded = !_isTodayExpanded;
-                  });
-                },
-                onUpcomingExpandedChanged: () {
-                  setState(() {
-                    _isUpcomingExpanded = !_isUpcomingExpanded;
-                  });
-                },
-                onOverdueExpandedChanged: () {
-                  setState(() {
-                    _isOverdueExpanded = !_isOverdueExpanded;
-                  });
-                },
-                onCompletedExpandedChanged: () {
-                  setState(() {
-                    _isCompletedExpanded = !_isCompletedExpanded;
-                  });
-                },
+                child: taskController == null
+                    ? const SizedBox.shrink()
+                    : AnimatedBuilder(
+                  animation: taskController,
+                  builder: (context, _) {
+                    if (taskController.isLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    return _DashboardHomeTab(
+                      theme: theme,
+                      displayName: _displayName,
+                      controller: taskController,
+                      isTodayExpanded: _isTodayExpanded,
+                      isUpcomingExpanded: _isUpcomingExpanded,
+                      isOverdueExpanded: _isOverdueExpanded,
+                      isCompletedExpanded: _isCompletedExpanded,
+                      onTaskToggled: taskController.toggleTaskCompletion,
+                      onTaskOpened: (task) => _openEditor(task.id),
+                      onTodayExpandedChanged: () {
+                        setState(() {
+                          _isTodayExpanded = !_isTodayExpanded;
+                        });
+                      },
+                      onUpcomingExpandedChanged: () {
+                        setState(() {
+                          _isUpcomingExpanded = !_isUpcomingExpanded;
+                        });
+                      },
+                      onOverdueExpandedChanged: () {
+                        setState(() {
+                          _isOverdueExpanded = !_isOverdueExpanded;
+                        });
+                      },
+                      onCompletedExpandedChanged: () {
+                        setState(() {
+                          _isCompletedExpanded = !_isCompletedExpanded;
+                        });
+                      },
+                    );
+                  },
+                ),
               )
             : _currentIndex == 1
             ? KeyedSubtree(
                 key: DashboardScreen.tasksTabKey,
-                child: TaskManagementScreen(repository: taskRepository),
+                child: TaskManagementScreen(
+                  repository: repository,
+                  controller: taskController!,
+                ),
               )
             : _PlaceholderTab(tab: tab, theme: theme),
       ),
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton(
               key: DashboardScreen.addTaskButtonKey,
-              onPressed: () {
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Quick add is ready for the next task flow.',
-                      ),
-                    ),
-                  );
-              },
-              backgroundColor: _primaryBlue,
+              onPressed: _openCreateFlow,
+              backgroundColor: taskPrimaryBlue,
               foregroundColor: Colors.white,
-              elevation: 0,
-              highlightElevation: 0,
-              focusElevation: 0,
-              hoverElevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
               child: const Icon(Icons.add_rounded),
             )
           : null,
@@ -297,15 +312,15 @@ class _DashboardTab {
 
 class _DashboardHomeTab extends StatelessWidget {
   const _DashboardHomeTab({
-    super.key,
     required this.theme,
     required this.displayName,
-    required this.tasks,
+    required this.controller,
     required this.isTodayExpanded,
     required this.isUpcomingExpanded,
     required this.isOverdueExpanded,
     required this.isCompletedExpanded,
     required this.onTaskToggled,
+    required this.onTaskOpened,
     required this.onTodayExpandedChanged,
     required this.onUpcomingExpandedChanged,
     required this.onOverdueExpandedChanged,
@@ -314,12 +329,13 @@ class _DashboardHomeTab extends StatelessWidget {
 
   final ThemeData theme;
   final String? displayName;
-  final List<DashboardTask> tasks;
+  final TaskManagementController controller;
   final bool isTodayExpanded;
   final bool isUpcomingExpanded;
   final bool isOverdueExpanded;
   final bool isCompletedExpanded;
-  final ValueChanged<String> onTaskToggled;
+  final Future<void> Function(TaskItem task) onTaskToggled;
+  final Future<void> Function(TaskItem task) onTaskOpened;
   final VoidCallback onTodayExpandedChanged;
   final VoidCallback onUpcomingExpandedChanged;
   final VoidCallback onOverdueExpandedChanged;
@@ -327,33 +343,28 @@ class _DashboardHomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount = tasks
-        .where((task) => !task.isCompleted && !task.isOverdue)
-        .length;
-    final completedCount = tasks.where((task) => task.isCompleted).length;
-    final overdueCount = tasks
-        .where((task) => task.isOverdue && !task.isCompleted)
-        .length;
+    final now = DateTime.now();
+    final tasks = controller.tasks;
+    final pendingTasks = tasks.where((task) => !task.isCompleted).toList();
+    final completedTasks = tasks.where((task) => task.isCompleted).toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final overdueTasks = tasks
+        .where((task) => !task.isCompleted && task.statusAt(now) == TaskStatus.overdue)
+        .toList()
+      ..sort((a, b) => _sortByTimeline(a, b));
+    final todayTasks = tasks
+        .where((task) => _isTodayBucket(task, now))
+        .toList()
+      ..sort((a, b) => _sortByTimeline(a, b));
+    final upcomingTasks = tasks
+        .where((task) => _isUpcomingBucket(task, now))
+        .toList()
+      ..sort((a, b) => _sortByTimeline(a, b));
 
-    final todayTasks = _sortedTasks(_tasksForBucket(TaskBucket.today));
-    final tomorrowTasks = _sortedTasks(_tasksForBucket(TaskBucket.tomorrow));
-    final thisWeekTasks = _sortedTasks(_tasksForBucket(TaskBucket.thisWeek));
-    final laterTasks = _sortedTasks(_tasksForBucket(TaskBucket.later));
-    final overdueTasks = _sortedTasks(_tasksForBucket(TaskBucket.overdue));
-    final completedTasks = _sortedTasks(
-      tasks.where((task) => task.isCompleted).toList(),
-    );
-
-    final todayProgressTotal = tasks
-        .where((task) => task.bucket == TaskBucket.today || task.isCompleted)
-        .length;
-    final todayCompleted = completedCount;
-    final progressValue = todayProgressTotal == 0
-        ? 0.0
-        : todayCompleted / todayProgressTotal;
+    final progressValue = tasks.isEmpty ? 0.0 : completedTasks.length / tasks.length;
 
     return ColoredBox(
-      color: _badgeSecondaryBg,
+      color: taskSurface,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
         children: [
@@ -364,174 +375,83 @@ class _DashboardHomeTab extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _ProgressCard(
-            completedCount: todayCompleted,
-            totalCount: todayProgressTotal,
+            completedCount: completedTasks.length,
+            totalCount: tasks.length,
             progressValue: progressValue,
           ),
           const SizedBox(height: 16),
           _SummaryGrid(
             totalCount: tasks.length,
-            pendingCount: pendingCount,
-            completedCount: completedCount,
-            overdueCount: overdueCount,
+            pendingCount: pendingTasks.length,
+            completedCount: completedTasks.length,
+            overdueCount: overdueTasks.length,
           ),
           const SizedBox(height: 18),
-          _SectionCard(
+          _DashboardSection(
             title: 'Today\'s Tasks',
-            subtitle: 'What needs your attention right now.',
-            isExpanded: isTodayExpanded,
+            subtitle: 'Active work and unscheduled tasks for today.',
             headerKey: DashboardScreen.todayHeaderKey,
+            isExpanded: isTodayExpanded,
+            count: todayTasks.length,
+            toneColor: taskPrimaryBlue,
             onHeaderTap: onTodayExpandedChanged,
-            trailing: _ExpandTrailing(
-              countLabel: '${todayTasks.length}',
-              countBackgroundColor: _badgePrimaryBg,
-              countTextColor: _badgePrimaryText,
-              isExpanded: isTodayExpanded,
-            ),
-            child: _AnimatedSectionBody(
-              isExpanded: isTodayExpanded,
-              child: todayTasks.isEmpty
-                  ? const _EmptyState(
-                      title: 'No tasks in this view',
-                      message:
-                          'Try another filter or add a task to shape the rest of your day.',
-                    )
-                  : Column(
-                      children: [
-                        for (final task in todayTasks)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _TaskTile(
-                              task: task,
-                              onToggle: () => onTaskToggled(task.id),
-                            ),
-                          ),
-                      ],
-                    ),
+            child: _TaskListBody(
+              tasks: todayTasks,
+              emptyTitle: 'Nothing for today',
+              emptyMessage: 'Create a task to begin a new note or plan the next step.',
+              onTaskOpened: onTaskOpened,
+              onTaskToggled: onTaskToggled,
             ),
           ),
           const SizedBox(height: 18),
-          _SectionCard(
+          _DashboardSection(
             title: 'Upcoming',
-            subtitle: 'Tomorrow, this week, and later at a glance.',
-            isExpanded: isUpcomingExpanded,
+            subtitle: 'Tasks scheduled after today.',
             headerKey: DashboardScreen.upcomingHeaderKey,
+            isExpanded: isUpcomingExpanded,
+            count: upcomingTasks.length,
+            toneColor: taskWarningText,
             onHeaderTap: onUpcomingExpandedChanged,
-            trailing: _ExpandTrailing(
-              countLabel:
-                  '${tomorrowTasks.length + thisWeekTasks.length + laterTasks.length}',
-              countBackgroundColor: _warningBg,
-              countTextColor: _warningText,
-              isExpanded: isUpcomingExpanded,
-            ),
-            child: _AnimatedSectionBody(
-              isExpanded: isUpcomingExpanded,
-              child:
-                  tomorrowTasks.isEmpty &&
-                      thisWeekTasks.isEmpty &&
-                      laterTasks.isEmpty
-                  ? const _EmptyState(
-                      title: 'Nothing upcoming',
-                      message: 'Your future queue is clear for this filter.',
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (tomorrowTasks.isNotEmpty)
-                          _TaskGroup(
-                            title: 'Tomorrow',
-                            tasks: tomorrowTasks,
-                            onTaskToggled: onTaskToggled,
-                          ),
-                        if (thisWeekTasks.isNotEmpty)
-                          _TaskGroup(
-                            title: 'This Week',
-                            tasks: thisWeekTasks,
-                            onTaskToggled: onTaskToggled,
-                          ),
-                        if (laterTasks.isNotEmpty)
-                          _TaskGroup(
-                            title: 'Later',
-                            tasks: laterTasks,
-                            onTaskToggled: onTaskToggled,
-                          ),
-                      ],
-                    ),
+            child: _TaskListBody(
+              tasks: upcomingTasks,
+              emptyTitle: 'Nothing upcoming',
+              emptyMessage: 'Future scheduled tasks will appear here.',
+              onTaskOpened: onTaskOpened,
+              onTaskToggled: onTaskToggled,
             ),
           ),
           const SizedBox(height: 18),
-          _SectionCard(
+          _DashboardSection(
             title: 'Overdue',
-            subtitle: 'These need recovery first.',
-            isExpanded: isOverdueExpanded,
+            subtitle: 'Tasks that need attention first.',
             headerKey: DashboardScreen.overdueHeaderKey,
+            isExpanded: isOverdueExpanded,
+            count: overdueTasks.length,
+            toneColor: taskDangerText,
             onHeaderTap: onOverdueExpandedChanged,
-            trailing: _ExpandTrailing(
-              countLabel: '${overdueTasks.length}',
-              countBackgroundColor: _dangerBg,
-              countTextColor: _dangerText,
-              isExpanded: isOverdueExpanded,
-            ),
-            child: _AnimatedSectionBody(
-              isExpanded: isOverdueExpanded,
-              child: overdueTasks.isEmpty
-                  ? const _EmptyState(
-                      title: 'No overdue tasks',
-                      message: 'You are caught up on everything past due.',
-                    )
-                  : Column(
-                      children: [
-                        for (final task in overdueTasks)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _TaskTile(
-                              task: task,
-                              onToggle: () => onTaskToggled(task.id),
-                            ),
-                          ),
-                      ],
-                    ),
+            child: _TaskListBody(
+              tasks: overdueTasks,
+              emptyTitle: 'No overdue tasks',
+              emptyMessage: 'You are caught up on everything past due.',
+              onTaskOpened: onTaskOpened,
+              onTaskToggled: onTaskToggled,
             ),
           ),
           const SizedBox(height: 18),
-          _SectionCard(
+          _DashboardSection(
             title: 'Completed',
-            subtitle: 'Collapsed by default so the focus stays on active work.',
-            isExpanded: isCompletedExpanded,
+            subtitle: 'Finished tasks stay here for quick review.',
             headerKey: DashboardScreen.completedHeaderKey,
+            isExpanded: isCompletedExpanded,
+            count: completedTasks.length,
+            toneColor: taskSuccessText,
             onHeaderTap: onCompletedExpandedChanged,
-            trailing: _ExpandTrailing(
-              countLabel: '$completedCount',
-              countBackgroundColor: _successBg,
-              countTextColor: _successText,
-              isExpanded: isCompletedExpanded,
-            ),
-            child: _AnimatedSectionBody(
-              isExpanded: isCompletedExpanded,
-              child: completedTasks.isEmpty
-                  ? const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: _EmptyState(
-                        title: 'Nothing completed yet',
-                        message:
-                            'Completed tasks will appear here as you check them off.',
-                      ),
-                    )
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Column(
-                        children: [
-                          for (final task in completedTasks)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _TaskTile(
-                                task: task,
-                                onToggle: () => onTaskToggled(task.id),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+            child: _TaskListBody(
+              tasks: completedTasks,
+              emptyTitle: 'Nothing completed yet',
+              emptyMessage: 'Completed tasks will appear here as you check them off.',
+              onTaskOpened: onTaskOpened,
+              onTaskToggled: onTaskToggled,
             ),
           ),
         ],
@@ -539,38 +459,43 @@ class _DashboardHomeTab extends StatelessWidget {
     );
   }
 
-  List<DashboardTask> _tasksForBucket(TaskBucket bucket) =>
-      tasks.where((task) => task.bucket == bucket).toList();
+  static bool _isTodayBucket(TaskItem task, DateTime now) {
+    if (task.isCompleted || task.statusAt(now) == TaskStatus.overdue) {
+      return false;
+    }
 
-  List<DashboardTask> _sortedTasks(List<DashboardTask> values) {
-    final sorted = [...values];
-    sorted.sort((a, b) {
-      final pinnedCompare = (b.isPinned ? 1 : 0).compareTo(a.isPinned ? 1 : 0);
-      if (pinnedCompare != 0) {
-        return pinnedCompare;
-      }
-
-      final priorityCompare = _priorityWeight(
-        b.priority,
-      ).compareTo(_priorityWeight(a.priority));
-      if (priorityCompare != 0) {
-        return priorityCompare;
-      }
-
-      return (a.timeLabel ?? '').compareTo(b.timeLabel ?? '');
-    });
-    return sorted;
+    final start = task.startDate;
+    final end = task.endDate;
+    if (start == null && end == null) {
+      return true;
+    }
+    return _isSameDay(start ?? end!, now) || _isSameDay(end ?? start!, now);
   }
 
-  int _priorityWeight(TaskPriority priority) {
-    return switch (priority) {
-      TaskPriority.high => 3,
-      TaskPriority.medium => 2,
-      TaskPriority.low => 1,
-    };
+  static bool _isUpcomingBucket(TaskItem task, DateTime now) {
+    if (task.isCompleted || task.statusAt(now) == TaskStatus.overdue) {
+      return false;
+    }
+    final start = task.startDate ?? task.endDate;
+    if (start == null) {
+      return false;
+    }
+    return start.isAfter(DateTime(now.year, now.month, now.day));
   }
 
-  String _formatDate(DateTime date) {
+  static int _sortByTimeline(TaskItem left, TaskItem right) {
+    final leftDate = left.startDateTime ?? left.endDateTime ?? left.updatedAt;
+    final rightDate = right.startDateTime ?? right.endDateTime ?? right.updatedAt;
+    return leftDate.compareTo(rightDate);
+  }
+
+  static bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  static String _formatDate(DateTime date) {
     const weekdays = [
       'Monday',
       'Tuesday',
@@ -594,7 +519,6 @@ class _DashboardHomeTab extends StatelessWidget {
       'November',
       'December',
     ];
-
     return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
   }
 }
@@ -625,7 +549,7 @@ class _HeaderRow extends StatelessWidget {
                     ? 'Hi!'
                     : 'Hi, $displayName',
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: _darkText,
+                  color: taskDarkText,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -633,7 +557,7 @@ class _HeaderRow extends StatelessWidget {
               Text(
                 dateLabel,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: _badgeSecondaryText,
+                  color: taskMutedText,
                 ),
               ),
             ],
@@ -643,7 +567,7 @@ class _HeaderRow extends StatelessWidget {
           padding: EdgeInsets.all(6),
           child: Icon(
             TablerIcons.bell,
-            color: _badgeSecondaryText,
+            color: taskMutedText,
             size: 24,
           ),
         ),
@@ -657,321 +581,13 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(
+    return const CircleAvatar(
       radius: 24,
-      backgroundColor: _badgePrimaryBg,
-      child: const Icon(
+      backgroundColor: taskAccentBlue,
+      child: Icon(
         TablerIcons.user,
-        color: _badgePrimaryText,
+        color: taskPrimaryBlue,
         size: 24,
-      ),
-    );
-  }
-}
-
-class _DisplayNamePromptDialog extends StatefulWidget {
-  const _DisplayNamePromptDialog();
-
-  @override
-  State<_DisplayNamePromptDialog> createState() =>
-      _DisplayNamePromptDialogState();
-}
-
-class _DisplayNamePromptDialogState extends State<_DisplayNamePromptDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final canSave = _controller.text.trim().isNotEmpty;
-    final theme = Theme.of(context);
-
-    return PopScope(
-      canPop: false,
-      child: Dialog(
-        key: DashboardScreen.namePromptKey,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hello! What Should I Call You?',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: _darkText,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                "Let's personalize your workspace before you start creating tasks.",
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: _badgeSecondaryText,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                key: DashboardScreen.nameFieldKey,
-                controller: _controller,
-                autofocus: true,
-                textInputAction: TextInputAction.done,
-                style: theme.textTheme.bodyMedium?.copyWith(color: _darkText),
-                decoration: InputDecoration(
-                  hintText: 'Enter your name',
-                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                    color: _badgeSecondaryText,
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 15,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _borderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _borderColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _primaryBlue),
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (value) {
-                  final trimmed = value.trim();
-                  if (trimmed.isNotEmpty) {
-                    Navigator.of(context).pop(trimmed);
-                  }
-                },
-              ),
-              const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  key: DashboardScreen.nameSaveButtonKey,
-                  onPressed: canSave
-                      ? () => Navigator.of(context).pop(_controller.text.trim())
-                      : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 13,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text('Submit Name'),
-                        SizedBox(width: 6),
-                        Icon(TablerIcons.chevron_right, size: 16),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WelcomeHandoffDialog extends StatefulWidget {
-  const _WelcomeHandoffDialog({required this.displayName});
-
-  final String displayName;
-
-  @override
-  State<_WelcomeHandoffDialog> createState() => _WelcomeHandoffDialogState();
-}
-
-class _WelcomeHandoffDialogState extends State<_WelcomeHandoffDialog> {
-  bool _showButton = false;
-  Timer? _buttonTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _buttonTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _showButton = true;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _buttonTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return PopScope(
-      canPop: false,
-      child: Dialog(
-        key: DashboardScreen.welcomeScreenKey,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.fromLTRB(26, 30, 26, 26),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(34),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: _badgePrimaryBg,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.verified_rounded,
-                  color: _primaryBlue,
-                  size: 38,
-                ),
-              ),
-              const SizedBox(height: 20),
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: _darkText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  children: [
-                    const TextSpan(text: 'Welcome, '),
-                    TextSpan(
-                      text: widget.displayName,
-                      style: const TextStyle(color: _primaryBlue),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "You're All Set. Start Creating Tasks Whenever You're Ready.",
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: _badgeSecondaryText,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 22),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 240),
-                child: _showButton
-                    ? FilledButton(
-                        key: DashboardScreen.welcomeButtonKey,
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _primaryBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 13,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Text('Start creating tasks'),
-                              SizedBox(width: 6),
-                              Icon(TablerIcons.chevron_right, size: 16),
-                            ],
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(
-                        key: ValueKey('welcome-button-hidden'),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OverlayDialogScaffold extends StatelessWidget {
-  const _OverlayDialogScaffold({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 2.2, sigmaY: 2.2),
-                child: ColoredBox(
-                  color: Colors.black.withValues(alpha: 0.42),
-                ),
-              ),
-            ),
-            SafeArea(
-              child: Center(child: child),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -991,28 +607,28 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _primaryBlue,
-        borderRadius: BorderRadius.circular(24),
+        color: taskPrimaryBlue,
+        borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Daily Progress',
+            'Today\'s Progress',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            '$completedCount of $totalCount tasks completed today',
+            '$completedCount of $totalCount tasks completed',
             key: DashboardScreen.progressLabelKey,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.92),
-            ),
+                  color: Colors.white.withValues(alpha: 0.92),
+                ),
           ),
           const SizedBox(height: 14),
           ClipRRect(
@@ -1020,7 +636,7 @@ class _ProgressCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progressValue,
               minHeight: 8,
-              backgroundColor: _secondaryBlue,
+              backgroundColor: taskSecondaryBlue,
               valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
             ),
           ),
@@ -1057,29 +673,25 @@ class _SummaryGrid extends StatelessWidget {
           label: 'Total',
           count: totalCount,
           icon: TablerIcons.list_details,
-          backgroundColor: _badgePrimaryBg,
-          textColor: _badgePrimaryText,
+          color: taskPrimaryBlue,
         ),
         _SummaryCard(
           label: 'Pending',
           count: pendingCount,
           icon: TablerIcons.clock_hour_8,
-          backgroundColor: _warningBg,
-          textColor: _warningText,
+          color: taskWarningText,
         ),
         _SummaryCard(
           label: 'Completed',
           count: completedCount,
           icon: TablerIcons.circle_check,
-          backgroundColor: _successBg,
-          textColor: _successText,
+          color: taskSuccessText,
         ),
         _SummaryCard(
           label: 'Overdue',
           count: overdueCount,
           icon: TablerIcons.alert_circle,
-          backgroundColor: _dangerBg,
-          textColor: _dangerText,
+          color: taskDangerText,
         ),
       ],
     );
@@ -1091,15 +703,13 @@ class _SummaryCard extends StatelessWidget {
     required this.label,
     required this.count,
     required this.icon,
-    required this.backgroundColor,
-    required this.textColor,
+    required this.color,
   });
 
   final String label;
   final int count;
   final IconData icon;
-  final Color backgroundColor;
-  final Color textColor;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1108,7 +718,7 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: taskBorderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1117,27 +727,27 @@ class _SummaryCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: backgroundColor,
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 18, color: textColor),
+            child: Icon(icon, size: 18, color: color),
           ),
           const Spacer(),
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: _badgeSecondaryText,
-              fontWeight: FontWeight.w600,
-            ),
+                  color: taskSecondaryText,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
           const SizedBox(height: 4),
           Text(
             '$count',
             key: DashboardScreen.summaryCountKey(label),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: _darkText,
-              fontWeight: FontWeight.w700,
-            ),
+                  color: taskDarkText,
+                  fontWeight: FontWeight.w700,
+                ),
           ),
         ],
       ),
@@ -1145,24 +755,26 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
+class _DashboardSection extends StatelessWidget {
+  const _DashboardSection({
     required this.title,
     required this.subtitle,
+    required this.headerKey,
+    required this.isExpanded,
+    required this.count,
+    required this.toneColor,
+    required this.onHeaderTap,
     required this.child,
-    this.isExpanded,
-    this.headerKey,
-    this.onHeaderTap,
-    this.trailing,
   });
 
   final String title;
   final String subtitle;
+  final Key headerKey;
+  final bool isExpanded;
+  final int count;
+  final Color toneColor;
+  final VoidCallback onHeaderTap;
   final Widget child;
-  final bool? isExpanded;
-  final Key? headerKey;
-  final VoidCallback? onHeaderTap;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1171,7 +783,7 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _borderColor),
+        border: Border.all(color: taskBorderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1180,45 +792,54 @@ class _SectionCard extends StatelessWidget {
             key: headerKey,
             onTap: onHeaderTap,
             borderRadius: BorderRadius.circular(18),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: _darkText,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: _badgeSecondaryText,
-                                height: 1.4,
-                              ),
-                        ),
-                      ],
-                    ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: taskDarkText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: taskSecondaryText,
+                              height: 1.4,
+                            ),
+                      ),
+                    ],
                   ),
-                  ...(trailing != null ? [trailing!] : const <Widget>[]),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: toneColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: toneColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (isExpanded != false) ...[
+          if (isExpanded) ...[
             const SizedBox(height: 16),
-            const Divider(height: 1, thickness: 1, color: _borderColor),
-            const SizedBox(height: 18),
-            Padding(padding: const EdgeInsets.only(bottom: 6), child: child),
+            const Divider(height: 1, thickness: 1, color: taskBorderColor),
+            const SizedBox(height: 16),
+            child,
           ],
         ],
       ),
@@ -1226,255 +847,123 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _ExpandTrailing extends StatelessWidget {
-  const _ExpandTrailing({
-    required this.countLabel,
-    required this.countBackgroundColor,
-    required this.countTextColor,
-    required this.isExpanded,
+class _TaskListBody extends StatelessWidget {
+  const _TaskListBody({
+    required this.tasks,
+    required this.emptyTitle,
+    required this.emptyMessage,
+    required this.onTaskOpened,
+    required this.onTaskToggled,
   });
 
-  final String countLabel;
-  final Color countBackgroundColor;
-  final Color countTextColor;
-  final bool isExpanded;
+  final List<TaskItem> tasks;
+  final String emptyTitle;
+  final String emptyMessage;
+  final Future<void> Function(TaskItem task) onTaskOpened;
+  final Future<void> Function(TaskItem task) onTaskToggled;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    if (tasks.isEmpty) {
+      return _DashboardEmptyState(
+        title: emptyTitle,
+        message: emptyMessage,
+      );
+    }
+
+    return Column(
       children: [
-        _ToneBadge(
-          label: countLabel,
-          backgroundColor: countBackgroundColor,
-          textColor: countTextColor,
-        ),
-        const SizedBox(width: 8),
-        AnimatedRotation(
-          turns: isExpanded ? 0.5 : 0,
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeInOutCubic,
-          child: const Icon(
-            Icons.expand_more_rounded,
-            color: _badgeSecondaryText,
+        for (final task in tasks)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _HomeTaskTile(
+              task: task,
+              onOpen: () => onTaskOpened(task),
+              onToggle: () => onTaskToggled(task),
+            ),
           ),
-        ),
       ],
     );
   }
 }
 
-class _AnimatedSectionBody extends StatelessWidget {
-  const _AnimatedSectionBody({required this.isExpanded, required this.child});
-
-  final bool isExpanded;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(begin: 0, end: isExpanded ? 1 : 0),
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeInOutCubic,
-        child: child,
-        builder: (context, value, child) {
-          return Align(
-            alignment: Alignment.topCenter,
-            heightFactor: value,
-            child: child,
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TaskGroup extends StatelessWidget {
-  const _TaskGroup({
-    required this.title,
-    required this.tasks,
-    required this.onTaskToggled,
+class _HomeTaskTile extends StatelessWidget {
+  const _HomeTaskTile({
+    required this.task,
+    required this.onOpen,
+    required this.onToggle,
   });
 
-  final String title;
-  final List<DashboardTask> tasks;
-  final ValueChanged<String> onTaskToggled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: _darkText,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          for (final task in tasks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _TaskTile(
-                task: task,
-                onToggle: () => onTaskToggled(task.id),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TaskTile extends StatelessWidget {
-  const _TaskTile({required this.task, required this.onToggle});
-
-  final DashboardTask task;
+  final TaskItem task;
+  final VoidCallback onOpen;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final toneData = switch (task.priority) {
-      TaskPriority.high => (_dangerBg, _dangerText, 'High priority'),
-      TaskPriority.medium => (_warningBg, _warningText, 'Pending'),
-      TaskPriority.low => (_successBg, _successText, 'Low priority'),
-    };
+    final preview = task.notePlainText?.trim().isNotEmpty == true
+        ? task.notePlainText!.trim()
+        : 'Open the note editor to add rich content.';
 
-    final backgroundColor = task.isOverdue
-        ? _dangerBg
-        : task.isCompleted
-        ? _successBg
-        : Colors.white;
-    final borderColor = task.isOverdue
-        ? _dangerText.withValues(alpha: 0.35)
-        : task.isCompleted
-        ? _successText.withValues(alpha: 0.3)
-        : _borderColor;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
-      ),
-      padding: const EdgeInsets.fromLTRB(10, 14, 14, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2, right: 8),
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-              child: Checkbox(
-                key: DashboardScreen.taskToggleKey(task.id),
-                value: task.isCompleted,
-                onChanged: (_) => onToggle(),
-                activeColor: _successText,
-              ),
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: taskSurface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: taskBorderColor),
+        ),
+        padding: const EdgeInsets.fromLTRB(10, 14, 14, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Checkbox(
+              key: DashboardScreen.taskToggleKey(task.id),
+              value: task.isCompleted,
+              onChanged: (_) => onToggle(),
+              activeColor: taskSuccessText,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
             ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        task.title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: _darkText,
-                          fontWeight: FontWeight.w700,
-                          decoration: task.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
-                    ),
-                    if (task.isPinned)
-                      const Icon(
-                        TablerIcons.pin_filled,
-                        size: 16,
-                        color: _badgePrimaryText,
-                      ),
-                  ],
-                ),
-                if (task.timeLabel != null) ...[
-                  const SizedBox(height: 8),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    task.timeLabel!,
+                    task.title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: taskDarkText,
+                          fontWeight: FontWeight.w700,
+                          decoration:
+                              task.isCompleted ? TextDecoration.lineThrough : null,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    preview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _badgeSecondaryText,
-                      fontWeight: FontWeight.w600,
-                    ),
+                          color: taskSecondaryText,
+                          height: 1.4,
+                        ),
                   ),
                 ],
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _ToneBadge(
-                      label: toneData.$3,
-                      backgroundColor: toneData.$1,
-                      textColor: toneData.$2,
-                    ),
-                    if (task.isOverdue)
-                      const _ToneBadge(
-                        label: 'Overdue',
-                        backgroundColor: _dangerBg,
-                        textColor: _dangerText,
-                      ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ToneBadge extends StatelessWidget {
-  const _ToneBadge({
-    required this.label,
-    required this.backgroundColor,
-    required this.textColor,
-  });
-
-  final String label;
-  final Color backgroundColor;
-  final Color textColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: textColor,
-          fontWeight: FontWeight.w700,
+          ],
         ),
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.title, required this.message});
+class _DashboardEmptyState extends StatelessWidget {
+  const _DashboardEmptyState({
+    required this.title,
+    required this.message,
+  });
 
   final String title;
   final String message;
@@ -1490,20 +979,180 @@ class _EmptyState extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: _darkText,
-                fontWeight: FontWeight.w700,
-              ),
+                    color: taskDarkText,
+                    fontWeight: FontWeight.w700,
+                  ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Text(
               message,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: _badgeSecondaryText,
-                height: 1.4,
-              ),
+                    color: taskSecondaryText,
+                    height: 1.4,
+                  ),
               textAlign: TextAlign.center,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DisplayNamePromptDialog extends StatefulWidget {
+  const _DisplayNamePromptDialog();
+
+  @override
+  State<_DisplayNamePromptDialog> createState() => _DisplayNamePromptDialogState();
+}
+
+class _DisplayNamePromptDialogState extends State<_DisplayNamePromptDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      key: DashboardScreen.namePromptKey,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'What should we call you?',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: taskDarkText,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your name personalizes the dashboard and welcome flow.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: taskSecondaryText,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: DashboardScreen.nameFieldKey,
+              controller: _controller,
+              decoration: taskInputDecoration(
+                context: context,
+                hintText: 'Enter your name',
+              ),
+              autofocus: true,
+              onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              key: DashboardScreen.nameSaveButtonKey,
+              onPressed: _submit,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(50),
+                backgroundColor: taskPrimaryBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeHandoffDialog extends StatefulWidget {
+  const _WelcomeHandoffDialog({required this.displayName});
+
+  final String displayName;
+
+  @override
+  State<_WelcomeHandoffDialog> createState() => _WelcomeHandoffDialogState();
+}
+
+class _WelcomeHandoffDialogState extends State<_WelcomeHandoffDialog> {
+  bool _showButton = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showButton = true;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      key: DashboardScreen.welcomeScreenKey,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: taskAccentBlue,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(
+                TablerIcons.sparkles,
+                color: taskPrimaryBlue,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Welcome, ${widget.displayName}',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: taskDarkText,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your dashboard is ready with live task notes and quick writing flows.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: taskSecondaryText,
+                    height: 1.5,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 18),
+            if (_showButton)
+              FilledButton(
+                key: DashboardScreen.welcomeButtonKey,
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: taskPrimaryBlue,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Let\'s Go'),
+              ),
           ],
         ),
       ),
@@ -1520,7 +1169,7 @@ class _PlaceholderTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: _badgeSecondaryBg,
+      color: taskSurface,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1530,7 +1179,7 @@ class _PlaceholderTab extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: _borderColor),
+              border: Border.all(color: taskBorderColor),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1539,12 +1188,12 @@ class _PlaceholderTab extends StatelessWidget {
                   width: 64,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: _badgePrimaryBg,
+                    color: taskAccentBlue,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Icon(
                     TablerIcons.layout_grid,
-                    color: _badgePrimaryText,
+                    color: taskPrimaryBlue,
                     size: 30,
                   ),
                 ),
@@ -1552,18 +1201,18 @@ class _PlaceholderTab extends StatelessWidget {
                 Text(
                   tab.title,
                   style: theme.textTheme.headlineSmall?.copyWith(
-                    color: _darkText,
-                    fontWeight: FontWeight.w700,
-                  ),
+                        color: taskDarkText,
+                        fontWeight: FontWeight.w700,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
                   tab.description,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: _badgeSecondaryText,
-                    height: 1.5,
-                  ),
+                        color: taskSecondaryText,
+                        height: 1.5,
+                      ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -1588,8 +1237,8 @@ class _BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const activeColor = _primaryBlue;
-    const inactiveColor = _badgeSecondaryText;
+    const activeColor = taskPrimaryBlue;
+    const inactiveColor = taskMutedText;
 
     return SafeArea(
       top: false,
@@ -1677,4 +1326,3 @@ class _BottomNavBar extends StatelessWidget {
     );
   }
 }
-

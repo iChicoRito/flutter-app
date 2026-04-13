@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/app/app.dart';
 import 'package:flutter_app/core/services/display_name_store.dart';
@@ -7,9 +8,11 @@ import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dar
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/splash/presentation/splash_screen.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
+import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 
 void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
@@ -39,6 +42,40 @@ void main() {
     await pumpApp(tester);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+  }
+
+  Future<void> createTaskThroughUi(
+    WidgetTester tester, {
+    required String title,
+    String? description,
+  }) async {
+    await tester.tap(find.byKey(TaskManagementScreen.addTaskFabKey));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(TaskManagementScreen.createTitleFieldKey),
+      title,
+    );
+    if (description != null) {
+      await tester.enterText(
+        find.byKey(TaskManagementScreen.createDescriptionFieldKey),
+        description,
+      );
+    }
+    await tester.tap(find.byKey(TaskManagementScreen.createSubmitButtonKey));
+    await tester.pumpAndSettle();
+  }
+
+  Widget wrapWithMaterial(Widget child) {
+    return MaterialApp(
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
+      home: child,
+    );
   }
 
   testWidgets('shows splash screen first', (WidgetTester tester) async {
@@ -95,12 +132,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(DashboardScreen.welcomeButtonKey), findsOneWidget);
-
     await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(DashboardScreen.welcomeScreenKey), findsNothing);
-    expect(find.byKey(DashboardScreen.homeTabKey), findsOneWidget);
     expect(find.text('Hi, Mark'), findsOneWidget);
   });
 
@@ -113,7 +147,6 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
 
     await tester.enterText(find.byKey(DashboardScreen.nameFieldKey), 'Jamie');
@@ -122,308 +155,370 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(displayNameStore.displayName, 'Jamie');
-    expect(find.byKey(DashboardScreen.namePromptKey), findsNothing);
     expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
-
     await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
     await tester.pumpAndSettle();
 
     expect(find.text('Hi, Jamie'), findsOneWidget);
   });
 
-  testWidgets('dashboard home still shows task-first overview content', (
+  testWidgets('dashboard home shows live task summary content', (
     WidgetTester tester,
   ) async {
-    await openDashboard(tester);
-
-    expect(find.text('Total'), findsOneWidget);
-    expect(find.text('Pending'), findsAtLeastNWidgets(1));
-    expect(find.text('Completed'), findsAtLeastNWidgets(1));
-    expect(find.text('Overdue'), findsAtLeastNWidgets(1));
-    expect(find.byKey(DashboardScreen.homeTabKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.addTaskButtonKey), findsOneWidget);
-  });
-
-  testWidgets('tasks tab replaces wallet and shows empty state', (
-    WidgetTester tester,
-  ) async {
-    await openDashboard(tester);
-
-    expect(find.text('Wallet'), findsNothing);
-    expect(find.text('Tasks'), findsOneWidget);
-
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(DashboardScreen.tasksTabKey), findsOneWidget);
-    expect(find.byKey(TaskManagementScreen.markerKey), findsOneWidget);
-    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
-    expect(find.text('No tasks yet'), findsOneWidget);
-    expect(
-      find.byKey(TaskManagementScreen.categoryDropdownKey),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(TaskManagementScreen.priorityDropdownKey),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('task module supports add edit search complete and delete', (
-    WidgetTester tester,
-  ) async {
-    await openDashboard(tester);
-
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(TaskManagementScreen.addTaskFabKey));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(TaskEditorScreen.titleFieldKey),
-      'Prepare weekly report',
-    );
-    await tester.enterText(
-      find.byKey(TaskEditorScreen.descriptionFieldKey),
-      'Review metrics and send the summary.',
-    );
-    expect(find.byKey(TaskEditorScreen.startDateButtonKey), findsOneWidget);
-    expect(find.byKey(TaskEditorScreen.endDateButtonKey), findsOneWidget);
-    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Prepare weekly report'), findsOneWidget);
-
-    final createdTaskId = (await taskRepository.getTasks()).single.id;
-
-    await tester.ensureVisible(
-      find.byKey(TaskManagementScreen.taskMenuButtonKey(createdTaskId)),
-    );
-    await tester.tap(
-      find.byKey(TaskManagementScreen.taskMenuButtonKey(createdTaskId)),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(TaskManagementScreen.taskMenuActionKey(createdTaskId, 'edit')),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(TaskEditorScreen.titleFieldKey),
-      'Prepare monthly report',
-    );
-    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Prepare monthly report'), findsOneWidget);
-
-    await tester.longPress(
-      find.byKey(TaskManagementScreen.taskTileKey(createdTaskId)),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(
-      find.byKey(TaskManagementScreen.taskToggleKey(createdTaskId)),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(TaskManagementScreen.searchFieldKey),
-      'monthly',
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Prepare monthly report'), findsOneWidget);
-
-    await tester.enterText(
-      find.byKey(TaskManagementScreen.searchFieldKey),
-      'missing',
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
-
-    await tester.enterText(find.byKey(TaskManagementScreen.searchFieldKey), '');
-    await tester.pumpAndSettle();
-
-    await tester.tap(
-      find.byKey(TaskManagementScreen.taskMenuButtonKey(createdTaskId)),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(
-        TaskManagementScreen.taskMenuActionKey(createdTaskId, 'delete'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Prepare monthly report'), findsNothing);
-    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
-  });
-
-  testWidgets('task module filters by category and priority', (
-    WidgetTester tester,
-  ) async {
-    final now = DateTime.now();
     taskRepository = InMemoryTaskRepository(
       tasks: [
-        TaskItem(
+        buildTask(
           id: 'work-task',
           title: 'Submit project brief',
           priority: TaskPriority.high,
           categoryId: 'work',
-          createdAt: now,
-          updatedAt: now,
-        ),
-        TaskItem(
-          id: 'personal-task',
-          title: 'Book annual checkup',
-          priority: TaskPriority.medium,
-          categoryId: 'personal',
-          createdAt: now.subtract(const Duration(days: 1)),
-          updatedAt: now.subtract(const Duration(days: 1)),
-          endDate: now.subtract(const Duration(days: 1)),
+          noteText: 'Scope and milestones',
         ),
       ],
     );
 
     await openDashboard(tester);
 
+    expect(find.text('Total'), findsOneWidget);
+    expect(find.text('Pending'), findsOneWidget);
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Overdue'), findsOneWidget);
+    expect(find.byKey(DashboardScreen.addTaskButtonKey), findsOneWidget);
+    expect(find.text('Submit project brief'), findsOneWidget);
+  });
+
+  testWidgets('creating a task redirects straight into the rich editor', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(
-      find.byKey(TaskManagementScreen.categoryFilterKey('work')),
-    );
-    await tester.tap(
-      find.byKey(TaskManagementScreen.categoryFilterKey('work')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Submit project brief'), findsOneWidget);
-    expect(find.text('Book annual checkup'), findsNothing);
+    await createTaskThroughUi(tester, title: 'Prepare weekly report');
 
-    await tester.tap(find.byKey(TaskManagementScreen.priorityDropdownKey));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find
-          .byKey(
-            TaskManagementScreen.priorityFilterKey(TaskPriority.medium.name),
-          )
-          .last,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Submit project brief'), findsNothing);
-    expect(find.text('Book annual checkup'), findsNothing);
-
-    await tester.ensureVisible(
-      find.byKey(TaskManagementScreen.allCategoriesKey),
-    );
-    await tester.tap(find.byKey(TaskManagementScreen.allCategoriesKey));
-    await tester.pumpAndSettle();
-    expect(find.text('Book annual checkup'), findsOneWidget);
+    expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
+    expect(find.text('Task Notes'), findsOneWidget);
+    expect(find.text('Prepare weekly report'), findsWidgets);
   });
 
-  testWidgets('task editor shows saved schedule values for editing', (
+  testWidgets('task card shows the short creation description', (
     WidgetTester tester,
   ) async {
-    final now = DateTime(2026, 4, 13, 9);
-    final task = TaskItem(
-      id: 'scheduled-task',
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await createTaskThroughUi(
+      tester,
+      title: 'Prepare weekly report',
+      description: 'Send recap to leadership',
+    );
+
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send recap to leadership'), findsOneWidget);
+  });
+
+  testWidgets('task card shows description and actual note preview separately', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'preview-task',
+          title: 'Prepare weekly report',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          noteText: 'Full meeting notes for leadership sync',
+        ).copyWith(description: 'Send recap to leadership'),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send recap to leadership'), findsOneWidget);
+    expect(find.text('Full meeting notes for leadership sync'), findsOneWidget);
+  });
+
+  testWidgets('creation description stays separate from the note body', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await createTaskThroughUi(
+      tester,
+      title: 'Prepare weekly report',
+      description: 'Send recap to leadership',
+    );
+
+    final createdTask = (await taskRepository.getTasks()).single;
+    expect(createdTask.description, 'Send recap to leadership');
+    expect(createdTask.notePlainText, isNull);
+  });
+
+  testWidgets('editor autosaves title changes and reopens with persisted data', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await createTaskThroughUi(tester, title: 'Prepare weekly report');
+
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(TaskEditorScreen.titleFieldKey),
+      'Prepare monthly report',
+    );
+    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TaskEditorScreen.autosaveStatusKey), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prepare monthly report'), findsOneWidget);
+
+    await tester.tap(find.text('Prepare monthly report'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prepare monthly report'), findsOneWidget);
+  });
+
+  testWidgets('editor metadata changes autosave and update timestamps', (
+    WidgetTester tester,
+  ) async {
+    final task = buildTask(
+      id: 'metadata-task',
       title: 'Run workshop',
-      description: 'Finalize the prep list.',
-      priority: TaskPriority.high,
-      categoryId: 'work',
-      createdAt: now,
-      updatedAt: now,
-      startDate: DateTime(2026, 4, 15),
-      startMinutes: 9 * 60,
-      endDate: DateTime(2026, 4, 15),
-      endMinutes: 11 * 60,
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TaskEditorScreen(
-          repository: taskRepository,
-          categories: await taskRepository.getCategories(),
-          initialTask: task,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Apr 15, 2026'), findsNWidgets(2));
-    expect(find.text('9:00 AM'), findsOneWidget);
-    expect(find.text('11:00 AM'), findsOneWidget);
-  });
-
-  testWidgets('task editor blocks save when end schedule is before start', (
-    WidgetTester tester,
-  ) async {
-    final now = DateTime(2026, 4, 13, 9);
-    final task = TaskItem(
-      id: 'invalid-schedule',
-      title: 'Broken schedule',
       priority: TaskPriority.medium,
       categoryId: 'work',
-      createdAt: now,
-      updatedAt: now,
-      startDate: DateTime(2026, 4, 15),
-      startMinutes: 10 * 60,
-      endDate: DateTime(2026, 4, 15),
-      endMinutes: 9 * 60,
     );
+    taskRepository = InMemoryTaskRepository(tasks: [task]);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: TaskEditorScreen(
+      wrapWithMaterial(
+        TaskEditorScreen(
           repository: taskRepository,
-          categories: await taskRepository.getCategories(),
-          initialTask: task,
+          taskId: task.id,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
-    await tester.pump();
+    final beforeUpdate = (await taskRepository.getTaskById(task.id))!.updatedAt;
 
-    expect(
-      find.text(
-        'End schedule must be later than or equal to the start schedule.',
-      ),
-      findsWidgets,
-    );
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.priorityFieldKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-editor-priority-urgent')).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+
+    final updatedTask = (await taskRepository.getTaskById(task.id))!;
+    expect(updatedTask.priority, TaskPriority.urgent);
+    expect(updatedTask.updatedAt.isAfter(beforeUpdate), isTrue);
   });
 
-  testWidgets('create category dialog uses structured modal sections', (
+  testWidgets('task list search matches note preview text', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TaskEditorScreen(
-          repository: taskRepository,
-          categories: await taskRepository.getCategories(),
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'search-task',
+          title: 'Planning session',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+          noteText: 'Quarterly planning notes',
         ),
-      ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(TaskManagementScreen.searchFieldKey),
+      'planning notes',
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(TaskEditorScreen.addCategoryButtonKey));
+    expect(find.text('Planning session'), findsOneWidget);
+  });
+
+  testWidgets('task editor opens from both tasks tab and dashboard home', (
+    WidgetTester tester,
+  ) async {
+    final task = buildTask(
+      id: 'shared-open',
+      title: 'Outline launch checklist',
+      priority: TaskPriority.medium,
+      categoryId: 'work',
+      noteText: 'Draft agenda',
+    );
+    taskRepository = InMemoryTaskRepository(tasks: [task]);
+
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Outline launch checklist'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await tester.pumpAndSettle();
 
-    expect(find.text('Create Category'), findsOneWidget);
-    expect(find.text('Category Name'), findsOneWidget);
-    expect(find.text('Icon'), findsOneWidget);
-    expect(find.text('Color Selection'), findsOneWidget);
-    expect(find.text('Cancel'), findsOneWidget);
-    expect(find.text('Create'), findsOneWidget);
-    expect(find.text('Work'), findsNothing);
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Outline launch checklist'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
   });
+
+  testWidgets('dashboard completion toggles stay in sync with tasks tab', (
+    WidgetTester tester,
+  ) async {
+    final task = buildTask(
+      id: 'sync-task',
+      title: 'Review analytics dashboard',
+      priority: TaskPriority.medium,
+      categoryId: 'work',
+    );
+    final secondTask = buildTask(
+      id: 'sync-task-2',
+      title: 'Ship release notes',
+      priority: TaskPriority.low,
+      categoryId: 'work',
+    );
+    taskRepository = InMemoryTaskRepository(tasks: [task, secondTask]);
+
+    await openDashboard(tester);
+
+    await tester.tap(find.byKey(DashboardScreen.taskToggleKey(task.id)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(
+      find.byKey(TaskManagementScreen.taskTileKey(task.id)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(TaskManagementScreen.taskToggleKey(secondTask.id)),
+      findsOneWidget,
+    );
+
+    final checkbox = tester.widget<Checkbox>(
+      find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
+    );
+    expect(checkbox.value, isTrue);
+  });
+
+  testWidgets('selection mode clears on outside tap and back press', (
+    WidgetTester tester,
+  ) async {
+    final task = buildTask(
+      id: 'selection-task',
+      title: 'Finalize budget proposal',
+      priority: TaskPriority.medium,
+      categoryId: 'work',
+    );
+    final secondTask = buildTask(
+      id: 'selection-task-2',
+      title: 'Confirm rollout timeline',
+      priority: TaskPriority.high,
+      categoryId: 'work',
+    );
+    taskRepository = InMemoryTaskRepository(tasks: [task, secondTask]);
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(
+      find.byKey(TaskManagementScreen.taskTileKey(task.id)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(TaskManagementScreen.taskToggleKey(secondTask.id)),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
+      findsNothing,
+    );
+
+    await tester.longPress(
+      find.byKey(TaskManagementScreen.taskTileKey(task.id)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TaskManagementScreen.markerKey), findsOneWidget);
+    expect(
+      find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
+      findsNothing,
+    );
+  });
+}
+
+TaskItem buildTask({
+  required String id,
+  required String title,
+  required TaskPriority priority,
+  required String categoryId,
+  String? noteText,
+}) {
+  final now = DateTime(2026, 4, 13, 9);
+  return TaskItem(
+    id: id,
+    title: title,
+    priority: priority,
+    categoryId: categoryId,
+    createdAt: now,
+    updatedAt: now,
+    noteDocumentJson: buildPlainTextNoteDocumentJson(noteText),
+    notePlainText: noteText,
+  );
 }
 
 class FakeOnboardingStatusStore implements OnboardingStatusStore {

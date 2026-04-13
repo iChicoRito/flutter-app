@@ -1,8 +1,10 @@
 import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
+import 'features/task_management/data/hive_task_repository.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  final taskRepository = await HiveTaskRepository.initialize();
+  runApp(MyApp(taskRepository: taskRepository));
 }

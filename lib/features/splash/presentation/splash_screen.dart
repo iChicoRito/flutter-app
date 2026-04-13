@@ -7,10 +7,7 @@ import '../../dashboard/presentation/dashboard_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({
-    super.key,
-    required this.onboardingStatusStore,
-  });
+  const SplashScreen({super.key, required this.onboardingStatusStore});
 
   static const Key markerKey = Key('splash-screen');
 
@@ -40,21 +37,22 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 2600),
     )..repeat(reverse: true);
 
-    _glowScale = Tween<double>(begin: 0.92, end: 1.08).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _markScale = Tween<double>(begin: 0.96, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
-    _markOpacity = Tween<double>(begin: 0.88, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _glowScale = Tween<double>(
+      begin: 0.92,
+      end: 1.08,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _markScale = Tween<double>(
+      begin: 0.96,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+    _markOpacity = Tween<double>(
+      begin: 0.88,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     _labelOffset = Tween<Offset>(
       begin: const Offset(0, 0.16),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _navigationTimer = Timer(_displayDuration, _navigateToNextScreen);
   }
@@ -73,12 +71,11 @@ class _SplashScreenState extends State<SplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 700),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            isCompleted
-                ? const DashboardScreen()
-                : OnboardingScreen(
-                    onboardingStatusStore: widget.onboardingStatusStore,
-                  ),
+        pageBuilder: (context, animation, secondaryAnimation) => isCompleted
+            ? const DashboardScreen()
+            : OnboardingScreen(
+                onboardingStatusStore: widget.onboardingStatusStore,
+              ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final fade = CurvedAnimation(
             parent: animation,

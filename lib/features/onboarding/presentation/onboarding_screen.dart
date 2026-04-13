@@ -5,10 +5,7 @@ import '../../dashboard/presentation/dashboard_screen.dart';
 import '../domain/onboarding_step_data.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({
-    super.key,
-    required this.onboardingStatusStore,
-  });
+  const OnboardingScreen({super.key, required this.onboardingStatusStore});
 
   static const Key markerKey = Key('onboarding-screen');
   static const Key contentKey = Key('onboarding-content');
@@ -148,8 +145,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               },
               onHorizontalDragEnd: _handleSwipeEnd,
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 20,
+                ),
                 child: Column(
                   children: [
                     const Spacer(),
@@ -178,10 +177,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeOutCubic,
-                              layoutBuilder:
-                                  (currentChild, previousChildren) {
-                                return currentChild ??
-                                    const SizedBox.shrink();
+                              layoutBuilder: (currentChild, previousChildren) {
+                                return currentChild ?? const SizedBox.shrink();
                               },
                               transitionBuilder: (child, animation) {
                                 final isForward =
@@ -211,10 +208,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeOutCubic,
-                              layoutBuilder:
-                                  (currentChild, previousChildren) {
-                                return currentChild ??
-                                    const SizedBox.shrink();
+                              layoutBuilder: (currentChild, previousChildren) {
+                                return currentChild ?? const SizedBox.shrink();
                               },
                               transitionBuilder: (child, animation) {
                                 final isForward =
@@ -287,10 +282,7 @@ class _OnboardingBackdrop extends StatelessWidget {
               height: 160,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(48),
-                border: Border.all(
-                  color: const Color(0x331E88E5),
-                  width: 1.6,
-                ),
+                border: Border.all(color: const Color(0x331E88E5), width: 1.6),
               ),
             ),
           ),
@@ -331,18 +323,13 @@ class _OnboardingVisual extends StatelessWidget {
         shape: BoxShape.circle,
         color: secondary.withValues(alpha: 0.35),
       ),
-      child: Center(
-        child: Icon(icon, size: 54, color: primary),
-      ),
+      child: Center(child: Icon(icon, size: 54, color: primary)),
     );
   }
 }
 
 class _StepIndicator extends StatelessWidget {
-  const _StepIndicator({
-    required this.currentIndex,
-    required this.totalSteps,
-  });
+  const _StepIndicator({required this.currentIndex, required this.totalSteps});
 
   final int currentIndex;
   final int totalSteps;
@@ -351,8 +338,7 @@ class _StepIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     const dotSize = 8.0;
     const gap = 6.0;
-    final totalWidth =
-        (totalSteps * dotSize) + ((totalSteps - 1) * gap);
+    final totalWidth = (totalSteps * dotSize) + ((totalSteps - 1) * gap);
 
     return SizedBox(
       width: totalWidth,
@@ -366,7 +352,9 @@ class _StepIndicator extends StatelessWidget {
               (index) => Container(
                 width: dotSize,
                 height: dotSize,
-                margin: EdgeInsets.only(right: index == totalSteps - 1 ? 0 : gap),
+                margin: EdgeInsets.only(
+                  right: index == totalSteps - 1 ? 0 : gap,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFBFDBFE),
                   borderRadius: BorderRadius.circular(999),
@@ -421,9 +409,7 @@ class _OnboardingActions extends StatelessWidget {
       style: FilledButton.styleFrom(
         minimumSize: const Size.fromHeight(54),
         backgroundColor: const Color(0xFF1E88E5),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       child: isCompleting
           ? const SizedBox(

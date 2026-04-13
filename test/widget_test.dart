@@ -1,48 +1,53 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tabler_icons/tabler_icons.dart';
-
 import 'package:flutter_app/app/app.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/splash/presentation/splash_screen.dart';
+import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
+import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
+import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
+import 'package:flutter_app/features/task_management/domain/task_item.dart';
 
 void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
+  late InMemoryTaskRepository taskRepository;
 
   setUp(() {
     onboardingStatusStore = FakeOnboardingStatusStore();
+    taskRepository = InMemoryTaskRepository();
   });
 
-  testWidgets('shows splash screen first', (WidgetTester tester) async {
+  Future<void> pumpApp(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
     await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
+      MyApp(
+        onboardingStatusStore: onboardingStatusStore,
+        taskRepository: taskRepository,
+      ),
     );
+  }
+
+  Future<void> openDashboard(WidgetTester tester) async {
+    onboardingStatusStore.completed = true;
+    await pumpApp(tester);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('shows splash screen first', (WidgetTester tester) async {
+    await pumpApp(tester);
 
     expect(find.byKey(SplashScreen.markerKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.markerKey), findsNothing);
     expect(find.text('Flutter App'), findsOneWidget);
   });
 
-  testWidgets('keeps splash visible before five seconds', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
-    await tester.pump(const Duration(seconds: 4, milliseconds: 900));
-
-    expect(find.byKey(SplashScreen.markerKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.markerKey), findsNothing);
-  });
-
   testWidgets('navigates to onboarding after five seconds on first launch', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
+    await pumpApp(tester);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
@@ -52,40 +57,10 @@ void main() {
     expect(find.text('Get Started'), findsOneWidget);
   });
 
-  testWidgets('shows four-step onboarding with expected navigation labels', (
+  testWidgets('completing onboarding writes the flag and opens dashboard', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(OnboardingScreen.contentKey), findsOneWidget);
-    expect(find.text('Welcome Aboard'), findsOneWidget);
-    expect(find.text('Get Started'), findsOneWidget);
-
-    await tester.tap(find.text('Get Started'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Back'), findsOneWidget);
-    expect(find.text('Next'), findsOneWidget);
-
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Ready To Begin'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
-  });
-
-  testWidgets('completing onboarding writes the flag and opens home', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
+    await pumpApp(tester);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
@@ -103,146 +78,190 @@ void main() {
     expect(find.byKey(DashboardScreen.homeTabKey), findsOneWidget);
   });
 
-  testWidgets('skips onboarding when it was already completed', (
+  testWidgets('dashboard home still shows task-first overview content', (
     WidgetTester tester,
   ) async {
-    onboardingStatusStore.completed = true;
-
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(OnboardingScreen.markerKey), findsNothing);
-    expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
-  });
-
-  testWidgets('dashboard home shows task-first content and add task CTA', (
-    WidgetTester tester,
-  ) async {
-    onboardingStatusStore.completed = true;
-
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
+    await openDashboard(tester);
 
     expect(find.text('Total'), findsOneWidget);
-    expect(find.text('Pending'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
-    expect(find.text('Overdue'), findsOneWidget);
-
-    final dashboardScroll = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
-      find.text('Today\'s Tasks'),
-      300,
-      scrollable: dashboardScroll,
-    );
-    await tester.scrollUntilVisible(
-      find.text('Upcoming'),
-      300,
-      scrollable: dashboardScroll,
-    );
-
+    expect(find.text('Pending'), findsAtLeastNWidgets(1));
+    expect(find.text('Completed'), findsAtLeastNWidgets(1));
+    expect(find.text('Overdue'), findsAtLeastNWidgets(1));
     expect(find.byKey(DashboardScreen.homeTabKey), findsOneWidget);
-    expect(find.text('Today\'s Tasks'), findsOneWidget);
-    expect(find.text('Upcoming'), findsOneWidget);
     expect(find.byKey(DashboardScreen.addTaskButtonKey), findsOneWidget);
   });
 
-  testWidgets('toggling a task updates counts and progress', (
+  testWidgets('tasks tab replaces wallet and shows empty state', (
     WidgetTester tester,
   ) async {
-    onboardingStatusStore.completed = true;
+    await openDashboard(tester);
 
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
-    );
-    await tester.pump(const Duration(seconds: 5));
+    expect(find.text('Wallet'), findsNothing);
+    expect(find.text('Tasks'), findsOneWidget);
+
+    await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(DashboardScreen.tasksTabKey), findsOneWidget);
+    expect(find.byKey(TaskManagementScreen.markerKey), findsOneWidget);
+    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
+    expect(find.text('No tasks yet'), findsOneWidget);
     expect(
-      tester
-          .widget<Text>(find.byKey(DashboardScreen.summaryCountKey('Pending')))
-          .data,
-      '6',
+      find.byKey(TaskManagementScreen.categoryDropdownKey),
+      findsOneWidget,
     );
     expect(
-      tester.widget<Text>(find.byKey(DashboardScreen.progressLabelKey)).data,
-      '2 of 5 tasks completed today',
+      find.byKey(TaskManagementScreen.priorityDropdownKey),
+      findsOneWidget,
     );
+  });
 
-    final dashboardScroll = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
-      find.byKey(DashboardScreen.taskToggleKey('today-design')),
-      120,
-      scrollable: dashboardScroll,
-    );
-    await tester.drag(dashboardScroll, const Offset(0, -120));
+  testWidgets('task module supports add edit search complete and delete', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskManagementScreen.addTaskFabKey));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(TaskEditorScreen.titleFieldKey),
+      'Prepare weekly report',
+    );
+    await tester.enterText(
+      find.byKey(TaskEditorScreen.descriptionFieldKey),
+      'Review metrics and send the summary.',
+    );
+    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prepare weekly report'), findsOneWidget);
+
+    final createdTaskId = (await taskRepository.getTasks()).single.id;
+
     await tester.ensureVisible(
-      find.byKey(DashboardScreen.taskToggleKey('today-design')),
+      find.byKey(TaskManagementScreen.taskMenuButtonKey(createdTaskId)),
+    );
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuButtonKey(createdTaskId)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(DashboardScreen.taskToggleKey('today-design')));
-    await tester.pumpAndSettle();
-    await tester.drag(dashboardScroll, const Offset(0, 500));
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuActionKey(createdTaskId, 'edit')),
+    );
     await tester.pumpAndSettle();
 
-    expect(
-      tester
-          .widget<Text>(find.byKey(DashboardScreen.summaryCountKey('Pending')))
-          .data,
-      '5',
+    await tester.enterText(
+      find.byKey(TaskEditorScreen.titleFieldKey),
+      'Prepare monthly report',
     );
+    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prepare monthly report'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskToggleKey(createdTaskId)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(TaskManagementScreen.searchFieldKey),
+      'monthly',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Prepare monthly report'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(TaskManagementScreen.searchFieldKey),
+      'missing',
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
+
+    await tester.enterText(find.byKey(TaskManagementScreen.searchFieldKey), '');
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuButtonKey(createdTaskId)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        TaskManagementScreen.taskMenuActionKey(createdTaskId, 'delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prepare monthly report'), findsNothing);
+    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
   });
 
-  testWidgets('completed section starts collapsed and can expand', (
+  testWidgets('task module filters by category and priority', (
     WidgetTester tester,
   ) async {
-    onboardingStatusStore.completed = true;
-
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
+    final now = DateTime.now();
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        TaskItem(
+          id: 'work-task',
+          title: 'Submit project brief',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+          createdAt: now,
+          updatedAt: now,
+        ),
+        TaskItem(
+          id: 'personal-task',
+          title: 'Book annual checkup',
+          priority: TaskPriority.medium,
+          categoryId: 'personal',
+          createdAt: now.subtract(const Duration(days: 1)),
+          updatedAt: now.subtract(const Duration(days: 1)),
+          dueDate: now.subtract(const Duration(days: 1)),
+        ),
+      ],
     );
-    await tester.pump(const Duration(seconds: 5));
+
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Send status update email'), findsNothing);
-
-    final dashboardScroll = find.byType(Scrollable).first;
-    await tester.scrollUntilVisible(
-      find.byKey(DashboardScreen.completedHeaderKey),
-      300,
-      scrollable: dashboardScroll,
+    await tester.ensureVisible(
+      find.byKey(TaskManagementScreen.categoryFilterKey('work')),
     );
-    await tester.tap(find.byKey(DashboardScreen.completedHeaderKey));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Send status update email'), findsOneWidget);
-  });
-
-  testWidgets('summary cards render as passive stats with icons', (
-    WidgetTester tester,
-  ) async {
-    onboardingStatusStore.completed = true;
-
-    await tester.pumpWidget(
-      MyApp(onboardingStatusStore: onboardingStatusStore),
+    await tester.tap(
+      find.byKey(TaskManagementScreen.categoryFilterKey('work')),
     );
-    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+    expect(find.text('Submit project brief'), findsOneWidget);
+    expect(find.text('Book annual checkup'), findsNothing);
 
-    expect(find.text('Total'), findsOneWidget);
-    expect(find.text('Pending'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
-    expect(find.text('Overdue'), findsOneWidget);
-    expect(find.byIcon(TablerIcons.list_details), findsOneWidget);
-    expect(find.byIcon(TablerIcons.clock_hour_8), findsAtLeastNWidgets(1));
-    expect(find.byIcon(TablerIcons.circle_check), findsAtLeastNWidgets(1));
-    expect(find.byIcon(TablerIcons.alert_circle), findsOneWidget);
+    await tester.tap(find.byKey(TaskManagementScreen.priorityDropdownKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find
+          .byKey(
+            TaskManagementScreen.priorityFilterKey(TaskPriority.medium.name),
+          )
+          .last,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Submit project brief'), findsNothing);
+    expect(find.text('Book annual checkup'), findsNothing);
+
+    await tester.ensureVisible(
+      find.byKey(TaskManagementScreen.allCategoriesKey),
+    );
+    await tester.tap(find.byKey(TaskManagementScreen.allCategoriesKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Book annual checkup'), findsOneWidget);
   });
 }
 

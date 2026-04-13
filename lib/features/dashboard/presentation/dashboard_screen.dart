@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../../core/services/task_repository_scope.dart';
+import '../../task_management/presentation/task_management_screen.dart';
 import '../domain/dashboard_task.dart';
 import '../domain/dashboard_task_seed.dart';
 
@@ -10,6 +12,7 @@ class DashboardScreen extends StatefulWidget {
 
   static const Key markerKey = Key('dashboard-screen');
   static const Key homeTabKey = Key('dashboard-home-tab');
+  static const Key tasksTabKey = Key('dashboard-tasks-tab');
   static const Key addTaskButtonKey = Key('dashboard-add-task');
   static const Key todayHeaderKey = Key('dashboard-today-header');
   static const Key upcomingHeaderKey = Key('dashboard-upcoming-header');
@@ -56,10 +59,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       description: 'Placeholder content for the main dashboard view.',
     ),
     _DashboardTab(
-      label: 'Wallet',
-      assetPath: 'assets/icons/wallet_filled.svg',
-      title: 'Wallet',
-      description: 'Placeholder content for balances and transactions.',
+      label: 'Tasks',
+      icon: TablerIcons.checklist,
+      title: 'Task Management',
+      description: 'Your offline task, note, and reminder hub.',
     ),
     _DashboardTab(
       label: 'Analysis',
@@ -95,6 +98,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tab = _tabs[_currentIndex];
+    final taskRepository = TaskRepositoryScope.of(context);
 
     return Scaffold(
       key: DashboardScreen.markerKey,
@@ -130,6 +134,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _isCompletedExpanded = !_isCompletedExpanded;
                   });
                 },
+              )
+            : _currentIndex == 1
+            ? KeyedSubtree(
+                key: DashboardScreen.tasksTabKey,
+                child: TaskManagementScreen(repository: taskRepository),
               )
             : _PlaceholderTab(tab: tab, theme: theme),
       ),
@@ -175,13 +184,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class _DashboardTab {
   const _DashboardTab({
     required this.label,
-    required this.assetPath,
     required this.title,
     required this.description,
-  });
+    this.assetPath,
+    this.icon,
+  }) : assert(assetPath != null || icon != null);
 
   final String label;
-  final String assetPath;
+  final String? assetPath;
+  final IconData? icon;
   final String title;
   final String description;
 }
@@ -216,22 +227,26 @@ class _DashboardHomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount =
-        tasks.where((task) => !task.isCompleted && !task.isOverdue).length;
+    final pendingCount = tasks
+        .where((task) => !task.isCompleted && !task.isOverdue)
+        .length;
     final completedCount = tasks.where((task) => task.isCompleted).length;
-    final overdueCount =
-        tasks.where((task) => task.isOverdue && !task.isCompleted).length;
+    final overdueCount = tasks
+        .where((task) => task.isOverdue && !task.isCompleted)
+        .length;
 
     final todayTasks = _sortedTasks(_tasksForBucket(TaskBucket.today));
     final tomorrowTasks = _sortedTasks(_tasksForBucket(TaskBucket.tomorrow));
     final thisWeekTasks = _sortedTasks(_tasksForBucket(TaskBucket.thisWeek));
     final laterTasks = _sortedTasks(_tasksForBucket(TaskBucket.later));
     final overdueTasks = _sortedTasks(_tasksForBucket(TaskBucket.overdue));
-    final completedTasks =
-        _sortedTasks(tasks.where((task) => task.isCompleted).toList());
+    final completedTasks = _sortedTasks(
+      tasks.where((task) => task.isCompleted).toList(),
+    );
 
-    final todayProgressTotal =
-        tasks.where((task) => task.bucket == TaskBucket.today || task.isCompleted).length;
+    final todayProgressTotal = tasks
+        .where((task) => task.bucket == TaskBucket.today || task.isCompleted)
+        .length;
     final todayCompleted = completedCount;
     final progressValue = todayProgressTotal == 0
         ? 0.0
@@ -317,35 +332,35 @@ class _DashboardHomeTab extends StatelessWidget {
               isExpanded: isUpcomingExpanded,
               child:
                   tomorrowTasks.isEmpty &&
-                          thisWeekTasks.isEmpty &&
-                          laterTasks.isEmpty
-                      ? const _EmptyState(
-                          title: 'Nothing upcoming',
-                          message: 'Your future queue is clear for this filter.',
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (tomorrowTasks.isNotEmpty)
-                              _TaskGroup(
-                                title: 'Tomorrow',
-                                tasks: tomorrowTasks,
-                                onTaskToggled: onTaskToggled,
-                              ),
-                            if (thisWeekTasks.isNotEmpty)
-                              _TaskGroup(
-                                title: 'This Week',
-                                tasks: thisWeekTasks,
-                                onTaskToggled: onTaskToggled,
-                              ),
-                            if (laterTasks.isNotEmpty)
-                              _TaskGroup(
-                                title: 'Later',
-                                tasks: laterTasks,
-                                onTaskToggled: onTaskToggled,
-                              ),
-                          ],
-                        ),
+                      thisWeekTasks.isEmpty &&
+                      laterTasks.isEmpty
+                  ? const _EmptyState(
+                      title: 'Nothing upcoming',
+                      message: 'Your future queue is clear for this filter.',
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (tomorrowTasks.isNotEmpty)
+                          _TaskGroup(
+                            title: 'Tomorrow',
+                            tasks: tomorrowTasks,
+                            onTaskToggled: onTaskToggled,
+                          ),
+                        if (thisWeekTasks.isNotEmpty)
+                          _TaskGroup(
+                            title: 'This Week',
+                            tasks: thisWeekTasks,
+                            onTaskToggled: onTaskToggled,
+                          ),
+                        if (laterTasks.isNotEmpty)
+                          _TaskGroup(
+                            title: 'Later',
+                            tasks: laterTasks,
+                            onTaskToggled: onTaskToggled,
+                          ),
+                      ],
+                    ),
             ),
           ),
           const SizedBox(height: 18),
@@ -434,14 +449,14 @@ class _DashboardHomeTab extends StatelessWidget {
   List<DashboardTask> _sortedTasks(List<DashboardTask> values) {
     final sorted = [...values];
     sorted.sort((a, b) {
-      final pinnedCompare =
-          (b.isPinned ? 1 : 0).compareTo(a.isPinned ? 1 : 0);
+      final pinnedCompare = (b.isPinned ? 1 : 0).compareTo(a.isPinned ? 1 : 0);
       if (pinnedCompare != 0) {
         return pinnedCompare;
       }
 
-      final priorityCompare =
-          _priorityWeight(b.priority).compareTo(_priorityWeight(a.priority));
+      final priorityCompare = _priorityWeight(
+        b.priority,
+      ).compareTo(_priorityWeight(a.priority));
       if (priorityCompare != 0) {
         return priorityCompare;
       }
@@ -522,10 +537,7 @@ class _HeaderRow extends StatelessWidget {
             color: _badgePrimaryBg,
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(
-            TablerIcons.checklist,
-            color: _badgePrimaryText,
-          ),
+          child: const Icon(TablerIcons.checklist, color: _badgePrimaryText),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -565,10 +577,7 @@ class _HeaderRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _borderColor),
           ),
-          child: const Icon(
-            TablerIcons.bell,
-            color: _badgeSecondaryText,
-          ),
+          child: const Icon(TablerIcons.bell, color: _badgeSecondaryText),
         ),
       ],
     );
@@ -789,18 +798,20 @@ class _SectionCard extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: _darkText,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: _darkText,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           subtitle,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: _badgeSecondaryText,
-                            height: 1.4,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: _badgeSecondaryText,
+                                height: 1.4,
+                              ),
                         ),
                       ],
                     ),
@@ -812,16 +823,9 @@ class _SectionCard extends StatelessWidget {
           ),
           if (isExpanded != false) ...[
             const SizedBox(height: 16),
-            const Divider(
-              height: 1,
-              thickness: 1,
-              color: _borderColor,
-            ),
+            const Divider(height: 1, thickness: 1, color: _borderColor),
             const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: child,
-            ),
+            Padding(padding: const EdgeInsets.only(bottom: 6), child: child),
           ],
         ],
       ),
@@ -868,10 +872,7 @@ class _ExpandTrailing extends StatelessWidget {
 }
 
 class _AnimatedSectionBody extends StatelessWidget {
-  const _AnimatedSectionBody({
-    required this.isExpanded,
-    required this.child,
-  });
+  const _AnimatedSectionBody({required this.isExpanded, required this.child});
 
   final bool isExpanded;
   final Widget child;
@@ -937,10 +938,7 @@ class _TaskGroup extends StatelessWidget {
 }
 
 class _TaskTile extends StatelessWidget {
-  const _TaskTile({
-    required this.task,
-    required this.onToggle,
-  });
+  const _TaskTile({required this.task, required this.onToggle});
 
   final DashboardTask task;
   final VoidCallback onToggle;
@@ -956,13 +954,13 @@ class _TaskTile extends StatelessWidget {
     final backgroundColor = task.isOverdue
         ? _dangerBg
         : task.isCompleted
-            ? _successBg
-            : Colors.white;
+        ? _successBg
+        : Colors.white;
     final borderColor = task.isOverdue
         ? _dangerText.withValues(alpha: 0.35)
         : task.isCompleted
-            ? _successText.withValues(alpha: 0.3)
-            : _borderColor;
+        ? _successText.withValues(alpha: 0.3)
+        : _borderColor;
 
     return Container(
       decoration: BoxDecoration(
@@ -1001,8 +999,9 @@ class _TaskTile extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: _darkText,
                           fontWeight: FontWeight.w700,
-                          decoration:
-                              task.isCompleted ? TextDecoration.lineThrough : null,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                     ),
@@ -1082,10 +1081,7 @@ class _ToneBadge extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.title,
-    required this.message,
-  });
+  const _EmptyState({required this.title, required this.message});
 
   final String title;
   final String message;
@@ -1123,10 +1119,7 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({
-    required this.tab,
-    required this.theme,
-  });
+  const _PlaceholderTab({required this.tab, required this.theme});
 
   final _DashboardTab tab;
   final ThemeData theme;
@@ -1249,24 +1242,30 @@ class _BottomNavBar extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              SvgPicture.asset(
-                                tab.assetPath,
-                                width: 26,
-                                height: 26,
-                                colorFilter: ColorFilter.mode(
-                                  isActive ? activeColor : inactiveColor,
-                                  BlendMode.srcIn,
+                              if (tab.assetPath != null)
+                                SvgPicture.asset(
+                                  tab.assetPath!,
+                                  width: 26,
+                                  height: 26,
+                                  colorFilter: ColorFilter.mode(
+                                    isActive ? activeColor : inactiveColor,
+                                    BlendMode.srcIn,
+                                  ),
                                 ),
-                              ),
+                              if (tab.icon != null)
+                                Icon(
+                                  tab.icon,
+                                  size: 26,
+                                  color: isActive ? activeColor : inactiveColor,
+                                ),
                               const SizedBox(height: 4),
                               Text(
                                 tab.label,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
+                                style: Theme.of(context).textTheme.labelMedium
                                     ?.copyWith(
-                                      color:
-                                          isActive ? activeColor : inactiveColor,
+                                      color: isActive
+                                          ? activeColor
+                                          : inactiveColor,
                                       fontWeight: FontWeight.w500,
                                     ),
                               ),

@@ -1,8 +1,5 @@
 class OnboardingStepData {
-  const OnboardingStepData({
-    required this.title,
-    required this.description,
-  });
+  const OnboardingStepData({required this.title, required this.description});
 
   final String title;
   final String description;

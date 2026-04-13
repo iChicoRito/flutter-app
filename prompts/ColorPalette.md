@@ -2,11 +2,11 @@ Main Color Palette (60–30–10 Rule)
 
     theme:
     primary:
-        base: "#1E88E5"   # 60% - Main brand color
+        base: "#066FD1"   # 60% - Main brand color
     secondary:
         base: "#90CAF9"   # 30% - Supporting color
     accent:
-        base: "#E3F2FD"   # 10% - Background / highlights
+        base: "#E6F0FA"   # 10% - Background / highlights
 
 Badge, Tags & Widget Colors
 

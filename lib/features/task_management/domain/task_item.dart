@@ -67,6 +67,22 @@ class TaskItem {
     );
   }
 
+  TaskItem normalizedSingleSchedule() {
+    final targetDate = endDate ?? startDate;
+    final targetMinutes = endMinutes ?? startMinutes;
+
+    return copyWith(
+      startDate: null,
+      startMinutes: null,
+      clearStartDate: true,
+      clearStartMinutes: true,
+      endDate: targetDate,
+      endMinutes: targetMinutes,
+      clearEndDate: targetDate == null,
+      clearEndMinutes: targetMinutes == null,
+    );
+  }
+
   TaskStatus statusAt(DateTime now) {
     if (isCompleted) {
       return TaskStatus.completed;

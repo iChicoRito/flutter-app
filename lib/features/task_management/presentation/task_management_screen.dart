@@ -117,8 +117,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         description: request.description,
         categoryId: request.categoryId,
         priority: request.priority,
-        startDate: request.startDate,
-        startMinutes: request.startMinutes,
         endDate: request.endDate,
         endMinutes: request.endMinutes,
       );
@@ -250,8 +248,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                               children: [
                                 Expanded(
                                   child: TaskCompactDropdown<String?>(
-                                    buttonKey:
-                                        TaskManagementScreen.categoryDropdownKey,
+                                    buttonKey: TaskManagementScreen
+                                        .categoryDropdownKey,
                                     menuKeyBuilder: (value) => Key(
                                       'task-category-dropdown-${value ?? 'all'}',
                                     ),
@@ -285,12 +283,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: TaskCompactDropdown<TaskPriority?>(
-                                    buttonKey:
-                                        TaskManagementScreen.priorityDropdownKey,
+                                    buttonKey: TaskManagementScreen
+                                        .priorityDropdownKey,
                                     menuKeyBuilder: (value) =>
                                         TaskManagementScreen.priorityFilterKey(
-                                      value?.name ?? 'all',
-                                    ),
+                                          value?.name ?? 'all',
+                                        ),
                                     currentValue: _controller.priorityFilter,
                                     currentLabel:
                                         _controller.priorityFilter == null
@@ -423,7 +421,9 @@ class _CategoryFilterRow extends StatelessWidget {
               chipKey: TaskManagementScreen.allCategoriesKey,
               label: 'All Categories',
               icon: null,
-              iconColor: selectedCategoryId == null ? Colors.white : taskMutedText,
+              iconColor: selectedCategoryId == null
+                  ? Colors.white
+                  : taskMutedText,
               selected: selectedCategoryId == null,
               onTap: () => onSelected(null),
             ),
@@ -493,9 +493,9 @@ class _CategoryChip extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: selected ? Colors.white : taskSecondaryText,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: selected ? Colors.white : taskSecondaryText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -543,7 +543,8 @@ class _FiltersSection extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
                               color: taskDarkText,
                               fontWeight: FontWeight.w700,
                             ),
@@ -552,16 +553,18 @@ class _FiltersSection extends StatelessWidget {
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: taskSecondaryText,
-                              height: 1.4,
-                            ),
+                          color: taskSecondaryText,
+                          height: 1.4,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
                 Icon(
-                  isExpanded ? TablerIcons.chevron_up : TablerIcons.chevron_down,
+                  isExpanded
+                      ? TablerIcons.chevron_up
+                      : TablerIcons.chevron_down,
                   size: 18,
                   color: taskMutedText,
                 ),
@@ -712,7 +715,9 @@ class _TaskCard extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.topRight,
                             child: IconButton(
-                              key: TaskManagementScreen.taskMenuButtonKey(task.id),
+                              key: TaskManagementScreen.taskMenuButtonKey(
+                                task.id,
+                              ),
                               onPressed: onDelete,
                               visualDensity: VisualDensity.compact,
                               splashRadius: 18,
@@ -800,9 +805,9 @@ class _CategoryBadge extends StatelessWidget {
           Text(
             category.name,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: category.color,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: category.color,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -842,17 +847,16 @@ class _EmptyState extends StatelessWidget {
           Text(
             'No tasks yet',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: taskDarkText,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: taskDarkText,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Create a task to start capturing notes, details, and schedules in one place.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: taskMutedText,
-                  height: 1.5,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: taskMutedText, height: 1.5),
             textAlign: TextAlign.center,
           ),
         ],
@@ -882,17 +886,17 @@ class _DeleteTaskDialog extends StatelessWidget {
             Text(
               'Delete Task',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: taskDarkText,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: taskDarkText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'This removes the task and its notes from your device.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: taskSecondaryText,
-                    height: 1.45,
-                  ),
+                color: taskSecondaryText,
+                height: 1.45,
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -908,9 +912,9 @@ class _DeleteTaskDialog extends StatelessWidget {
                   child: Text(
                     'Delete',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: taskDangerText,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: taskDangerText,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -944,9 +948,9 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               message,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: taskDarkText,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: taskDarkText),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),

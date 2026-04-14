@@ -131,11 +131,12 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
     final document = quill.Document.fromJson(
       jsonDecode(
-        normalizeNoteDocumentJson(
-          task.noteDocumentJson,
-          fallbackText: task.description,
-        ),
-      ) as List,
+            normalizeNoteDocumentJson(
+              task.noteDocumentJson,
+              fallbackText: task.description,
+            ),
+          )
+          as List,
     );
     final noteController = quill.QuillController(
       document: document,
@@ -363,9 +364,9 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               Text(
                 'Task Notes',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: taskMutedText,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: taskMutedText,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -373,10 +374,10 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                    ),
+                  color: taskDarkText,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
               ),
             ],
           ),
@@ -413,9 +414,9 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                     child: Text(
                       'Delete',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: taskDangerText,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: taskDangerText,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -424,7 +425,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
           ],
         ),
         body: SafeArea(
-          child: _buildBody(context, task: task, noteController: noteController),
+          child: _buildBody(
+            context,
+            task: task,
+            noteController: noteController,
+          ),
         ),
       ),
     );
@@ -439,10 +444,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_loadError != null) {
-      return _EditorErrorState(
-        message: _loadError!,
-        onRetry: _loadEditorState,
-      );
+      return _EditorErrorState(message: _loadError!, onRetry: _loadEditorState);
     }
     if (task == null || noteController == null) {
       return _EditorErrorState(
@@ -601,7 +603,7 @@ class _MetadataCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Keep the note attached to the right category, priority, and schedule.',
+                                'Keep the note attached to the right category, priority, and target schedule.',
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
                                       color: taskMutedText,
@@ -680,10 +682,10 @@ class _MetadataCard extends StatelessWidget {
   static String _scheduleLabel(TaskItem task) {
     final start = task.startDateTime;
     final end = task.endDateTime;
-    if (start == null && end == null) {
+    if (end == null) {
       return 'No schedule';
     }
-    if (start != null && end != null) {
+    if (start != null) {
       if (_isSameDay(start, end)) {
         return '${_shortDate(start)} • ${_shortTime(end)}';
       }
@@ -692,7 +694,7 @@ class _MetadataCard extends StatelessWidget {
     if (start != null) {
       return 'Starts ${_shortDate(start)}';
     }
-    return 'Ends ${_shortDate(end!)}';
+    return 'Due ${_shortDate(end)} at ${_shortTime(end)}';
   }
 
   static String _formatDateTime(DateTime value) {
@@ -718,7 +720,9 @@ class _MetadataCard extends StatelessWidget {
   }
 
   static String _shortTime(DateTime value) {
-    final hour = value.hour == 0 ? 12 : (value.hour > 12 ? value.hour - 12 : value.hour);
+    final hour = value.hour == 0
+        ? 12
+        : (value.hour > 12 ? value.hour - 12 : value.hour);
     final minute = value.minute.toString().padLeft(2, '0');
     final suffix = value.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $suffix';
@@ -732,11 +736,7 @@ class _MetadataCard extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
-    required this.label,
-    this.iconColor,
-  });
+  const _InfoPill({required this.icon, required this.label, this.iconColor});
 
   final IconData icon;
   final String label;
@@ -762,9 +762,9 @@ class _InfoPill extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: taskDarkText,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -775,10 +775,7 @@ class _InfoPill extends StatelessWidget {
 }
 
 class _EditorErrorState extends StatelessWidget {
-  const _EditorErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _EditorErrorState({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;
@@ -799,9 +796,9 @@ class _EditorErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               message,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: taskDarkText,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: taskDarkText),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -818,10 +815,7 @@ class _EditorErrorState extends StatelessWidget {
 }
 
 class _TaskDetailsResult {
-  const _TaskDetailsResult({
-    required this.task,
-    required this.categories,
-  });
+  const _TaskDetailsResult({required this.task, required this.categories});
 
   final TaskItem task;
   final List<TaskCategory> categories;
@@ -851,10 +845,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   late List<TaskCategory> _categories;
   late TaskPriority _priority;
   late String _selectedCategoryId;
-  DateTime? _startDate;
-  DateTime? _endDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
+  DateTime? _targetDate;
+  TimeOfDay? _targetTime;
 
   @override
   void initState() {
@@ -866,10 +858,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     _categories = [...widget.categories];
     _priority = widget.task.priority;
     _selectedCategoryId = widget.task.categoryId;
-    _startDate = widget.task.startDate;
-    _endDate = widget.task.endDate;
-    _startTime = _toTimeOfDay(widget.task.startMinutes);
-    _endTime = _toTimeOfDay(widget.task.endMinutes);
+    _targetDate = widget.task.endDate;
+    _targetTime = _toTimeOfDay(widget.task.endMinutes);
   }
 
   @override
@@ -894,97 +884,23 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     return TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
   }
 
-  DateTime? _combineDateAndTime(DateTime? date, TimeOfDay? time) {
-    if (date == null) {
-      return null;
-    }
-    final value = time ?? const TimeOfDay(hour: 0, minute: 0);
-    return DateTime(date.year, date.month, date.day, value.hour, value.minute);
-  }
-
-  bool _isSameCalendarDay(DateTime? first, DateTime? second) {
-    if (first == null || second == null) {
-      return false;
-    }
-    return first.year == second.year &&
-        first.month == second.month &&
-        first.day == second.day;
-  }
-
-  DateTime _dateOnly(DateTime value) {
-    return DateTime(value.year, value.month, value.day);
-  }
-
-  void _syncEndDateWithTimes() {
-    if (_startDate == null || _endDate == null || _startTime == null || _endTime == null) {
-      return;
-    }
-
-    final start = _combineDateAndTime(_startDate, _startTime)!;
-    final end = _combineDateAndTime(_endDate, _endTime)!;
-
-    if (_isSameCalendarDay(_startDate, _endDate) && end.isBefore(start)) {
-      _endDate = _dateOnly(_endDate!.add(const Duration(days: 1)));
-      return;
-    }
-
-    final expectedOvernightEndDate = _dateOnly(
-      _startDate!.add(const Duration(days: 1)),
-    );
-    if (_dateOnly(_endDate!) == expectedOvernightEndDate && !end.isBefore(start)) {
-      _endDate = _dateOnly(_startDate!);
-    }
-  }
-
-  DateTime? _resolvedEndDate() {
-    if (_endDate == null) {
-      return null;
-    }
-    final start = _combineDateAndTime(_startDate, _startTime);
-    final end = _combineDateAndTime(_endDate, _endTime);
-    if (start != null &&
-        end != null &&
-        _isSameCalendarDay(_startDate, _endDate) &&
-        end.isBefore(start)) {
-      return _endDate!.add(const Duration(days: 1));
-    }
-    return _endDate;
-  }
-
   String? _scheduleValidationMessage() {
-    final start = _combineDateAndTime(_startDate, _startTime);
-    final end = _combineDateAndTime(_resolvedEndDate(), _endTime);
-
-    if (start != null && _endDate == null) {
-      return 'Choose an end date to complete the schedule range.';
-    }
-    if (end != null && _startDate == null) {
-      return 'Choose a start date before setting an end schedule.';
-    }
-    if (start != null && end != null && end.isBefore(start)) {
-      return 'End schedule must be later than or equal to the start schedule.';
+    if (_targetTime != null && _targetDate == null) {
+      return 'Choose a target date before setting the task time.';
     }
     return null;
   }
 
-  Future<void> _pickDateRange() async {
+  Future<void> _pickDate() async {
     _parkFocus();
     final now = DateTime.now();
-    final initialStart = _startDate ?? now;
-    final initialEnd = _endDate ?? _startDate ?? now;
-    final picked = await showDateRangePicker(
+    final initialDate = _targetDate ?? now;
+    final picked = await showDatePicker(
       context: context,
-      initialDateRange: DateTimeRange(
-        start: DateTime(
-          initialStart.year,
-          initialStart.month,
-          initialStart.day,
-        ),
-        end: DateTime(
-          initialEnd.year,
-          initialEnd.month,
-          initialEnd.day,
-        ),
+      initialDate: DateTime(
+        initialDate.year,
+        initialDate.month,
+        initialDate.day,
       ),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
@@ -1002,17 +918,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     }
 
     setState(() {
-      _startDate = DateTime(
-        picked.start.year,
-        picked.start.month,
-        picked.start.day,
-      );
-      _endDate = DateTime(
-        picked.end.year,
-        picked.end.month,
-        picked.end.day,
-      );
-      _syncEndDateWithTimes();
+      _targetDate = DateTime(picked.year, picked.month, picked.day);
     });
     _parkFocus();
   }
@@ -1026,7 +932,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     final picked = await showTimePicker(
       context: context,
       initialTime: initialValue ?? TimeOfDay.now(),
-      initialEntryMode: TimePickerEntryMode.inputOnly,
+      initialEntryMode: TimePickerEntryMode.dial,
       helpText: helpText,
       builder: (context, child) {
         return Theme(
@@ -1045,38 +951,21 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     _parkFocus();
   }
 
-  Future<void> _pickTimeRange() async {
-    final startInitial = _startTime ?? TimeOfDay.now();
-    final endInitial = _endTime ?? _startTime ?? startInitial;
-
-    TimeOfDay? pickedStart;
+  Future<void> _pickTargetTime() async {
+    TimeOfDay? pickedTime;
     await _pickTime(
-      initialValue: startInitial,
-      helpText: 'Start Time',
+      initialValue: _targetTime ?? TimeOfDay.now(),
+      helpText: 'Target Time',
       onSelected: (value) {
-        pickedStart = value;
+        pickedTime = value;
       },
     );
-    if (pickedStart == null || !mounted) {
-      return;
-    }
-
-    TimeOfDay? pickedEnd;
-    await _pickTime(
-      initialValue: endInitial,
-      helpText: 'End Time',
-      onSelected: (value) {
-        pickedEnd = value;
-      },
-    );
-    if (pickedEnd == null) {
+    if (pickedTime == null) {
       return;
     }
 
     setState(() {
-      _startTime = pickedStart;
-      _endTime = pickedEnd;
-      _syncEndDateWithTimes();
+      _targetTime = pickedTime;
     });
   }
 
@@ -1126,17 +1015,16 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
           description: trimmedDescription,
           priority: _priority,
           categoryId: _selectedCategoryId,
-          startDate: _startDate,
-          startMinutes: _startTime == null
+          startDate: null,
+          startMinutes: null,
+          clearStartDate: true,
+          clearStartMinutes: true,
+          endDate: _targetDate,
+          endMinutes: _targetTime == null
               ? null
-              : (_startTime!.hour * 60) + _startTime!.minute,
-          clearStartDate: _startDate == null,
-          clearStartMinutes: _startTime == null,
-          endDate: _resolvedEndDate(),
-          endMinutes:
-              _endTime == null ? null : (_endTime!.hour * 60) + _endTime!.minute,
-          clearEndDate: _endDate == null,
-          clearEndMinutes: _endTime == null,
+              : (_targetTime!.hour * 60) + _targetTime!.minute,
+          clearEndDate: _targetDate == null,
+          clearEndMinutes: _targetTime == null,
           updatedAt: DateTime.now(),
         ),
         categories: _categories,
@@ -1213,9 +1101,9 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                       const SizedBox(height: 6),
                       Text(
                         'Maximum of 30 characters',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: taskMutedText,
-                            ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: taskMutedText),
                       ),
                     ],
                   ),
@@ -1258,13 +1146,15 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                               currentValue: _selectedCategoryId,
                               currentLabel:
                                   _categoryLabel(_selectedCategoryId) ??
-                                      'Category',
+                                  'Category',
                               onSelected: (value) {
                                 setState(() {
                                   _selectedCategoryId = value;
                                 });
                               },
-                              items: _categories.map((item) => item.id).toList(),
+                              items: _categories
+                                  .map((item) => item.id)
+                                  .toList(),
                               labelBuilder: (value) =>
                                   _categoryLabel(value) ?? 'Category',
                               leadingBuilder: (value) {
@@ -1309,31 +1199,31 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                 const SizedBox(height: 12),
                 TaskSectionCard(
                   title: 'Schedule',
-                  subtitle:
-                      'Set a full task window so the dashboard can place it clearly.',
+                  subtitle: 'Set the target date and time for this task.',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       TaskPickerButton(
                         buttonKey: TaskEditorScreen.dateRangeButtonKey,
-                        title: 'Start / End Date',
-                        value: _formatDateRange(_startDate, _endDate),
+                        title: 'Target Date',
+                        value: _formatDateValue(_targetDate),
                         icon: TablerIcons.calendar_event,
-                        onTap: _pickDateRange,
+                        onTap: _pickDate,
                       ),
                       const SizedBox(height: 12),
                       TaskPickerButton(
                         buttonKey: TaskEditorScreen.timeRangeButtonKey,
-                        title: 'Start / End Time',
-                        value: _formatTimeRange(context, _startTime, _endTime),
+                        title: 'Target Time',
+                        value: _formatTimeValue(context, _targetTime),
                         icon: TablerIcons.clock_hour_8,
-                        onTap: _pickTimeRange,
+                        onTap: _pickTargetTime,
                       ),
                       if (scheduleValidationMessage != null) ...[
                         const SizedBox(height: 12),
                         Text(
                           scheduleValidationMessage,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 color: taskDangerText,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1407,28 +1297,18 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  String _formatDateRange(DateTime? start, DateTime? end) {
-    if (start == null && end == null) {
-      return 'Select date range';
+  String _formatDateValue(DateTime? value) {
+    if (value == null) {
+      return 'Select target date';
     }
-    if (start != null && end != null) {
-      return '${_formatDate(start)} - ${_formatDate(end)}';
-    }
-    return _formatDate(start ?? end!);
+    return _formatDate(value);
   }
 
-  String _formatTimeRange(
-    BuildContext context,
-    TimeOfDay? start,
-    TimeOfDay? end,
-  ) {
-    if (start == null && end == null) {
-      return 'Select time range';
+  String _formatTimeValue(BuildContext context, TimeOfDay? value) {
+    if (value == null) {
+      return 'Select target time';
     }
-    if (start != null && end != null) {
-      return '${start.format(context)} - ${end.format(context)}';
-    }
-    return (start ?? end)!.format(context);
+    return value.format(context);
   }
 }
 
@@ -1453,17 +1333,17 @@ class _DeleteTaskDialog extends StatelessWidget {
             Text(
               'Delete Task',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: taskDarkText,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: taskDarkText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'This removes the task and its notes from your device.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: taskSecondaryText,
-                    height: 1.45,
-                  ),
+                color: taskSecondaryText,
+                height: 1.45,
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -1479,9 +1359,9 @@ class _DeleteTaskDialog extends StatelessWidget {
                   child: Text(
                     'Delete',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: taskDangerText,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: taskDangerText,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -1554,7 +1434,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                       children: [
                         Text(
                           'Create Category',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
                                 color: taskDarkText,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1562,10 +1443,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                         const SizedBox(height: 4),
                         Text(
                           'Create a category with a focused icon and theme-safe color.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: taskSecondaryText,
-                                height: 1.4,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: taskSecondaryText, height: 1.4),
                         ),
                       ],
                     ),
@@ -1616,12 +1495,13 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: taskCategoryIconOptions.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 4,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1,
+                          ),
                       itemBuilder: (context, index) {
                         final option = taskCategoryIconOptions[index];
                         final selected = _selectedIconKey == option.key;
@@ -1638,13 +1518,17 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                               color: selected ? taskPrimaryBlue : taskSurface,
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: selected ? taskPrimaryBlue : taskBorderColor,
+                                color: selected
+                                    ? taskPrimaryBlue
+                                    : taskBorderColor,
                               ),
                             ),
                             child: Icon(
                               option.icon,
                               size: 22,
-                              color: selected ? Colors.white : taskSecondaryText,
+                              color: selected
+                                  ? Colors.white
+                                  : taskSecondaryText,
                             ),
                           ),
                         );
@@ -1657,12 +1541,13 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: taskCategoryColorOptions.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 5,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 1,
-                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 5,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1,
+                          ),
                       itemBuilder: (context, index) {
                         final color = taskCategoryColorOptions[index];
                         final selected = color == _selectedColor;
@@ -1679,7 +1564,9 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                               color: color,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: selected ? taskDarkText : taskMutedBorderColor,
+                                color: selected
+                                    ? taskDarkText
+                                    : taskMutedBorderColor,
                                 width: selected ? 3 : 1.5,
                               ),
                               boxShadow: selected

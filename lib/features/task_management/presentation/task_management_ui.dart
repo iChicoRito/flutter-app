@@ -104,9 +104,7 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
     final backgroundColor = widget.isError
         ? taskDangerText
         : const Color(0xFFE6F6F1);
-    final foregroundColor = widget.isError
-        ? Colors.white
-        : taskSuccessText;
+    final foregroundColor = widget.isError ? Colors.white : taskSuccessText;
 
     return Positioned(
       left: 16,
@@ -131,9 +129,9 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
               child: Text(
                 widget.message,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: foregroundColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: foregroundColor,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -432,7 +430,18 @@ ThemeData buildTaskPickerTheme(ThemeData baseTheme) {
       headerForegroundColor: taskDarkText,
       dividerColor: taskBorderColor,
       rangeSelectionBackgroundColor: taskAccentBlue,
-      todayForegroundColor: WidgetStateProperty.all(taskPrimaryBlue),
+      todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return taskPrimaryBlue;
+      }),
+      todayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return taskPrimaryBlue;
+        }
+        return null;
+      }),
       dayForegroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return Colors.white;
@@ -447,13 +456,13 @@ ThemeData buildTaskPickerTheme(ThemeData baseTheme) {
       }),
       yearForegroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return Colors.white;
+          return taskPrimaryBlue;
         }
         return taskDarkText;
       }),
       yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return taskPrimaryBlue;
+          return taskAccentBlue;
         }
         return null;
       }),

@@ -23,6 +23,8 @@ abstract class TaskReminderService {
 
   Future<void> cancelTask(String taskId);
 
+  Future<void> clearDueNotification(String taskId);
+
   Future<void> rebuildPendingReminders(Iterable<TaskItem> tasks, {DateTime? now});
 
   Future<void> snoozeTask(
@@ -54,6 +56,9 @@ class NoopTaskReminderService implements TaskReminderService {
 
   @override
   Future<void> cancelTask(String taskId) async {}
+
+  @override
+  Future<void> clearDueNotification(String taskId) async {}
 
   @override
   Future<void> rebuildPendingReminders(
@@ -387,6 +392,16 @@ class LocalTaskReminderService implements TaskReminderService {
   }
 
   @override
+  Future<void> clearDueNotification(String taskId) async {
+    await initialize();
+    if (!_isAvailable) {
+      return;
+    }
+
+    await _plugin.cancel(id: TaskReminderPlan.dueNotificationId(taskId));
+  }
+
+  @override
   Future<void> rebuildPendingReminders(
     Iterable<TaskItem> tasks, {
     DateTime? now,
@@ -536,11 +551,6 @@ class LocalTaskReminderService implements TaskReminderService {
           AndroidNotificationAction(
             'snooze_5m',
             'Snooze 5 min',
-            showsUserInterface: true,
-          ),
-          AndroidNotificationAction(
-            'dismiss_alarm',
-            'Dismiss',
             showsUserInterface: true,
           ),
         ],

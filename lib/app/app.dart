@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/display_name_store.dart';
 import '../core/services/onboarding_status_store.dart';
@@ -42,10 +43,13 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   static const Duration _foregroundAlarmGracePeriod = Duration(seconds: 10);
+  static const String _latchedAlarmPayloadKey = 'active_alarm_payload';
 
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   String? _activeAlarmTaskId;
+  TaskReminderPayload? _activeAlarmPayload;
+  bool _isAlarmScreenVisible = false;
   Timer? _foregroundAlarmPoller;
   final Set<String> _handledDueTaskIds = <String>{};
 
@@ -55,6 +59,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     widget.reminderService.bindAlarmHandler(_handleAlarmEvent);
     _startForegroundAlarmPoller();
+    unawaited(_restoreLatchedAlarm());
   }
 
   @override
@@ -69,6 +74,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _lifecycleState = state;
     if (state == AppLifecycleState.resumed) {
       _startForegroundAlarmPoller();
+      unawaited(_restoreLatchedAlarm());
       unawaited(_checkForDueTasks());
     } else {
       _foregroundAlarmPoller?.cancel();
@@ -80,13 +86,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final payload = event.payload;
     switch (event.actionId) {
       case 'dismiss_alarm':
+        if (_isAlarmScreenVisible && _activeAlarmTaskId == payload.taskId) {
+          return;
+        }
         await widget.reminderService.cancelTask(payload.taskId);
+        await _clearLatchedAlarm();
         return;
       case 'snooze_5m':
+        if (_isAlarmScreenVisible && _activeAlarmTaskId == payload.taskId) {
+          return;
+        }
         await widget.reminderService.snoozeTask(
           payload.taskId,
           taskTitle: payload.taskTitle,
         );
+        await _clearLatchedAlarm();
         return;
     }
 
@@ -96,29 +110,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (_lifecycleState != AppLifecycleState.resumed) {
       return;
     }
+    if (_isAlarmScreenVisible) {
+      _handledDueTaskIds.add(payload.taskId);
+      return;
+    }
     if (_activeAlarmTaskId == payload.taskId) {
       return;
     }
 
-    final navigator = _navigatorKey.currentState;
-    if (navigator == null) {
+    await widget.reminderService.clearDueNotification(payload.taskId);
+    await _persistLatchedAlarm(payload);
+    if (!mounted) {
       return;
     }
 
-    _activeAlarmTaskId = payload.taskId;
-    _handledDueTaskIds.add(payload.taskId);
-    await navigator.push(
-      MaterialPageRoute<void>(
-        builder: (context) => TaskAlarmScreen(
-          payload: payload,
-          reminderService: widget.reminderService,
-          taskRepository: widget.taskRepository,
-        ),
-        settings: const RouteSettings(name: TaskAlarmScreen.routeName),
-        fullscreenDialog: true,
-      ),
-    );
-    _activeAlarmTaskId = null;
+    setState(() {
+      _activeAlarmTaskId = payload.taskId;
+      _activeAlarmPayload = payload;
+      _handledDueTaskIds.add(payload.taskId);
+      _isAlarmScreenVisible = true;
+    });
   }
 
   void _startForegroundAlarmPoller() {
@@ -171,6 +182,40 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _persistLatchedAlarm(TaskReminderPayload payload) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_latchedAlarmPayloadKey, payload.toJson());
+  }
+
+  Future<void> _clearLatchedAlarm() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_latchedAlarmPayloadKey);
+  }
+
+  Future<void> _restoreLatchedAlarm() async {
+    if (_activeAlarmPayload != null) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final rawPayload = prefs.getString(_latchedAlarmPayloadKey);
+    if (rawPayload == null) {
+      return;
+    }
+
+    final payload = TaskReminderPayload.fromJson(rawPayload);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _activeAlarmTaskId = payload.taskId;
+      _activeAlarmPayload = payload;
+      _handledDueTaskIds.add(payload.taskId);
+      _isAlarmScreenVisible = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     const primaryBlue = Color(0xFF066FD1);
@@ -181,6 +226,32 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         repository: widget.taskRepository,
         child: MaterialApp(
           navigatorKey: _navigatorKey,
+          builder: (context, child) {
+            return Stack(
+              children: [
+                child ?? const SizedBox.shrink(),
+                if (_activeAlarmPayload != null)
+                  Positioned.fill(
+                    child: TaskAlarmScreen(
+                      payload: _activeAlarmPayload!,
+                      reminderService: widget.reminderService,
+                      taskRepository: widget.taskRepository,
+                      onDismissed: () {
+                        if (!mounted) {
+                          return;
+                        }
+                        unawaited(_clearLatchedAlarm());
+                        setState(() {
+                          _activeAlarmPayload = null;
+                          _activeAlarmTaskId = null;
+                          _isAlarmScreenVisible = false;
+                        });
+                      },
+                    ),
+                  ),
+              ],
+            );
+          },
           title: 'Flutter App',
           debugShowCheckedModeBanner: false,
           localizationsDelegates: const [

@@ -88,19 +88,27 @@ class HiveTaskRepository implements TaskRepository {
       return null;
     }
 
-    return normalizeTaskNoteFields(task);
+    return normalizeTaskNoteFields(task).normalizedSingleSchedule();
   }
 
   @override
   Future<List<TaskItem>> getTasks() async {
-    final tasks = _taskBox.values.map(normalizeTaskNoteFields).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final tasks =
+        _taskBox.values
+            .map(
+              (task) =>
+                  normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return tasks;
   }
 
   Future<void> migrateLegacyTasksIfNeeded() async {
     for (final task in _taskBox.values) {
-      final normalized = normalizeTaskNoteFields(task);
+      final normalized = normalizeTaskNoteFields(
+        task,
+      ).normalizedSingleSchedule();
       if (normalized != task) {
         await _taskBox.put(task.id, normalized);
       }
@@ -124,7 +132,10 @@ class HiveTaskRepository implements TaskRepository {
 
   @override
   Future<void> upsertTask(TaskItem task) async {
-    await _taskBox.put(task.id, normalizeTaskNoteFields(task));
+    await _taskBox.put(
+      task.id,
+      normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+    );
   }
 }
 
@@ -160,15 +171,23 @@ class InMemoryTaskRepository implements TaskRepository {
       return null;
     }
 
-    final normalized = normalizeTaskNoteFields(_tasks[index]);
+    final normalized = normalizeTaskNoteFields(
+      _tasks[index],
+    ).normalizedSingleSchedule();
     _tasks[index] = normalized;
     return normalized;
   }
 
   @override
   Future<List<TaskItem>> getTasks() async {
-    final tasks = _tasks.map(normalizeTaskNoteFields).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final tasks =
+        _tasks
+            .map(
+              (task) =>
+                  normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+            )
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return tasks;
   }
 
@@ -185,7 +204,9 @@ class InMemoryTaskRepository implements TaskRepository {
 
   @override
   Future<void> upsertTask(TaskItem task) async {
-    final normalizedTask = normalizeTaskNoteFields(task);
+    final normalizedTask = normalizeTaskNoteFields(
+      task,
+    ).normalizedSingleSchedule();
     final index = _tasks.indexWhere((item) => item.id == task.id);
     if (index >= 0) {
       _tasks[index] = normalizedTask;
@@ -208,29 +229,37 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
     final legacyDueDate = reader.availableBytes > 0
         ? _readDateValue(reader.read(), dateOnly: true)
         : null;
-    final legacyDueMinutes = reader.availableBytes > 0 ? reader.read() as int? : null;
+    final legacyDueMinutes = reader.availableBytes > 0
+        ? reader.read() as int?
+        : null;
     final priorityIndex = reader.readInt();
     final categoryId = reader.readString();
     final isCompleted = reader.readBool();
-    final createdAt = _readDateValue(reader.read()) ??
-        DateTime.fromMillisecondsSinceEpoch(0);
-    final updatedAt = _readDateValue(reader.read()) ??
-        DateTime.fromMillisecondsSinceEpoch(0);
+    final createdAt =
+        _readDateValue(reader.read()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final updatedAt =
+        _readDateValue(reader.read()) ?? DateTime.fromMillisecondsSinceEpoch(0);
     final completedAt = reader.availableBytes > 0
         ? _readDateValue(reader.read())
         : null;
     final startDate = reader.availableBytes > 0
         ? _readDateValue(reader.read(), dateOnly: true)
         : null;
-    final startMinutes = reader.availableBytes > 0 ? reader.read() as int? : null;
+    final startMinutes = reader.availableBytes > 0
+        ? reader.read() as int?
+        : null;
     final endDate = reader.availableBytes > 0
         ? _readDateValue(reader.read(), dateOnly: true)
         : legacyDueDate;
     final endMinutes = reader.availableBytes > 0
         ? reader.read() as int?
         : legacyDueMinutes;
-    final noteDocumentJson = reader.availableBytes > 0 ? reader.read() as String? : null;
-    final notePlainText = reader.availableBytes > 0 ? reader.read() as String? : null;
+    final noteDocumentJson = reader.availableBytes > 0
+        ? reader.read() as String?
+        : null;
+    final notePlainText = reader.availableBytes > 0
+        ? reader.read() as String?
+        : null;
 
     return TaskItem(
       id: id,
@@ -248,7 +277,7 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       createdAt: createdAt,
       updatedAt: updatedAt,
       completedAt: completedAt,
-    );
+    ).normalizedSingleSchedule();
   }
 
   @override
@@ -265,8 +294,8 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(_writeDateValue(obj.createdAt))
       ..write(_writeDateValue(obj.updatedAt))
       ..write(_writeDateValue(obj.completedAt))
-      ..write(_writeDateValue(obj.startDate, dateOnly: true))
-      ..write(obj.startMinutes)
+      ..write(null)
+      ..write(null)
       ..write(_writeDateValue(obj.endDate, dateOnly: true))
       ..write(obj.endMinutes)
       ..write(obj.noteDocumentJson)
@@ -278,9 +307,7 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       return null;
     }
     if (value is DateTime) {
-      return dateOnly
-          ? DateTime(value.year, value.month, value.day)
-          : value;
+      return dateOnly ? DateTime(value.year, value.month, value.day) : value;
     }
     if (value is int) {
       final dateTime = DateTime.fromMillisecondsSinceEpoch(value);
@@ -313,7 +340,8 @@ class TaskCategoryAdapter extends TypeAdapter<TaskCategory> {
       name: reader.readString(),
       iconKey: reader.readString(),
       colorValue: reader.readInt(),
-      createdAt: TaskItemAdapter._readDateValue(reader.read()) ??
+      createdAt:
+          TaskItemAdapter._readDateValue(reader.read()) ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }

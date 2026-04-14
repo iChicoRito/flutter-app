@@ -51,19 +51,25 @@ void main() {
     expect(task.statusAt(now), TaskStatus.completed);
   });
 
-  test('start-only schedule stays pending', () {
-    final now = DateTime(2026, 4, 13, 9);
-    final task = TaskItem(
-      id: 'start-only',
-      title: 'Kickoff meeting',
-      priority: TaskPriority.low,
-      categoryId: 'work',
-      createdAt: now,
-      updatedAt: now,
-      startDate: DateTime(2026, 4, 12),
-      startMinutes: 8 * 60,
-    );
+  test(
+    'legacy start-only schedule normalizes into the target end schedule',
+    () {
+      final now = DateTime(2026, 4, 13, 9);
+      final task = TaskItem(
+        id: 'start-only',
+        title: 'Kickoff meeting',
+        priority: TaskPriority.low,
+        categoryId: 'work',
+        createdAt: now,
+        updatedAt: now,
+        startDate: DateTime(2026, 4, 12),
+        startMinutes: 8 * 60,
+      ).normalizedSingleSchedule();
 
-    expect(task.statusAt(now), TaskStatus.pending);
-  });
+      expect(task.startDate, isNull);
+      expect(task.startMinutes, isNull);
+      expect(task.endDateTime, DateTime(2026, 4, 12, 8));
+      expect(task.statusAt(now), TaskStatus.overdue);
+    },
+  );
 }

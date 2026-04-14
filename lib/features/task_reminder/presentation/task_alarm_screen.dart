@@ -17,6 +17,7 @@ class TaskAlarmScreen extends StatefulWidget {
     required this.payload,
     required this.reminderService,
     required this.taskRepository,
+    this.onDismissed,
   });
 
   static const routeName = 'task-alarm-screen';
@@ -24,6 +25,7 @@ class TaskAlarmScreen extends StatefulWidget {
   final TaskReminderPayload payload;
   final TaskReminderService reminderService;
   final TaskRepository taskRepository;
+  final VoidCallback? onDismissed;
 
   @override
   State<TaskAlarmScreen> createState() => _TaskAlarmScreenState();
@@ -32,8 +34,7 @@ class TaskAlarmScreen extends StatefulWidget {
 class _TaskAlarmScreenState extends State<TaskAlarmScreen>
     with SingleTickerProviderStateMixin {
   bool _isDismissing = false;
-  TaskItem? _task;
-  TaskCategory? _category;
+  List<_AlarmTaskDetails> _alarmTasks = const [];
   late final AnimationController _iconController;
 
   @override
@@ -55,25 +56,44 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
   }
 
   Future<void> _loadTaskDetails() async {
-    final task = await widget.taskRepository.getTaskById(widget.payload.taskId);
+    final allTasks = await widget.taskRepository.getTasks();
     final categories = await widget.taskRepository.getCategories();
     if (!mounted) {
       return;
     }
 
-    TaskCategory? category;
-    if (task != null) {
+    final dueAt = widget.payload.scheduledAt;
+    final matchingTasks = <_AlarmTaskDetails>[];
+
+    for (final task in allTasks) {
+      if (task.isCompleted) {
+        continue;
+      }
+      if (!_isSameAlarmTime(task.endDateTime, dueAt)) {
+        continue;
+      }
+
+      TaskCategory? category;
       for (final item in categories) {
         if (item.id == task.categoryId) {
           category = item;
           break;
         }
       }
+
+      matchingTasks.add(_AlarmTaskDetails(task: task, category: category));
     }
 
     setState(() {
-      _task = task;
-      _category = category;
+      _alarmTasks = matchingTasks.isEmpty
+          ? [
+              _AlarmTaskDetails(
+                task: null,
+                category: null,
+                fallbackTitle: widget.payload.taskTitle,
+              ),
+            ]
+          : matchingTasks;
     });
   }
 
@@ -123,9 +143,23 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
     });
 
     await _stopAlarmEffects();
-    await widget.reminderService.cancelTask(widget.payload.taskId);
+    for (final item in _alarmTasks) {
+      final taskId = item.task?.id;
+      if (taskId != null) {
+        await widget.reminderService.cancelTask(taskId);
+      }
+    }
+    if (_alarmTasks.every((item) => item.task == null)) {
+      await widget.reminderService.cancelTask(widget.payload.taskId);
+    }
 
-    if (mounted) {
+    if (!mounted) {
+      return;
+    }
+
+    if (widget.onDismissed != null) {
+      widget.onDismissed!();
+    } else {
       Navigator.of(context).pop();
     }
   }
@@ -133,10 +167,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
   @override
   Widget build(BuildContext context) {
     final dueText = _formatDueTime(widget.payload.scheduledAt);
-    final task = _task;
-    final category = _category;
-    final title = task?.title ?? widget.payload.taskTitle;
-    final detailsText = _resolveTaskDetails(task);
+    final alarmTasks = _alarmTasks;
 
     return PopScope(
       canPop: false,
@@ -168,11 +199,11 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
                         animation: _iconController,
                         builder: (context, child) => child!,
                         child: Container(
-                          width: 88,
-                          height: 88,
+                          width: 74,
+                          height: 74,
                           decoration: BoxDecoration(
                             color: const Color(0xFFE6F0FA),
-                            borderRadius: BorderRadius.circular(26),
+                            shape: BoxShape.circle,
                           ),
                           child: Center(
                             child: AnimatedBuilder(
@@ -182,7 +213,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
                                   angle: _shakeAngle(_iconController.value),
                                   child: const Icon(
                                     Icons.alarm_rounded,
-                                    size: 44,
+                                    size: 36,
                                     color: Color(0xFF066FD1),
                                   ),
                                 );
@@ -204,15 +235,6 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        widget.payload.taskTitle,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: const Color(0xFF333333),
-                          fontWeight: FontWeight.w600,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
                       if (dueText != null) ...[
                         const SizedBox(height: 8),
                         Text(
@@ -229,65 +251,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
                       const SizedBox(height: 14),
                       const Divider(height: 1, thickness: 1, color: Color(0xFFE5E8EC)),
                       const SizedBox(height: 14),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          title,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: const Color(0xFF333333),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          detailsText,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xFF999999),
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      if (category != null)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: category.color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  resolveTaskCategoryIcon(category.iconKey),
-                                  size: 13,
-                                  color: category.color,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  category.name,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelMedium
-                                      ?.copyWith(
-                                        color: category.color,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      ..._buildAlarmTaskSections(context, alarmTasks),
                       const SizedBox(height: 14),
                       const Divider(height: 1, thickness: 1, color: Color(0xFFE5E8EC)),
                       const SizedBox(height: 16),
@@ -354,4 +318,112 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
     final activeProgress = progress / 0.6;
     return 0.16 * sin(activeProgress * 8 * pi) * (1 - (activeProgress * 0.12));
   }
+
+  List<Widget> _buildAlarmTaskSections(
+    BuildContext context,
+    List<_AlarmTaskDetails> alarmTasks,
+  ) {
+    final sections = <Widget>[];
+
+    for (var index = 0; index < alarmTasks.length; index++) {
+      final item = alarmTasks[index];
+      final task = item.task;
+      final category = item.category;
+
+      sections.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            task?.title ?? item.fallbackTitle ?? widget.payload.taskTitle,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: const Color(0xFF333333),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+      sections.add(const SizedBox(height: 6));
+      sections.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _resolveTaskDetails(task),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: const Color(0xFF999999),
+              height: 1.35,
+            ),
+          ),
+        ),
+      );
+      sections.add(const SizedBox(height: 10));
+      if (category != null) {
+        sections.add(
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: category.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    resolveTaskCategoryIcon(category.iconKey),
+                    size: 13,
+                    color: category.color,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    category.name,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: category.color,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        sections.add(const SizedBox(height: 10));
+      }
+
+      if (index != alarmTasks.length - 1) {
+        sections.add(
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E8EC)),
+        );
+        sections.add(const SizedBox(height: 14));
+      }
+    }
+
+    return sections;
+  }
+
+  bool _isSameAlarmTime(DateTime? first, DateTime? second) {
+    if (first == null || second == null) {
+      return false;
+    }
+
+    return first.year == second.year &&
+        first.month == second.month &&
+        first.day == second.day &&
+        first.hour == second.hour &&
+        first.minute == second.minute;
+  }
+}
+
+class _AlarmTaskDetails {
+  const _AlarmTaskDetails({
+    required this.task,
+    required this.category,
+    this.fallbackTitle,
+  });
+
+  final TaskItem? task;
+  final TaskCategory? category;
+  final String? fallbackTitle;
 }

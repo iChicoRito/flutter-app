@@ -59,8 +59,6 @@ class TaskManagementController extends ChangeNotifier {
     String? description,
     required String categoryId,
     required TaskPriority priority,
-    DateTime? startDate,
-    int? startMinutes,
     DateTime? endDate,
     int? endMinutes,
   }) async {
@@ -75,8 +73,6 @@ class TaskManagementController extends ChangeNotifier {
       notePlainText: null,
       priority: priority,
       categoryId: categoryId,
-      startDate: startDate,
-      startMinutes: startMinutes,
       endDate: endDate,
       endMinutes: endMinutes,
       createdAt: now,
@@ -162,7 +158,8 @@ class TaskManagementController extends ChangeNotifier {
           task.title.toLowerCase().contains(query) ||
           descriptionText.contains(query) ||
           noteText.contains(query) ||
-          (categoryLookup[task.categoryId]?.toLowerCase().contains(query) ?? false);
+          (categoryLookup[task.categoryId]?.toLowerCase().contains(query) ??
+              false);
       final matchesCategory =
           categoryFilterId == null || task.categoryId == categoryFilterId;
       final matchesPriority =
@@ -171,7 +168,8 @@ class TaskManagementController extends ChangeNotifier {
     }).toList();
 
     filtered.sort((a, b) {
-      final priorityDiff = _priorityWeight(b.priority) - _priorityWeight(a.priority);
+      final priorityDiff =
+          _priorityWeight(b.priority) - _priorityWeight(a.priority);
       if (priorityDiff != 0) {
         return priorityDiff;
       }

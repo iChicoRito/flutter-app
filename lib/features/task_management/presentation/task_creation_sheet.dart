@@ -22,8 +22,6 @@ class TaskCreationRequest {
     required this.description,
     required this.categoryId,
     required this.priority,
-    this.startDate,
-    this.startMinutes,
     this.endDate,
     this.endMinutes,
   });
@@ -32,8 +30,6 @@ class TaskCreationRequest {
   final String description;
   final String categoryId;
   final TaskPriority priority;
-  final DateTime? startDate;
-  final int? startMinutes;
   final DateTime? endDate;
   final int? endMinutes;
 }
@@ -62,18 +58,15 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   late List<TaskCategory> _categories;
   late TaskPriority _priority;
   String? _selectedCategoryId;
-  DateTime? _startDate;
-  DateTime? _endDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
+  DateTime? _targetDate;
+  TimeOfDay? _targetTime;
 
   @override
   void initState() {
     super.initState();
     _categories = [...widget.categories];
     _priority = TaskPriority.medium;
-    _selectedCategoryId =
-        _categories.isNotEmpty ? _categories.first.id : null;
+    _selectedCategoryId = _categories.isNotEmpty ? _categories.first.id : null;
   }
 
   @override
@@ -91,101 +84,24 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     FocusScope.of(context).requestFocus(_pickerFocusNode);
   }
 
-  DateTime? _combineDateAndTime(DateTime? date, TimeOfDay? time) {
-    if (date == null) {
-      return null;
-    }
-
-    final value = time ?? const TimeOfDay(hour: 0, minute: 0);
-    return DateTime(date.year, date.month, date.day, value.hour, value.minute);
-  }
-
-  bool _isSameCalendarDay(DateTime? first, DateTime? second) {
-    if (first == null || second == null) {
-      return false;
-    }
-    return first.year == second.year &&
-        first.month == second.month &&
-        first.day == second.day;
-  }
-
-  DateTime _dateOnly(DateTime value) {
-    return DateTime(value.year, value.month, value.day);
-  }
-
-  void _syncEndDateWithTimes() {
-    if (_startDate == null || _endDate == null || _startTime == null || _endTime == null) {
-      return;
-    }
-
-    final start = _combineDateAndTime(_startDate, _startTime)!;
-    final end = _combineDateAndTime(_endDate, _endTime)!;
-
-    if (_isSameCalendarDay(_startDate, _endDate) && end.isBefore(start)) {
-      _endDate = _dateOnly(_endDate!.add(const Duration(days: 1)));
-      return;
-    }
-
-    final expectedOvernightEndDate = _dateOnly(
-      _startDate!.add(const Duration(days: 1)),
-    );
-    if (_dateOnly(_endDate!) == expectedOvernightEndDate && !end.isBefore(start)) {
-      _endDate = _dateOnly(_startDate!);
-    }
-  }
-
-  DateTime? _resolvedEndDate() {
-    if (_endDate == null) {
-      return null;
-    }
-    final start = _combineDateAndTime(_startDate, _startTime);
-    final end = _combineDateAndTime(_endDate, _endTime);
-    if (start != null &&
-        end != null &&
-        _isSameCalendarDay(_startDate, _endDate) &&
-        end.isBefore(start)) {
-      return _endDate!.add(const Duration(days: 1));
-    }
-    return _endDate;
-  }
-
   String? _scheduleValidationMessage() {
-    final start = _combineDateAndTime(_startDate, _startTime);
-    final end = _combineDateAndTime(_resolvedEndDate(), _endTime);
-
-    if (start != null && _endDate == null) {
-      return 'Choose an end date to complete the schedule range.';
-    }
-
-    if (end != null && _startDate == null) {
-      return 'Choose a start date before setting an end schedule.';
-    }
-
-    if (start != null && end != null && end.isBefore(start)) {
-      return 'End schedule must be later than or equal to the start schedule.';
+    if (_targetTime != null && _targetDate == null) {
+      return 'Choose a target date before setting the task time.';
     }
 
     return null;
   }
 
-  Future<void> _pickDateRange() async {
+  Future<void> _pickDate() async {
     _parkFocus();
     final now = DateTime.now();
-    final initialStart = _startDate ?? now;
-    final initialEnd = _endDate ?? _startDate ?? now;
-    final picked = await showDateRangePicker(
+    final initialDate = _targetDate ?? now;
+    final picked = await showDatePicker(
       context: context,
-      initialDateRange: DateTimeRange(
-        start: DateTime(
-          initialStart.year,
-          initialStart.month,
-          initialStart.day,
-        ),
-        end: DateTime(
-          initialEnd.year,
-          initialEnd.month,
-          initialEnd.day,
-        ),
+      initialDate: DateTime(
+        initialDate.year,
+        initialDate.month,
+        initialDate.day,
       ),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
@@ -203,17 +119,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     }
 
     setState(() {
-      _startDate = DateTime(
-        picked.start.year,
-        picked.start.month,
-        picked.start.day,
-      );
-      _endDate = DateTime(
-        picked.end.year,
-        picked.end.month,
-        picked.end.day,
-      );
-      _syncEndDateWithTimes();
+      _targetDate = DateTime(picked.year, picked.month, picked.day);
     });
     _parkFocus();
   }
@@ -227,7 +133,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     final picked = await showTimePicker(
       context: context,
       initialTime: initialValue ?? TimeOfDay.now(),
-      initialEntryMode: TimePickerEntryMode.inputOnly,
+      initialEntryMode: TimePickerEntryMode.dial,
       helpText: helpText,
       builder: (context, child) {
         return Theme(
@@ -246,38 +152,21 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     _parkFocus();
   }
 
-  Future<void> _pickTimeRange() async {
-    final startInitial = _startTime ?? TimeOfDay.now();
-    final endInitial = _endTime ?? _startTime ?? startInitial;
-
-    TimeOfDay? pickedStart;
+  Future<void> _pickTargetTime() async {
+    TimeOfDay? pickedTime;
     await _pickTime(
-      initialValue: startInitial,
-      helpText: 'Start Time',
+      initialValue: _targetTime ?? TimeOfDay.now(),
+      helpText: 'Target Time',
       onSelected: (value) {
-        pickedStart = value;
+        pickedTime = value;
       },
     );
-    if (pickedStart == null || !mounted) {
-      return;
-    }
-
-    TimeOfDay? pickedEnd;
-    await _pickTime(
-      initialValue: endInitial,
-      helpText: 'End Time',
-      onSelected: (value) {
-        pickedEnd = value;
-      },
-    );
-    if (pickedEnd == null) {
+    if (pickedTime == null) {
       return;
     }
 
     setState(() {
-      _startTime = pickedStart;
-      _endTime = pickedEnd;
-      _syncEndDateWithTimes();
+      _targetTime = pickedTime;
     });
   }
 
@@ -335,14 +224,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId!,
         priority: _priority,
-        startDate: _startDate,
-        startMinutes: _startTime == null
+        endDate: _targetDate,
+        endMinutes: _targetTime == null
             ? null
-            : (_startTime!.hour * 60) + _startTime!.minute,
-        endDate: _resolvedEndDate(),
-        endMinutes: _endTime == null
-            ? null
-            : (_endTime!.hour * 60) + _endTime!.minute,
+            : (_targetTime!.hour * 60) + _targetTime!.minute,
       ),
     );
   }
@@ -393,9 +278,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       decoration: taskInputDecoration(
                         context: context,
                         hintText: 'Short preview for the task card',
-                      ).copyWith(
-                        counterText: '',
-                      ),
+                      ).copyWith(counterText: ''),
                       maxLength: 30,
                       textInputAction: TextInputAction.next,
                       validator: (value) {
@@ -412,9 +295,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     const SizedBox(height: 6),
                     Text(
                       'Maximum of 30 characters',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: taskMutedText,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: taskMutedText),
                     ),
                   ],
                 ),
@@ -508,25 +391,24 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
               const SizedBox(height: 16),
               TaskSectionCard(
                 title: 'Schedule',
-                subtitle:
-                    'Set a full task window so the dashboard can place it clearly.',
+                subtitle: 'Set the target date and time for this task.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TaskPickerButton(
                       buttonKey: createDateRangeButtonKey,
-                      title: 'Start / End Date',
-                      value: _formatDateRange(_startDate, _endDate),
+                      title: 'Target Date',
+                      value: _formatDateValue(_targetDate),
                       icon: TablerIcons.calendar_event,
-                      onTap: _pickDateRange,
+                      onTap: _pickDate,
                     ),
                     const SizedBox(height: 12),
                     TaskPickerButton(
                       buttonKey: createTimeRangeButtonKey,
-                      title: 'Start / End Time',
-                      value: _formatTimeRange(context, _startTime, _endTime),
+                      title: 'Target Time',
+                      value: _formatTimeValue(context, _targetTime),
                       icon: TablerIcons.clock_hour_8,
-                      onTap: _pickTimeRange,
+                      onTap: _pickTargetTime,
                     ),
                     if (scheduleValidationMessage != null) ...[
                       const SizedBox(height: 12),
@@ -605,28 +487,18 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  String _formatDateRange(DateTime? start, DateTime? end) {
-    if (start == null && end == null) {
-      return 'Select date range';
+  String _formatDateValue(DateTime? value) {
+    if (value == null) {
+      return 'Select target date';
     }
-    if (start != null && end != null) {
-      return '${_formatDate(start)} - ${_formatDate(end)}';
-    }
-    return _formatDate(start ?? end!);
+    return _formatDate(value);
   }
 
-  String _formatTimeRange(
-    BuildContext context,
-    TimeOfDay? start,
-    TimeOfDay? end,
-  ) {
-    if (start == null && end == null) {
-      return 'Select time range';
+  String _formatTimeValue(BuildContext context, TimeOfDay? value) {
+    if (value == null) {
+      return 'Select target time';
     }
-    if (start != null && end != null) {
-      return '${start.format(context)} - ${end.format(context)}';
-    }
-    return (start ?? end)!.format(context);
+    return value.format(context);
   }
 }
 
@@ -754,11 +626,11 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                       itemCount: taskCategoryIconOptions.length,
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 4,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 1,
-                      ),
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1,
+                          ),
                       itemBuilder: (context, index) {
                         final option = taskCategoryIconOptions[index];
                         final selected = _selectedIconKey == option.key;
@@ -800,11 +672,11 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                       itemCount: taskCategoryColorOptions.length,
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 5,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 1,
-                      ),
+                            crossAxisCount: 5,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1,
+                          ),
                       itemBuilder: (context, index) {
                         final color = taskCategoryColorOptions[index];
                         final selected = color == _selectedColor;

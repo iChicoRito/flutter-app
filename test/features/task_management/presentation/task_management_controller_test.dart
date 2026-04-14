@@ -100,6 +100,9 @@ class FakeTaskReminderService implements TaskReminderService {
   }
 
   @override
+  Future<void> clearDueNotification(String taskId) async {}
+
+  @override
   Future<void> rebuildPendingReminders(
     Iterable<TaskItem> tasks, {
     DateTime? now,

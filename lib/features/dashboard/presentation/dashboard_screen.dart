@@ -59,7 +59,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ),
     _DashboardTab(
       label: 'Tasks',
-      icon: TablerIcons.checklist,
+      assetPath: 'assets/icons/list_details_filled.svg',
       title: 'Task Management',
       description: 'Your offline task, note, and reminder hub.',
     ),

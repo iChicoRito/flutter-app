@@ -12,10 +12,8 @@ const createDescriptionFieldKey = Key('task-create-description-field');
 const createPriorityFieldKey = Key('task-create-priority-field');
 const createCategoryFieldKey = Key('task-create-category-field');
 const createSubmitButtonKey = Key('task-create-submit-button');
-const createStartDateButtonKey = Key('task-create-start-date-button');
-const createEndDateButtonKey = Key('task-create-end-date-button');
-const createStartTimeButtonKey = Key('task-create-start-time-button');
-const createEndTimeButtonKey = Key('task-create-end-time-button');
+const createDateRangeButtonKey = Key('task-create-date-range-button');
+const createTimeRangeButtonKey = Key('task-create-time-range-button');
 const createAddCategoryButtonKey = Key('task-create-add-category');
 
 class TaskCreationRequest {
@@ -58,6 +56,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _pickerFocusNode = FocusNode();
   final _uuid = const Uuid();
 
   late List<TaskCategory> _categories;
@@ -81,7 +80,15 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _pickerFocusNode.dispose();
     super.dispose();
+  }
+
+  void _parkFocus() {
+    if (!mounted) {
+      return;
+    }
+    FocusScope.of(context).requestFocus(_pickerFocusNode);
   }
 
   DateTime? _combineDateAndTime(DateTime? date, TimeOfDay? time) {
@@ -93,9 +100,58 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     return DateTime(date.year, date.month, date.day, value.hour, value.minute);
   }
 
-  String? _scheduleValidationMessage() {
+  bool _isSameCalendarDay(DateTime? first, DateTime? second) {
+    if (first == null || second == null) {
+      return false;
+    }
+    return first.year == second.year &&
+        first.month == second.month &&
+        first.day == second.day;
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  void _syncEndDateWithTimes() {
+    if (_startDate == null || _endDate == null || _startTime == null || _endTime == null) {
+      return;
+    }
+
+    final start = _combineDateAndTime(_startDate, _startTime)!;
+    final end = _combineDateAndTime(_endDate, _endTime)!;
+
+    if (_isSameCalendarDay(_startDate, _endDate) && end.isBefore(start)) {
+      _endDate = _dateOnly(_endDate!.add(const Duration(days: 1)));
+      return;
+    }
+
+    final expectedOvernightEndDate = _dateOnly(
+      _startDate!.add(const Duration(days: 1)),
+    );
+    if (_dateOnly(_endDate!) == expectedOvernightEndDate && !end.isBefore(start)) {
+      _endDate = _dateOnly(_startDate!);
+    }
+  }
+
+  DateTime? _resolvedEndDate() {
+    if (_endDate == null) {
+      return null;
+    }
     final start = _combineDateAndTime(_startDate, _startTime);
     final end = _combineDateAndTime(_endDate, _endTime);
+    if (start != null &&
+        end != null &&
+        _isSameCalendarDay(_startDate, _endDate) &&
+        end.isBefore(start)) {
+      return _endDate!.add(const Duration(days: 1));
+    }
+    return _endDate;
+  }
+
+  String? _scheduleValidationMessage() {
+    final start = _combineDateAndTime(_startDate, _startTime);
+    final end = _combineDateAndTime(_resolvedEndDate(), _endTime);
 
     if (start != null && _endDate == null) {
       return 'Choose an end date to complete the schedule range.';
@@ -112,14 +168,25 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     return null;
   }
 
-  Future<void> _pickDate({
-    required DateTime? initialValue,
-    required ValueChanged<DateTime> onSelected,
-  }) async {
+  Future<void> _pickDateRange() async {
+    _parkFocus();
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final initialStart = _startDate ?? now;
+    final initialEnd = _endDate ?? _startDate ?? now;
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: initialValue ?? now,
+      initialDateRange: DateTimeRange(
+        start: DateTime(
+          initialStart.year,
+          initialStart.month,
+          initialStart.day,
+        ),
+        end: DateTime(
+          initialEnd.year,
+          initialEnd.month,
+          initialEnd.day,
+        ),
+      ),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
@@ -131,19 +198,37 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     );
 
     if (picked == null) {
+      _parkFocus();
       return;
     }
 
-    onSelected(DateTime(picked.year, picked.month, picked.day));
+    setState(() {
+      _startDate = DateTime(
+        picked.start.year,
+        picked.start.month,
+        picked.start.day,
+      );
+      _endDate = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+      );
+      _syncEndDateWithTimes();
+    });
+    _parkFocus();
   }
 
   Future<void> _pickTime({
     required TimeOfDay? initialValue,
     required ValueChanged<TimeOfDay> onSelected,
+    required String helpText,
   }) async {
+    _parkFocus();
     final picked = await showTimePicker(
       context: context,
       initialTime: initialValue ?? TimeOfDay.now(),
+      initialEntryMode: TimePickerEntryMode.inputOnly,
+      helpText: helpText,
       builder: (context, child) {
         return Theme(
           data: buildTaskPickerTheme(Theme.of(context)),
@@ -153,10 +238,47 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     );
 
     if (picked == null) {
+      _parkFocus();
       return;
     }
 
     onSelected(picked);
+    _parkFocus();
+  }
+
+  Future<void> _pickTimeRange() async {
+    final startInitial = _startTime ?? TimeOfDay.now();
+    final endInitial = _endTime ?? _startTime ?? startInitial;
+
+    TimeOfDay? pickedStart;
+    await _pickTime(
+      initialValue: startInitial,
+      helpText: 'Start Time',
+      onSelected: (value) {
+        pickedStart = value;
+      },
+    );
+    if (pickedStart == null || !mounted) {
+      return;
+    }
+
+    TimeOfDay? pickedEnd;
+    await _pickTime(
+      initialValue: endInitial,
+      helpText: 'End Time',
+      onSelected: (value) {
+        pickedEnd = value;
+      },
+    );
+    if (pickedEnd == null) {
+      return;
+    }
+
+    setState(() {
+      _startTime = pickedStart;
+      _endTime = pickedEnd;
+      _syncEndDateWithTimes();
+    });
   }
 
   Future<void> _addCategory() async {
@@ -217,7 +339,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         startMinutes: _startTime == null
             ? null
             : (_startTime!.hour * 60) + _startTime!.minute,
-        endDate: _endDate,
+        endDate: _resolvedEndDate(),
         endMinutes: _endTime == null
             ? null
             : (_endTime!.hour * 60) + _endTime!.minute,
@@ -235,6 +357,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       body: SafeArea(
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
             children: [
@@ -253,7 +376,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                         context: context,
                         hintText: 'What needs to get done?',
                       ),
-                      autofocus: true,
                       textInputAction: TextInputAction.next,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -263,7 +385,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    const TaskFieldLabel('Description'),
+                    const TaskFieldLabel('Short Description'),
                     const SizedBox(height: 8),
                     TextFormField(
                       key: createDescriptionFieldKey,
@@ -278,11 +400,21 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       textInputAction: TextInputAction.next,
                       validator: (value) {
                         final trimmed = value?.trim() ?? '';
+                        if (trimmed.isEmpty) {
+                          return 'Short description is required.';
+                        }
                         if (trimmed.length > 30) {
                           return 'Description must be 30 characters or fewer.';
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Maximum of 30 characters',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: taskMutedText,
+                          ),
                     ),
                   ],
                 ),
@@ -349,7 +481,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                         ),
                         const SizedBox(width: 12),
                         SizedBox(
-                          height: 50,
+                          height: 44,
                           child: OutlinedButton.icon(
                             key: createAddCategoryButtonKey,
                             onPressed: _addCategory,
@@ -357,6 +489,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                             label: const Text('New'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: taskPrimaryBlue,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
                               side: const BorderSide(color: taskBorderColor),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
@@ -378,71 +514,19 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TaskPickerButton(
-                      buttonKey: createStartDateButtonKey,
-                      title: 'Start Date',
-                      value: _startDate == null
-                          ? 'Select start date'
-                          : _formatDate(_startDate!),
+                      buttonKey: createDateRangeButtonKey,
+                      title: 'Start / End Date',
+                      value: _formatDateRange(_startDate, _endDate),
                       icon: TablerIcons.calendar_event,
-                      onTap: () => _pickDate(
-                        initialValue: _startDate,
-                        onSelected: (value) {
-                          setState(() {
-                            _startDate = value;
-                          });
-                        },
-                      ),
+                      onTap: _pickDateRange,
                     ),
                     const SizedBox(height: 12),
                     TaskPickerButton(
-                      buttonKey: createEndDateButtonKey,
-                      title: 'End Date',
-                      value: _endDate == null
-                          ? 'Select end date'
-                          : _formatDate(_endDate!),
-                      icon: TablerIcons.calendar_due,
-                      onTap: () => _pickDate(
-                        initialValue: _endDate ?? _startDate,
-                        onSelected: (value) {
-                          setState(() {
-                            _endDate = value;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TaskPickerButton(
-                      buttonKey: createStartTimeButtonKey,
-                      title: 'Start Time',
-                      value: _startTime == null
-                          ? 'Select start time'
-                          : _startTime!.format(context),
+                      buttonKey: createTimeRangeButtonKey,
+                      title: 'Start / End Time',
+                      value: _formatTimeRange(context, _startTime, _endTime),
                       icon: TablerIcons.clock_hour_8,
-                      onTap: () => _pickTime(
-                        initialValue: _startTime,
-                        onSelected: (value) {
-                          setState(() {
-                            _startTime = value;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TaskPickerButton(
-                      buttonKey: createEndTimeButtonKey,
-                      title: 'End Time',
-                      value: _endTime == null
-                          ? 'Select end time'
-                          : _endTime!.format(context),
-                      icon: TablerIcons.clock_play,
-                      onTap: () => _pickTime(
-                        initialValue: _endTime,
-                        onSelected: (value) {
-                          setState(() {
-                            _endTime = value;
-                          });
-                        },
-                      ),
+                      onTap: _pickTimeRange,
                     ),
                     if (scheduleValidationMessage != null) ...[
                       const SizedBox(height: 12),
@@ -519,6 +603,30 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _formatDateRange(DateTime? start, DateTime? end) {
+    if (start == null && end == null) {
+      return 'Select date range';
+    }
+    if (start != null && end != null) {
+      return '${_formatDate(start)} - ${_formatDate(end)}';
+    }
+    return _formatDate(start ?? end!);
+  }
+
+  String _formatTimeRange(
+    BuildContext context,
+    TimeOfDay? start,
+    TimeOfDay? end,
+  ) {
+    if (start == null && end == null) {
+      return 'Select time range';
+    }
+    if (start != null && end != null) {
+      return '${start.format(context)} - ${end.format(context)}';
+    }
+    return (start ?? end)!.format(context);
   }
 }
 

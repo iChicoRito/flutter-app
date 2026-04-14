@@ -19,14 +19,13 @@ class TaskEditorScreen extends StatefulWidget {
     required this.taskId,
   });
 
+  static const String deletedResult = 'deleted';
   static const Key markerKey = Key('task-editor-screen');
   static const Key titleFieldKey = Key('task-editor-title-field');
   static const Key descriptionFieldKey = Key('task-editor-body');
   static const Key editorBodyKey = Key('task-editor-body');
-  static const Key startDateButtonKey = Key('task-editor-start-date-button');
-  static const Key endDateButtonKey = Key('task-editor-end-date-button');
-  static const Key startTimeButtonKey = Key('task-editor-start-time-button');
-  static const Key endTimeButtonKey = Key('task-editor-end-time-button');
+  static const Key dateRangeButtonKey = Key('task-editor-date-range-button');
+  static const Key timeRangeButtonKey = Key('task-editor-time-range-button');
   static const Key categoryFieldKey = Key('task-editor-category-field');
   static const Key priorityFieldKey = Key('task-editor-priority-field');
   static const Key addCategoryButtonKey = Key('task-editor-add-category');
@@ -215,13 +214,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   Future<bool> _flushBeforeExit() async {
     final success = await _persistPendingChanges();
     if (!success && mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('The latest note changes could not be saved yet.'),
-          ),
-        );
+      showTaskToast(
+        context,
+        message: 'The latest note changes could not be saved yet.',
+        isError: true,
+      );
     }
     return success;
   }
@@ -253,11 +250,28 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       return;
     }
 
-    setState(() {
-      _task = result.task;
-      _categories = result.categories;
-    });
-    _scheduleAutosave();
+    try {
+      await widget.repository.upsertTask(result.task);
+      final latest = await widget.repository.getTaskById(result.task.id);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _task = latest ?? result.task;
+        _categories = result.categories;
+      });
+      showTaskToast(context, message: 'Task updated successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to update the task right now.',
+        isError: true,
+      );
+    }
   }
 
   Future<void> _deleteTask() async {
@@ -274,11 +288,22 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       return;
     }
 
-    await widget.repository.deleteTask(task.id);
-    if (!mounted) {
-      return;
+    try {
+      await widget.repository.deleteTask(task.id);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(TaskEditorScreen.deletedResult);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to delete the task right now.',
+        isError: true,
+      );
     }
-    Navigator.of(context).pop(true);
   }
 
   TaskCategory? _categoryFor(String categoryId) {
@@ -808,6 +833,8 @@ class _TaskDetailsSheet extends StatefulWidget {
 }
 
 class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _pickerFocusNode = FocusNode();
   final _uuid = const Uuid();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
@@ -839,7 +866,15 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _pickerFocusNode.dispose();
     super.dispose();
+  }
+
+  void _parkFocus() {
+    if (!mounted) {
+      return;
+    }
+    FocusScope.of(context).requestFocus(_pickerFocusNode);
   }
 
   TimeOfDay? _toTimeOfDay(int? minutes) {
@@ -857,9 +892,58 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     return DateTime(date.year, date.month, date.day, value.hour, value.minute);
   }
 
-  String? _scheduleValidationMessage() {
+  bool _isSameCalendarDay(DateTime? first, DateTime? second) {
+    if (first == null || second == null) {
+      return false;
+    }
+    return first.year == second.year &&
+        first.month == second.month &&
+        first.day == second.day;
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  void _syncEndDateWithTimes() {
+    if (_startDate == null || _endDate == null || _startTime == null || _endTime == null) {
+      return;
+    }
+
+    final start = _combineDateAndTime(_startDate, _startTime)!;
+    final end = _combineDateAndTime(_endDate, _endTime)!;
+
+    if (_isSameCalendarDay(_startDate, _endDate) && end.isBefore(start)) {
+      _endDate = _dateOnly(_endDate!.add(const Duration(days: 1)));
+      return;
+    }
+
+    final expectedOvernightEndDate = _dateOnly(
+      _startDate!.add(const Duration(days: 1)),
+    );
+    if (_dateOnly(_endDate!) == expectedOvernightEndDate && !end.isBefore(start)) {
+      _endDate = _dateOnly(_startDate!);
+    }
+  }
+
+  DateTime? _resolvedEndDate() {
+    if (_endDate == null) {
+      return null;
+    }
     final start = _combineDateAndTime(_startDate, _startTime);
     final end = _combineDateAndTime(_endDate, _endTime);
+    if (start != null &&
+        end != null &&
+        _isSameCalendarDay(_startDate, _endDate) &&
+        end.isBefore(start)) {
+      return _endDate!.add(const Duration(days: 1));
+    }
+    return _endDate;
+  }
+
+  String? _scheduleValidationMessage() {
+    final start = _combineDateAndTime(_startDate, _startTime);
+    final end = _combineDateAndTime(_resolvedEndDate(), _endTime);
 
     if (start != null && _endDate == null) {
       return 'Choose an end date to complete the schedule range.';
@@ -873,14 +957,25 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     return null;
   }
 
-  Future<void> _pickDate({
-    required DateTime? initialValue,
-    required ValueChanged<DateTime> onSelected,
-  }) async {
+  Future<void> _pickDateRange() async {
+    _parkFocus();
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final initialStart = _startDate ?? now;
+    final initialEnd = _endDate ?? _startDate ?? now;
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: initialValue ?? now,
+      initialDateRange: DateTimeRange(
+        start: DateTime(
+          initialStart.year,
+          initialStart.month,
+          initialStart.day,
+        ),
+        end: DateTime(
+          initialEnd.year,
+          initialEnd.month,
+          initialEnd.day,
+        ),
+      ),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
@@ -892,19 +987,37 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     );
 
     if (picked == null) {
+      _parkFocus();
       return;
     }
 
-    onSelected(DateTime(picked.year, picked.month, picked.day));
+    setState(() {
+      _startDate = DateTime(
+        picked.start.year,
+        picked.start.month,
+        picked.start.day,
+      );
+      _endDate = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+      );
+      _syncEndDateWithTimes();
+    });
+    _parkFocus();
   }
 
   Future<void> _pickTime({
     required TimeOfDay? initialValue,
     required ValueChanged<TimeOfDay> onSelected,
+    required String helpText,
   }) async {
+    _parkFocus();
     final picked = await showTimePicker(
       context: context,
       initialTime: initialValue ?? TimeOfDay.now(),
+      initialEntryMode: TimePickerEntryMode.inputOnly,
+      helpText: helpText,
       builder: (context, child) {
         return Theme(
           data: buildTaskPickerTheme(Theme.of(context)),
@@ -914,10 +1027,47 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     );
 
     if (picked == null) {
+      _parkFocus();
       return;
     }
 
     onSelected(picked);
+    _parkFocus();
+  }
+
+  Future<void> _pickTimeRange() async {
+    final startInitial = _startTime ?? TimeOfDay.now();
+    final endInitial = _endTime ?? _startTime ?? startInitial;
+
+    TimeOfDay? pickedStart;
+    await _pickTime(
+      initialValue: startInitial,
+      helpText: 'Start Time',
+      onSelected: (value) {
+        pickedStart = value;
+      },
+    );
+    if (pickedStart == null || !mounted) {
+      return;
+    }
+
+    TimeOfDay? pickedEnd;
+    await _pickTime(
+      initialValue: endInitial,
+      helpText: 'End Time',
+      onSelected: (value) {
+        pickedEnd = value;
+      },
+    );
+    if (pickedEnd == null) {
+      return;
+    }
+
+    setState(() {
+      _startTime = pickedStart;
+      _endTime = pickedEnd;
+      _syncEndDateWithTimes();
+    });
   }
 
   Future<void> _addCategory() async {
@@ -943,6 +1093,11 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   }
 
   void _submit() {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     final scheduleValidationMessage = _scheduleValidationMessage();
     if (scheduleValidationMessage != null) {
       ScaffoldMessenger.of(context)
@@ -952,22 +1107,13 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     }
 
     final trimmedTitle = _titleController.text.trim();
-    if (trimmedTitle.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Task title is required.')),
-        );
-      return;
-    }
+    final trimmedDescription = _descriptionController.text.trim();
 
     Navigator.of(context).pop(
       _TaskDetailsResult(
         task: widget.task.copyWith(
           title: trimmedTitle,
-          description: _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+          description: trimmedDescription,
           priority: _priority,
           categoryId: _selectedCategoryId,
           startDate: _startDate,
@@ -976,11 +1122,12 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
               : (_startTime!.hour * 60) + _startTime!.minute,
           clearStartDate: _startDate == null,
           clearStartMinutes: _startTime == null,
-          endDate: _endDate,
+          endDate: _resolvedEndDate(),
           endMinutes:
               _endTime == null ? null : (_endTime!.hour * 60) + _endTime!.minute,
           clearEndDate: _endDate == null,
           clearEndMinutes: _endTime == null,
+          updatedAt: DateTime.now(),
         ),
         categories: _categories,
       ),
@@ -999,183 +1146,194 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
         surfaceTintColor: Colors.white,
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Adjust the task metadata without leaving the writing flow.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: taskSecondaryText,
-                      height: 1.4,
-                    ),
-              ),
-              const SizedBox(height: 18),
-              const TaskFieldLabel('Task Title'),
-              const SizedBox(height: 8),
-              TextFormField(
-                key: TaskEditorScreen.titleFieldKey,
-                controller: _titleController,
-                decoration: taskInputDecoration(
-                  context: context,
-                  hintText: 'Enter task title',
-                ),
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 16),
-              const TaskFieldLabel('Description'),
-              const SizedBox(height: 8),
-              TextFormField(
-                key: const Key('task-editor-description-field'),
-                controller: _descriptionController,
-                decoration: taskInputDecoration(
-                  context: context,
-                  hintText: 'Short preview for the task card',
-                ).copyWith(counterText: ''),
-                maxLength: 30,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 16),
-              const TaskFieldLabel('Priority'),
-              const SizedBox(height: 8),
-              TaskCompactDropdown<TaskPriority>(
-                buttonKey: TaskEditorScreen.priorityFieldKey,
-                menuKeyBuilder: (value) => Key('task-editor-priority-${value.name}'),
-                currentValue: _priority,
-                currentLabel: _priorityLabel(_priority),
-                onSelected: (value) {
-                  setState(() {
-                    _priority = value;
-                  });
-                },
-                items: TaskPriority.values,
-                labelBuilder: _priorityLabel,
-              ),
-              const SizedBox(height: 16),
-              const TaskFieldLabel('Category'),
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: TaskCompactDropdown<String>(
-                      buttonKey: TaskEditorScreen.categoryFieldKey,
-                      menuKeyBuilder: (value) => Key('task-editor-category-$value'),
-                      currentValue: _selectedCategoryId,
-                      currentLabel: _categoryLabel(_selectedCategoryId) ?? 'Category',
-                      onSelected: (value) {
-                        setState(() {
-                          _selectedCategoryId = value;
-                        });
-                      },
-                      items: _categories.map((item) => item.id).toList(),
-                      labelBuilder: (value) => _categoryLabel(value) ?? 'Category',
-                      leadingBuilder: (value) {
-                        final category = _categoryById(value);
-                        if (category == null) {
-                          return null;
-                        }
-                        return Icon(
-                          resolveTaskCategoryIcon(category.iconKey),
-                          color: category.color,
-                          size: 18,
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      key: TaskEditorScreen.addCategoryButtonKey,
-                      onPressed: _addCategory,
-                      icon: const Icon(TablerIcons.plus, size: 18),
-                      label: const Text('New'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: taskPrimaryBlue,
-                        side: const BorderSide(color: taskBorderColor),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TaskSectionCard(
+                  title: 'Task Details',
+                  subtitle: 'Add the core information people will scan first.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const TaskFieldLabel('Task Title'),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        key: TaskEditorScreen.titleFieldKey,
+                        controller: _titleController,
+                        decoration: taskInputDecoration(
+                          context: context,
+                          hintText: 'Enter task title',
                         ),
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Task title is required.';
+                          }
+                          return null;
+                        },
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      const TaskFieldLabel('Short Description'),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        key: const Key('task-editor-description-field'),
+                        controller: _descriptionController,
+                        decoration: taskInputDecoration(
+                          context: context,
+                          hintText: 'Short preview for the task card',
+                        ).copyWith(counterText: ''),
+                        maxLength: 30,
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          final trimmed = value?.trim() ?? '';
+                          if (trimmed.isEmpty) {
+                            return 'Short description is required.';
+                          }
+                          if (trimmed.length > 30) {
+                            return 'Description must be 30 characters or fewer.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Maximum of 30 characters',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: taskMutedText,
+                            ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const TaskFieldLabel('Schedule'),
-              const SizedBox(height: 8),
-              TaskPickerButton(
-                buttonKey: TaskEditorScreen.startDateButtonKey,
-                title: 'Start Date',
-                value: _startDate == null ? 'Select start date' : _formatDate(_startDate!),
-                icon: TablerIcons.calendar_event,
-                onTap: () => _pickDate(
-                  initialValue: _startDate,
-                  onSelected: (value) {
-                    setState(() {
-                      _startDate = value;
-                    });
-                  },
                 ),
-              ),
-              const SizedBox(height: 12),
-              TaskPickerButton(
-                buttonKey: TaskEditorScreen.endDateButtonKey,
-                title: 'End Date',
-                value: _endDate == null ? 'Select end date' : _formatDate(_endDate!),
-                icon: TablerIcons.calendar_due,
-                onTap: () => _pickDate(
-                  initialValue: _endDate ?? _startDate,
-                  onSelected: (value) {
-                    setState(() {
-                      _endDate = value;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              TaskPickerButton(
-                buttonKey: TaskEditorScreen.startTimeButtonKey,
-                title: 'Start Time',
-                value: _startTime == null ? 'Select start time' : _startTime!.format(context),
-                icon: TablerIcons.clock_hour_8,
-                onTap: () => _pickTime(
-                  initialValue: _startTime,
-                  onSelected: (value) {
-                    setState(() {
-                      _startTime = value;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              TaskPickerButton(
-                buttonKey: TaskEditorScreen.endTimeButtonKey,
-                title: 'End Time',
-                value: _endTime == null ? 'Select end time' : _endTime!.format(context),
-                icon: TablerIcons.clock_play,
-                onTap: () => _pickTime(
-                  initialValue: _endTime,
-                  onSelected: (value) {
-                    setState(() {
-                      _endTime = value;
-                    });
-                  },
-                ),
-              ),
-              if (scheduleValidationMessage != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  scheduleValidationMessage,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: taskDangerText,
-                        fontWeight: FontWeight.w600,
+                const SizedBox(height: 16),
+                TaskSectionCard(
+                  title: 'Task Settings',
+                  subtitle:
+                      'Set the category, urgency, and timing before writing notes.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const TaskFieldLabel('Priority'),
+                      const SizedBox(height: 8),
+                      TaskCompactDropdown<TaskPriority>(
+                        buttonKey: TaskEditorScreen.priorityFieldKey,
+                        menuKeyBuilder: (value) =>
+                            Key('task-editor-priority-${value.name}'),
+                        currentValue: _priority,
+                        currentLabel: _priorityLabel(_priority),
+                        onSelected: (value) {
+                          setState(() {
+                            _priority = value;
+                          });
+                        },
+                        items: TaskPriority.values,
+                        labelBuilder: _priorityLabel,
                       ),
+                      const SizedBox(height: 16),
+                      const TaskFieldLabel('Category'),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TaskCompactDropdown<String>(
+                              buttonKey: TaskEditorScreen.categoryFieldKey,
+                              menuKeyBuilder: (value) =>
+                                  Key('task-editor-category-$value'),
+                              currentValue: _selectedCategoryId,
+                              currentLabel:
+                                  _categoryLabel(_selectedCategoryId) ??
+                                      'Category',
+                              onSelected: (value) {
+                                setState(() {
+                                  _selectedCategoryId = value;
+                                });
+                              },
+                              items: _categories.map((item) => item.id).toList(),
+                              labelBuilder: (value) =>
+                                  _categoryLabel(value) ?? 'Category',
+                              leadingBuilder: (value) {
+                                final category = _categoryById(value);
+                                if (category == null) {
+                                  return null;
+                                }
+                                return Icon(
+                                  resolveTaskCategoryIcon(category.iconKey),
+                                  color: category.color,
+                                  size: 18,
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              key: TaskEditorScreen.addCategoryButtonKey,
+                              onPressed: _addCategory,
+                              icon: const Icon(TablerIcons.plus, size: 18),
+                              label: const Text('New'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: taskPrimaryBlue,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                side: const BorderSide(color: taskBorderColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TaskSectionCard(
+                  title: 'Schedule',
+                  subtitle:
+                      'Set a full task window so the dashboard can place it clearly.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TaskPickerButton(
+                        buttonKey: TaskEditorScreen.dateRangeButtonKey,
+                        title: 'Start / End Date',
+                        value: _formatDateRange(_startDate, _endDate),
+                        icon: TablerIcons.calendar_event,
+                        onTap: _pickDateRange,
+                      ),
+                      const SizedBox(height: 12),
+                      TaskPickerButton(
+                        buttonKey: TaskEditorScreen.timeRangeButtonKey,
+                        title: 'Start / End Time',
+                        value: _formatTimeRange(context, _startTime, _endTime),
+                        icon: TablerIcons.clock_hour_8,
+                        onTap: _pickTimeRange,
+                      ),
+                      if (scheduleValidationMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          scheduleValidationMessage,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: taskDangerText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -1237,6 +1395,30 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _formatDateRange(DateTime? start, DateTime? end) {
+    if (start == null && end == null) {
+      return 'Select date range';
+    }
+    if (start != null && end != null) {
+      return '${_formatDate(start)} - ${_formatDate(end)}';
+    }
+    return _formatDate(start ?? end!);
+  }
+
+  String _formatTimeRange(
+    BuildContext context,
+    TimeOfDay? start,
+    TimeOfDay? end,
+  ) {
+    if (start == null && end == null) {
+      return 'Select time range';
+    }
+    if (start != null && end != null) {
+      return '${start.format(context)} - ${end.format(context)}';
+    }
+    return (start ?? end)!.format(context);
   }
 }
 

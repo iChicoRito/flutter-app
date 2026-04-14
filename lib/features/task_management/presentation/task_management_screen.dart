@@ -61,6 +61,7 @@ class TaskManagementScreen extends StatefulWidget {
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSelectionMode = false;
+  bool _isFiltersExpanded = true;
 
   TaskManagementController get _controller => widget.controller;
 
@@ -89,13 +90,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
   Future<void> _openCreateFlow() async {
     if (_controller.categories.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Add a category first before creating a task.'),
-          ),
-        );
+      showTaskToast(
+        context,
+        message: 'Add a category first before creating a task.',
+        isError: true,
+      );
       return;
     }
 
@@ -111,26 +110,38 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       return;
     }
 
-    final task = await _controller.createTask(
-      title: request.title,
-      description: request.description,
-      categoryId: request.categoryId,
-      priority: request.priority,
-      startDate: request.startDate,
-      startMinutes: request.startMinutes,
-      endDate: request.endDate,
-      endMinutes: request.endMinutes,
-    );
-    if (!mounted) {
-      return;
-    }
+    try {
+      final task = await _controller.createTask(
+        title: request.title,
+        description: request.description,
+        categoryId: request.categoryId,
+        priority: request.priority,
+        startDate: request.startDate,
+        startMinutes: request.startMinutes,
+        endDate: request.endDate,
+        endMinutes: request.endMinutes,
+      );
+      if (!mounted) {
+        return;
+      }
 
-    await _openEditor(task.id);
+      showTaskToast(context, message: 'Task created successfully.');
+      await _openEditor(task.id);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to create the task right now.',
+        isError: true,
+      );
+    }
   }
 
   Future<void> _openEditor(String taskId) async {
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
         builder: (context) => TaskEditorScreen(
           repository: widget.repository,
           taskId: taskId,
@@ -142,6 +153,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       return;
     }
     await _controller.load();
+    if (!mounted) {
+      return;
+    }
+    if (result == TaskEditorScreen.deletedResult) {
+      showTaskToast(context, message: 'Task deleted successfully.');
+    }
   }
 
   Future<void> _confirmDelete(TaskItem task) async {
@@ -153,14 +170,23 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       return;
     }
 
-    await _controller.deleteTask(task.id);
-    if (!mounted) {
-      return;
-    }
+    try {
+      await _controller.deleteTask(task.id);
+      if (!mounted) {
+        return;
+      }
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Task deleted.')));
+      showTaskToast(context, message: 'Task deleted successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to delete the task right now.',
+        isError: true,
+      );
+    }
   }
 
   @override
@@ -206,10 +232,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                         onChanged: _controller.updateSearchQuery,
                       ),
                       const SizedBox(height: 16),
-                      TaskSectionCard(
+                      _FiltersSection(
                         title: 'Filters',
                         subtitle:
                             'Search across task titles, note previews, and categories.',
+                        isExpanded: _isFiltersExpanded,
+                        onHeaderTap: () {
+                          setState(() {
+                            _isFiltersExpanded = !_isFiltersExpanded;
+                          });
+                        },
                         child: Column(
                           children: [
                             Row(
@@ -388,7 +420,7 @@ class _CategoryFilterRow extends StatelessWidget {
             child: _CategoryChip(
               chipKey: TaskManagementScreen.allCategoriesKey,
               label: 'All Categories',
-              icon: TablerIcons.check,
+              icon: null,
               iconColor: selectedCategoryId == null ? Colors.white : taskMutedText,
               selected: selectedCategoryId == null,
               onTap: () => onSelected(null),
@@ -429,7 +461,7 @@ class _CategoryChip extends StatelessWidget {
 
   final Key chipKey;
   final String label;
-  final IconData icon;
+  final IconData? icon;
   final Color iconColor;
   final bool selected;
   final VoidCallback onTap;
@@ -452,8 +484,10 @@ class _CategoryChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: iconColor),
-            const SizedBox(width: 6),
+            if (icon != null) ...[
+              Icon(icon, size: 13, color: iconColor),
+              const SizedBox(width: 6),
+            ],
             Text(
               label,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -463,6 +497,82 @@ class _CategoryChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FiltersSection extends StatelessWidget {
+  const _FiltersSection({
+    required this.title,
+    required this.subtitle,
+    required this.isExpanded,
+    required this.onHeaderTap,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool isExpanded;
+  final VoidCallback onHeaderTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: taskBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onHeaderTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: taskDarkText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: taskSecondaryText,
+                              height: 1.4,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  isExpanded ? TablerIcons.chevron_up : TablerIcons.chevron_down,
+                  size: 18,
+                  color: taskMutedText,
+                ),
+              ],
+            ),
+          ),
+          if (isExpanded) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1, thickness: 1, color: taskBorderColor),
+            const SizedBox(height: 16),
+            child,
+          ],
+        ],
       ),
     );
   }

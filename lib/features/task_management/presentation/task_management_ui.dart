@@ -17,6 +17,132 @@ const taskDangerText = Color(0xFFD63939);
 const taskSuccessText = Color(0xFF0CA678);
 const taskWarningText = Color(0xFFF59F00);
 
+OverlayEntry? _currentTaskToastEntry;
+
+void showTaskToast(
+  BuildContext context, {
+  required String message,
+  bool isError = false,
+}) {
+  _currentTaskToastEntry?.remove();
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) {
+    return;
+  }
+
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => _TaskToastOverlay(
+      message: message,
+      isError: isError,
+      onDismissed: () {
+        if (_currentTaskToastEntry == entry) {
+          _currentTaskToastEntry = null;
+        }
+        entry.remove();
+      },
+    ),
+  );
+
+  _currentTaskToastEntry = entry;
+  overlay.insert(entry);
+}
+
+class _TaskToastOverlay extends StatefulWidget {
+  const _TaskToastOverlay({
+    required this.message,
+    required this.isError,
+    required this.onDismissed,
+  });
+
+  final String message;
+  final bool isError;
+  final VoidCallback onDismissed;
+
+  @override
+  State<_TaskToastOverlay> createState() => _TaskToastOverlayState();
+}
+
+class _TaskToastOverlayState extends State<_TaskToastOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    reverseDuration: const Duration(milliseconds: 180),
+  );
+  late final Animation<Offset> _offset = Tween<Offset>(
+    begin: const Offset(0, 0.2),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+  bool _dismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _showAndHide();
+  }
+
+  Future<void> _showAndHide() async {
+    await _controller.forward();
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (!mounted || _dismissed) {
+      return;
+    }
+    await _controller.reverse();
+    _dismissed = true;
+    widget.onDismissed();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = widget.isError
+        ? taskDangerText
+        : const Color(0xFFE6F6F1);
+    final foregroundColor = widget.isError
+        ? Colors.white
+        : taskSuccessText;
+
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 24 + MediaQuery.of(context).padding.bottom,
+      child: IgnorePointer(
+        child: SlideTransition(
+          position: _offset,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: widget.isError
+                      ? backgroundColor
+                      : foregroundColor.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Text(
+                widget.message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: foregroundColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 InputDecoration taskInputDecoration({
   required BuildContext context,
   required String hintText,
@@ -178,10 +304,11 @@ class TaskCompactDropdown<T> extends StatelessWidget {
         }).toList();
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: taskBorderColor),
         ),
         child: Row(
@@ -290,9 +417,55 @@ ThemeData buildTaskPickerTheme(ThemeData baseTheme) {
       onSurface: taskDarkText,
     ),
     textTheme: textTheme,
+    scaffoldBackgroundColor: Colors.white,
+    canvasColor: Colors.white,
     dialogTheme: const DialogThemeData(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
+    ),
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      rangePickerBackgroundColor: Colors.white,
+      rangePickerSurfaceTintColor: Colors.white,
+      headerBackgroundColor: Colors.white,
+      headerForegroundColor: taskDarkText,
+      dividerColor: taskBorderColor,
+      rangeSelectionBackgroundColor: taskAccentBlue,
+      todayForegroundColor: WidgetStateProperty.all(taskPrimaryBlue),
+      dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return taskDarkText;
+      }),
+      dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return taskPrimaryBlue;
+        }
+        return null;
+      }),
+      yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return Colors.white;
+        }
+        return taskDarkText;
+      }),
+      yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return taskPrimaryBlue;
+        }
+        return null;
+      }),
+      rangeSelectionOverlayColor: WidgetStateProperty.all(
+        taskPrimaryBlue.withValues(alpha: 0.08),
+      ),
+      dayOverlayColor: WidgetStateProperty.all(
+        taskPrimaryBlue.withValues(alpha: 0.08),
+      ),
+      yearOverlayColor: WidgetStateProperty.all(
+        taskPrimaryBlue.withValues(alpha: 0.08),
+      ),
     ),
   );
 }

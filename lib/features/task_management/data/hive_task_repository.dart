@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'task_note_codec.dart';
@@ -51,7 +53,18 @@ class HiveTaskRepository implements TaskRepository {
       }
 
       // Recover from incompatible legacy task payloads so the app can boot.
-      await Hive.deleteBoxFromDisk(_taskBoxName);
+      try {
+        await Hive.deleteBoxFromDisk(_taskBoxName);
+      } on PathNotFoundException {
+        // Hive may already have removed the main box file before attempting to
+        // delete a non-existent lock file on some Android environments.
+      } on FileSystemException catch (error) {
+        final isMissingLockFile =
+            error.path?.toLowerCase().endsWith('tasksbox.lock') ?? false;
+        if (!isMissingLockFile) {
+          rethrow;
+        }
+      }
       return Hive.openBox<TaskItem>(_taskBoxName);
     }
   }
@@ -189,38 +202,51 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
 
   @override
   TaskItem read(BinaryReader reader) {
-    final values = <dynamic>[];
-    while (reader.availableBytes > 0) {
-      values.add(reader.read());
-    }
-
-    final legacyDueDate = values.length > 3 ? values[3] as DateTime? : null;
-    final legacyDueMinutes = values.length > 4 ? values[4] as int? : null;
-    final completedAt = values.length > 10 ? values[10] as DateTime? : null;
-    final startDate = values.length > 11 ? values[11] as DateTime? : null;
-    final startMinutes = values.length > 12 ? values[12] as int? : null;
-    final endDate = values.length > 13
-        ? values[13] as DateTime?
+    final id = reader.readString();
+    final title = reader.readString();
+    final description = reader.read() as String?;
+    final legacyDueDate = reader.availableBytes > 0
+        ? _readDateValue(reader.read(), dateOnly: true)
+        : null;
+    final legacyDueMinutes = reader.availableBytes > 0 ? reader.read() as int? : null;
+    final priorityIndex = reader.readInt();
+    final categoryId = reader.readString();
+    final isCompleted = reader.readBool();
+    final createdAt = _readDateValue(reader.read()) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final updatedAt = _readDateValue(reader.read()) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final completedAt = reader.availableBytes > 0
+        ? _readDateValue(reader.read())
+        : null;
+    final startDate = reader.availableBytes > 0
+        ? _readDateValue(reader.read(), dateOnly: true)
+        : null;
+    final startMinutes = reader.availableBytes > 0 ? reader.read() as int? : null;
+    final endDate = reader.availableBytes > 0
+        ? _readDateValue(reader.read(), dateOnly: true)
         : legacyDueDate;
-    final endMinutes = values.length > 14
-        ? values[14] as int?
+    final endMinutes = reader.availableBytes > 0
+        ? reader.read() as int?
         : legacyDueMinutes;
+    final noteDocumentJson = reader.availableBytes > 0 ? reader.read() as String? : null;
+    final notePlainText = reader.availableBytes > 0 ? reader.read() as String? : null;
 
     return TaskItem(
-      id: values[0] as String,
-      title: values[1] as String,
-      description: values[2] as String?,
-      noteDocumentJson: values.length > 15 ? values[15] as String? : null,
-      notePlainText: values.length > 16 ? values[16] as String? : null,
+      id: id,
+      title: title,
+      description: description,
+      noteDocumentJson: noteDocumentJson,
+      notePlainText: notePlainText,
       startDate: startDate,
       startMinutes: startMinutes,
       endDate: endDate,
       endMinutes: endMinutes,
-      priority: TaskPriority.values[values[5] as int],
-      categoryId: values[6] as String,
-      isCompleted: values[7] as bool,
-      createdAt: values[8] as DateTime,
-      updatedAt: values[9] as DateTime,
+      priority: TaskPriority.values[priorityIndex],
+      categoryId: categoryId,
+      isCompleted: isCompleted,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
       completedAt: completedAt,
     );
   }
@@ -236,15 +262,43 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..writeInt(obj.priority.index)
       ..writeString(obj.categoryId)
       ..writeBool(obj.isCompleted)
-      ..write(obj.createdAt)
-      ..write(obj.updatedAt)
-      ..write(obj.completedAt)
-      ..write(obj.startDate)
+      ..write(_writeDateValue(obj.createdAt))
+      ..write(_writeDateValue(obj.updatedAt))
+      ..write(_writeDateValue(obj.completedAt))
+      ..write(_writeDateValue(obj.startDate, dateOnly: true))
       ..write(obj.startMinutes)
-      ..write(obj.endDate)
+      ..write(_writeDateValue(obj.endDate, dateOnly: true))
       ..write(obj.endMinutes)
       ..write(obj.noteDocumentJson)
       ..write(obj.notePlainText);
+  }
+
+  static DateTime? _readDateValue(dynamic value, {bool dateOnly = false}) {
+    if (value == null) {
+      return null;
+    }
+    if (value is DateTime) {
+      return dateOnly
+          ? DateTime(value.year, value.month, value.day)
+          : value;
+    }
+    if (value is int) {
+      final dateTime = DateTime.fromMillisecondsSinceEpoch(value);
+      return dateOnly
+          ? DateTime(dateTime.year, dateTime.month, dateTime.day)
+          : dateTime;
+    }
+    return null;
+  }
+
+  static int? _writeDateValue(DateTime? value, {bool dateOnly = false}) {
+    if (value == null) {
+      return null;
+    }
+    final normalized = dateOnly
+        ? DateTime(value.year, value.month, value.day)
+        : value;
+    return normalized.millisecondsSinceEpoch;
   }
 }
 
@@ -259,7 +313,8 @@ class TaskCategoryAdapter extends TypeAdapter<TaskCategory> {
       name: reader.readString(),
       iconKey: reader.readString(),
       colorValue: reader.readInt(),
-      createdAt: reader.read(),
+      createdAt: TaskItemAdapter._readDateValue(reader.read()) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 
@@ -270,6 +325,6 @@ class TaskCategoryAdapter extends TypeAdapter<TaskCategory> {
       ..writeString(obj.name)
       ..writeString(obj.iconKey)
       ..writeInt(obj.colorValue)
-      ..write(obj.createdAt);
+      ..write(TaskItemAdapter._writeDateValue(obj.createdAt));
   }
 }

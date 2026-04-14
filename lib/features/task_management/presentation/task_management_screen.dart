@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../../core/services/task_reminder_scope.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -145,6 +146,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         builder: (context) => TaskEditorScreen(
           repository: widget.repository,
           taskId: taskId,
+          reminderService: TaskReminderScope.of(context),
         ),
       ),
     );

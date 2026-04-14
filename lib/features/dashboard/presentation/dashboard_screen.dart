@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/display_name_store.dart';
+import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/task_repository_scope.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/presentation/task_creation_sheet.dart';
@@ -86,8 +87,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _taskController ??=
-        TaskManagementController(TaskRepositoryScope.of(context))..load();
+    _taskController ??= TaskManagementController(
+      TaskRepositoryScope.of(context),
+      reminderService: TaskReminderScope.of(context),
+    )..load();
   }
 
   @override
@@ -196,6 +199,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         builder: (context) => TaskEditorScreen(
           repository: TaskRepositoryScope.of(context),
           taskId: taskId,
+          reminderService: TaskReminderScope.of(context),
         ),
       ),
     );
@@ -270,6 +274,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   controller: taskController!,
                 ),
               )
+            : _currentIndex == 3
+            ? _AlarmReliabilityTab(theme: theme)
             : _PlaceholderTab(tab: tab, theme: theme),
       ),
       floatingActionButton: _currentIndex == 0
@@ -1220,6 +1226,178 @@ class _PlaceholderTab extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AlarmReliabilityTab extends StatelessWidget {
+  const _AlarmReliabilityTab({required this.theme});
+
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: taskSurface,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: taskBorderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: taskAccentBlue,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    TablerIcons.alarm,
+                    color: taskPrimaryBlue,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Alarm Reliability',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: taskDarkText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Keep reminders more dependable by letting the app stay available in the background.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: taskSecondaryText,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Divider(height: 1, thickness: 1, color: taskBorderColor),
+                const SizedBox(height: 18),
+                const _ReliabilityStep(
+                  icon: TablerIcons.battery_charging,
+                  title: 'Turn Off Battery Restrictions',
+                  body:
+                      'Set the app to unrestricted or no battery optimization so Android does not delay alarms in the background.',
+                ),
+                const SizedBox(height: 14),
+                const _ReliabilityStep(
+                  icon: TablerIcons.apps,
+                  title: 'Keep It In Recent Apps',
+                  body:
+                      'Avoid clearing flutter_app from recent apps if you want the strongest reminder reliability on many phones.',
+                ),
+                const SizedBox(height: 14),
+                const _ReliabilityStep(
+                  icon: TablerIcons.lock,
+                  title: 'Allow Lock Screen Alerts',
+                  body:
+                      'Lock-screen notifications and full-screen notification access help the alarm show more prominently when the phone is locked.',
+                ),
+                const SizedBox(height: 14),
+                const _ReliabilityStep(
+                  icon: TablerIcons.volume,
+                  title: 'Check Alarm Volume',
+                  body:
+                      'The due screen now plays an alarm sound, so make sure media and alarm volume are not muted on your phone.',
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: taskAccentBlue,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        TablerIcons.info_circle,
+                        color: taskPrimaryBlue,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Android may still show only a notification while you are actively using another app. Lock-screen and foreground cases are the most reliable for automatic alarm takeovers.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: taskPrimaryBlue,
+                            height: 1.45,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReliabilityStep extends StatelessWidget {
+  const _ReliabilityStep({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: taskAccentBlue,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, size: 20, color: taskPrimaryBlue),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: taskDarkText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: taskSecondaryText,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

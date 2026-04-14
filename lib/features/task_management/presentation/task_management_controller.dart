@@ -1,15 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/services/task_reminder_service.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 
 class TaskManagementController extends ChangeNotifier {
-  TaskManagementController(this._repository, {Uuid? uuid}) : _uuid = uuid ?? const Uuid();
+  TaskManagementController(
+    this._repository, {
+    TaskReminderService? reminderService,
+    Uuid? uuid,
+  }) : _reminderService = reminderService ?? const NoopTaskReminderService(),
+       _uuid = uuid ?? const Uuid();
 
   final TaskRepository _repository;
+  final TaskReminderService _reminderService;
   final Uuid _uuid;
 
   bool isLoading = true;
@@ -84,6 +91,7 @@ class TaskManagementController extends ChangeNotifier {
     notifyListeners();
     try {
       await _repository.upsertTask(task);
+      await _reminderService.syncTask(task);
       await load();
     } finally {
       isSaving = false;
@@ -96,6 +104,7 @@ class TaskManagementController extends ChangeNotifier {
     notifyListeners();
     try {
       await _repository.deleteTask(taskId);
+      await _reminderService.cancelTask(taskId);
       await load();
     } finally {
       isSaving = false;

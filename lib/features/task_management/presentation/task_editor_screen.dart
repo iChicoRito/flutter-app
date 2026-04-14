@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:tabler_icons/tabler_icons.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/services/task_reminder_service.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -17,7 +18,8 @@ class TaskEditorScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.taskId,
-  });
+    TaskReminderService? reminderService,
+  }) : reminderService = reminderService ?? const NoopTaskReminderService();
 
   static const String deletedResult = 'deleted';
   static const Key markerKey = Key('task-editor-screen');
@@ -37,6 +39,7 @@ class TaskEditorScreen extends StatefulWidget {
 
   final TaskRepository repository;
   final String taskId;
+  final TaskReminderService reminderService;
 
   @override
   State<TaskEditorScreen> createState() => _TaskEditorScreenState();
@@ -179,7 +182,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     _hasPendingChanges = false;
 
     final documentJson = jsonEncode(noteController.document.toDelta().toJson());
-    final draft = _task!.copyWith(
+    final previousTask = _task!;
+    final draft = previousTask.copyWith(
       noteDocumentJson: documentJson,
       notePlainText: extractPlainTextFromNoteDocumentJson(documentJson),
       updatedAt: DateTime.now(),
@@ -187,6 +191,10 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
     try {
       await widget.repository.upsertTask(draft);
+      await widget.reminderService.syncTaskIfSchedulingChanged(
+        previous: previousTask,
+        next: draft,
+      );
       final latest = await widget.repository.getTaskById(draft.id) ?? draft;
       if (!mounted) {
         return true;
@@ -252,6 +260,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
     try {
       await widget.repository.upsertTask(result.task);
+      await widget.reminderService.syncTask(result.task);
       final latest = await widget.repository.getTaskById(result.task.id);
       if (!mounted) {
         return;
@@ -290,6 +299,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
     try {
       await widget.repository.deleteTask(task.id);
+      await widget.reminderService.cancelTask(task.id);
       if (!mounted) {
         return;
       }

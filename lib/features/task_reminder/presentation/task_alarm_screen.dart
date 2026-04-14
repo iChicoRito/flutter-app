@@ -5,6 +5,7 @@ import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../core/services/display_name_store.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../task_management/data/task_note_codec.dart';
 import '../../task_management/domain/task_category.dart';
@@ -17,6 +18,7 @@ class TaskAlarmScreen extends StatefulWidget {
     required this.payload,
     required this.reminderService,
     required this.taskRepository,
+    required this.displayNameStore,
     this.onDismissed,
   });
 
@@ -25,6 +27,7 @@ class TaskAlarmScreen extends StatefulWidget {
   final TaskReminderPayload payload;
   final TaskReminderService reminderService;
   final TaskRepository taskRepository;
+  final DisplayNameStore displayNameStore;
   final VoidCallback? onDismissed;
 
   @override
@@ -35,6 +38,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
     with SingleTickerProviderStateMixin {
   bool _isDismissing = false;
   List<_AlarmTaskDetails> _alarmTasks = const [];
+  String? _displayName;
   late final AnimationController _iconController;
 
   @override
@@ -44,6 +48,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2500),
     )..repeat();
+    _loadDisplayName();
     _loadTaskDetails();
     _startAlarmEffects();
   }
@@ -53,6 +58,17 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
     _iconController.dispose();
     _stopAlarmEffects();
     super.dispose();
+  }
+
+  Future<void> _loadDisplayName() async {
+    final value = await widget.displayNameStore.readDisplayName();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _displayName = value;
+    });
   }
 
   Future<void> _loadTaskDetails() async {
@@ -113,8 +129,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
       return;
     }
 
-    final supportsCustomPatterns =
-        await Vibration.hasCustomVibrationsSupport();
+    final supportsCustomPatterns = await Vibration.hasCustomVibrationsSupport();
     if (supportsCustomPatterns) {
       await Vibration.vibrate(
         pattern: const [0, 1200, 500, 1200],
@@ -168,6 +183,11 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
   Widget build(BuildContext context) {
     final dueText = _formatDueTime(widget.payload.scheduledAt);
     final alarmTasks = _alarmTasks;
+    final isMultiple = alarmTasks.length > 1;
+    final summaryText = TaskReminderMessages.dueAlarmSummary(
+      displayName: _displayName,
+      isMultiple: isMultiple,
+    );
 
     return PopScope(
       canPop: false,
@@ -227,33 +247,39 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
                         widget.payload.kind == TaskReminderKind.due
                             ? 'Tasks Due Now!'
                             : 'Task Reminder',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.headlineSmall?.copyWith(
-                          color: const Color(0xFF333333),
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(
+                              color: const Color(0xFF333333),
+                              fontWeight: FontWeight.w700,
+                            ),
                         textAlign: TextAlign.center,
                       ),
                       if (dueText != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Your task is scheduled for $dueText',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFF6B7280),
-                            height: 1.35,
-                          ),
+                          '$summaryText Scheduled for $dueText',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: const Color(0xFF6B7280),
+                                height: 1.35,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                       ],
                       const SizedBox(height: 14),
-                      const Divider(height: 1, thickness: 1, color: Color(0xFFE5E8EC)),
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Color(0xFFE5E8EC),
+                      ),
                       const SizedBox(height: 14),
                       ..._buildAlarmTaskSections(context, alarmTasks),
                       const SizedBox(height: 14),
-                      const Divider(height: 1, thickness: 1, color: Color(0xFFE5E8EC)),
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Color(0xFFE5E8EC),
+                      ),
                       const SizedBox(height: 16),
                       FilledButton(
                         onPressed: _isDismissing ? null : _dismissAlarm,

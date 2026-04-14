@@ -25,7 +25,7 @@ void main() {
       );
     }
 
-    test('schedules reminder and due alert for a future task', () {
+    test('schedules both pre-deadline reminders and the due alert', () {
       final entries = TaskReminderPlan.buildEntries(
         buildTask(
           id: 'future-task',
@@ -33,27 +33,51 @@ void main() {
           endMinutes: 10 * 60,
         ),
         now: now,
+        displayName: 'Mark',
       );
 
-      expect(entries, hasLength(2));
+      expect(entries, hasLength(3));
       expect(entries.first.kind, TaskReminderKind.reminder);
+      expect(entries[1].kind, TaskReminderKind.reminder);
       expect(entries.last.kind, TaskReminderKind.due);
-      expect(entries.first.scheduledAt, DateTime(2026, 4, 14, 9, 45));
+      expect(entries.first.scheduledAt, DateTime(2026, 4, 14, 9, 50));
+      expect(entries[1].scheduledAt, DateTime(2026, 4, 14, 9, 55));
       expect(entries.last.scheduledAt, DateTime(2026, 4, 14, 10));
+      expect(entries.first.title, 'Hi, Mark');
+      expect(
+        entries.first.body,
+        'Your task "Submit report" is due in 10 minutes.',
+      );
+      expect(entries[1].body, 'Your task "Submit report" is due in 5 minutes.');
+      expect(entries.last.body, 'Your task "Submit report" is due now.');
     });
 
-    test('skips early reminder when due time is inside the threshold', () {
+    test('keeps only future reminders when deadline is inside 10 minutes', () {
       final entries = TaskReminderPlan.buildEntries(
         buildTask(
           id: 'soon-task',
           endDate: DateTime(2026, 4, 14),
-          endMinutes: (9 * 60) + 10,
+          endMinutes: (9 * 60) + 8,
         ),
         now: now,
       );
 
-      expect(entries, hasLength(1));
-      expect(entries.single.kind, TaskReminderKind.due);
+      expect(entries, hasLength(2));
+      expect(entries.first.scheduledAt, DateTime(2026, 4, 14, 9, 3));
+      expect(entries.last.kind, TaskReminderKind.due);
+    });
+
+    test('uses fallback greeting when no display name exists', () {
+      final entries = TaskReminderPlan.buildEntries(
+        buildTask(
+          id: 'fallback-task',
+          endDate: DateTime(2026, 4, 14),
+          endMinutes: 10 * 60,
+        ),
+        now: now,
+      );
+
+      expect(entries.first.title, 'Hi, there');
     });
 
     test('does not schedule tasks without a due time', () {
@@ -80,12 +104,26 @@ void main() {
     });
 
     test('notification ids are deterministic and distinct', () {
-      final reminderId = TaskReminderPlan.reminderNotificationId('task-1');
+      final firstReminderId = TaskReminderPlan.firstReminderNotificationId(
+        'task-1',
+      );
+      final secondReminderId = TaskReminderPlan.secondReminderNotificationId(
+        'task-1',
+      );
       final dueId = TaskReminderPlan.dueNotificationId('task-1');
 
-      expect(reminderId, TaskReminderPlan.reminderNotificationId('task-1'));
+      expect(
+        firstReminderId,
+        TaskReminderPlan.firstReminderNotificationId('task-1'),
+      );
+      expect(
+        secondReminderId,
+        TaskReminderPlan.secondReminderNotificationId('task-1'),
+      );
       expect(dueId, TaskReminderPlan.dueNotificationId('task-1'));
-      expect(reminderId, isNot(dueId));
+      expect(firstReminderId, isNot(secondReminderId));
+      expect(firstReminderId, isNot(dueId));
+      expect(secondReminderId, isNot(dueId));
     });
   });
 }

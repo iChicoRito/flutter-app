@@ -204,6 +204,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
 
     final payload = TaskReminderPayload.fromJson(rawPayload);
+    await widget.reminderService.clearDueNotification(payload.taskId);
     if (!mounted) {
       return;
     }
@@ -236,6 +237,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                       payload: _activeAlarmPayload!,
                       reminderService: widget.reminderService,
                       taskRepository: widget.taskRepository,
+                      displayNameStore: widget.displayNameStore,
                       onDismissed: () {
                         if (!mounted) {
                           return;

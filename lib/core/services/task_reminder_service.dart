@@ -8,6 +8,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'display_name_store.dart';
 import '../../features/task_management/domain/task_item.dart';
 
 abstract class TaskReminderService {
@@ -25,7 +26,10 @@ abstract class TaskReminderService {
 
   Future<void> clearDueNotification(String taskId);
 
-  Future<void> rebuildPendingReminders(Iterable<TaskItem> tasks, {DateTime? now});
+  Future<void> rebuildPendingReminders(
+    Iterable<TaskItem> tasks, {
+    DateTime? now,
+  });
 
   Future<void> snoozeTask(
     String taskId, {
@@ -77,7 +81,9 @@ class NoopTaskReminderService implements TaskReminderService {
   bool isTaskAlarmSuppressed(String taskId, {DateTime? now}) => false;
 
   @override
-  void bindAlarmHandler(Future<void> Function(TaskReminderEvent event) handler) {}
+  void bindAlarmHandler(
+    Future<void> Function(TaskReminderEvent event) handler,
+  ) {}
 }
 
 enum TaskReminderKind { reminder, due }
@@ -152,7 +158,8 @@ class TaskReminderEvent {
 class TaskReminderPlan {
   const TaskReminderPlan._();
 
-  static const Duration reminderLeadTime = Duration(minutes: 15);
+  static const Duration firstReminderLeadTime = Duration(minutes: 10);
+  static const Duration secondReminderLeadTime = Duration(minutes: 5);
 
   static bool hasSchedulingChange(TaskItem previous, TaskItem next) {
     return previous.isCompleted != next.isCompleted ||
@@ -161,8 +168,12 @@ class TaskReminderPlan {
         previous.title != next.title;
   }
 
-  static int reminderNotificationId(String taskId) {
+  static int firstReminderNotificationId(String taskId) {
     return _notificationId(taskId, salt: 17);
+  }
+
+  static int secondReminderNotificationId(String taskId) {
+    return _notificationId(taskId, salt: 23);
   }
 
   static int dueNotificationId(String taskId) {
@@ -170,12 +181,17 @@ class TaskReminderPlan {
   }
 
   static Set<int> allNotificationIds(String taskId) {
-    return {reminderNotificationId(taskId), dueNotificationId(taskId)};
+    return {
+      firstReminderNotificationId(taskId),
+      secondReminderNotificationId(taskId),
+      dueNotificationId(taskId),
+    };
   }
 
   static List<TaskReminderEntry> buildEntries(
     TaskItem task, {
     required DateTime now,
+    String? displayName,
   }) {
     if (task.isCompleted) {
       return const [];
@@ -186,29 +202,52 @@ class TaskReminderPlan {
       return const [];
     }
 
+    final entries = <TaskReminderEntry>[];
+
+    final firstReminderAt = dueAt.subtract(firstReminderLeadTime);
+    if (firstReminderAt.isAfter(now)) {
+      entries.add(
+        TaskReminderEntry(
+          id: firstReminderNotificationId(task.id),
+          kind: TaskReminderKind.reminder,
+          scheduledAt: firstReminderAt,
+          title: TaskReminderMessages.greetingTitle(displayName),
+          body: TaskReminderMessages.firstReminderBody(
+            displayName: displayName,
+            taskTitle: task.title,
+          ),
+        ),
+      );
+    }
+
+    final secondReminderAt = dueAt.subtract(secondReminderLeadTime);
+    if (secondReminderAt.isAfter(now)) {
+      entries.add(
+        TaskReminderEntry(
+          id: secondReminderNotificationId(task.id),
+          kind: TaskReminderKind.reminder,
+          scheduledAt: secondReminderAt,
+          title: TaskReminderMessages.greetingTitle(displayName),
+          body: TaskReminderMessages.secondReminderBody(
+            displayName: displayName,
+            taskTitle: task.title,
+          ),
+        ),
+      );
+    }
+
     final dueEntry = TaskReminderEntry(
       id: dueNotificationId(task.id),
       kind: TaskReminderKind.due,
       scheduledAt: dueAt,
-      title: task.title,
-      body: 'Task is due now.',
-    );
-
-    final reminderAt = dueAt.subtract(reminderLeadTime);
-    if (!reminderAt.isAfter(now)) {
-      return [dueEntry];
-    }
-
-    return [
-      TaskReminderEntry(
-        id: reminderNotificationId(task.id),
-        kind: TaskReminderKind.reminder,
-        scheduledAt: reminderAt,
-        title: 'Task due soon',
-        body: '"${task.title}" is due in 15 minutes.',
+      title: TaskReminderMessages.greetingTitle(displayName),
+      body: TaskReminderMessages.dueNowBody(
+        displayName: displayName,
+        taskTitle: task.title,
       ),
-      dueEntry,
-    ];
+    );
+    entries.add(dueEntry);
+    return entries;
   }
 
   static int _notificationId(String taskId, {required int salt}) {
@@ -226,15 +265,82 @@ class TaskReminderPlan {
   }
 }
 
+@immutable
+class TaskReminderMessages {
+  const TaskReminderMessages._();
+
+  static const String fallbackGreetingName = 'there';
+
+  static String greetingTitle(String? displayName) {
+    return 'Hi, ${_resolvedName(displayName)}';
+  }
+
+  static String firstReminderBody({
+    required String? displayName,
+    required String taskTitle,
+  }) {
+    return 'Your task "$taskTitle" is due in 10 minutes.';
+  }
+
+  static String secondReminderBody({
+    required String? displayName,
+    required String taskTitle,
+  }) {
+    return 'Your task "$taskTitle" is due in 5 minutes.';
+  }
+
+  static String dueNowBody({
+    required String? displayName,
+    required String taskTitle,
+  }) {
+    return 'Your task "$taskTitle" is due now.';
+  }
+
+  static String overdueAlarmSummary({
+    required String? displayName,
+    required bool isMultiple,
+  }) {
+    final subject = isMultiple
+        ? 'your tasks are due now'
+        : 'your task is due now';
+    return 'Hi, ${_resolvedName(displayName)}, $subject.';
+  }
+
+  static String dueAlarmSummary({
+    required String? displayName,
+    required bool isMultiple,
+  }) {
+    final subject = isMultiple
+        ? 'the following tasks need your attention'
+        : 'the following task needs your attention';
+    return 'Hi, ${_resolvedName(displayName)}, $subject.';
+  }
+
+  static String _resolvedName(String? displayName) {
+    final trimmed = displayName?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return fallbackGreetingName;
+    }
+    return trimmed;
+  }
+}
+
 class LocalTaskReminderService implements TaskReminderService {
   LocalTaskReminderService({
     FlutterLocalNotificationsPlugin? plugin,
-  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    DisplayNameStore? displayNameStore,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _displayNameStore =
+           displayNameStore ?? const SharedPreferencesDisplayNameStore();
 
   static const String reminderChannelId = 'task_reminders';
   static const String dueChannelId = 'task_due_alarms';
+  static const MethodChannel _nativeAlarmChannel = MethodChannel(
+    'flutter_app/task_alarm_service',
+  );
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final DisplayNameStore _displayNameStore;
   bool _isInitialized = false;
   bool _isAvailable = true;
   Future<void> Function(TaskReminderEvent event)? _alarmHandler;
@@ -291,8 +397,8 @@ class LocalTaskReminderService implements TaskReminderService {
         );
       }
 
-      final androidImplementation =
-          _plugin.resolvePlatformSpecificImplementation<
+      final androidImplementation = _plugin
+          .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
 
@@ -312,14 +418,15 @@ class LocalTaskReminderService implements TaskReminderService {
           importance: Importance.max,
           playSound: true,
           enableVibration: true,
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         ),
       );
 
       if (defaultTargetPlatform == TargetPlatform.android) {
         await androidImplementation?.requestNotificationsPermission();
         await androidImplementation?.requestFullScreenIntentPermission();
-        final canScheduleExact =
-            await androidImplementation?.canScheduleExactNotifications();
+        final canScheduleExact = await androidImplementation
+            ?.canScheduleExactNotifications();
         if (canScheduleExact == false) {
           await androidImplementation?.requestExactAlarmsPermission();
         }
@@ -333,7 +440,9 @@ class LocalTaskReminderService implements TaskReminderService {
   }
 
   @override
-  void bindAlarmHandler(Future<void> Function(TaskReminderEvent event) handler) {
+  void bindAlarmHandler(
+    Future<void> Function(TaskReminderEvent event) handler,
+  ) {
     _alarmHandler = handler;
     final pendingEvent = _pendingAlarmEvent;
     if (pendingEvent != null) {
@@ -352,9 +461,11 @@ class LocalTaskReminderService implements TaskReminderService {
     _snoozedUntil.remove(task.id);
     _scheduleForegroundDueTimer(task, now: now);
 
+    final displayName = await _displayNameStore.readDisplayName();
     final entries = TaskReminderPlan.buildEntries(
       task,
       now: now ?? DateTime.now(),
+      displayName: displayName,
     );
     for (final entry in entries) {
       await _scheduleEntry(
@@ -386,6 +497,7 @@ class LocalTaskReminderService implements TaskReminderService {
     }
     _snoozedUntil.remove(taskId);
     _dueTimers.remove(taskId)?.cancel();
+    await _cancelNativeDueAlarm(taskId);
     for (final notificationId in TaskReminderPlan.allNotificationIds(taskId)) {
       await _plugin.cancel(id: notificationId);
     }
@@ -398,6 +510,7 @@ class LocalTaskReminderService implements TaskReminderService {
       return;
     }
 
+    await _cancelNativeDueAlarm(taskId);
     await _plugin.cancel(id: TaskReminderPlan.dueNotificationId(taskId));
   }
 
@@ -415,7 +528,12 @@ class LocalTaskReminderService implements TaskReminderService {
     final activeIds = <int>{};
 
     for (final task in tasks) {
-      final entries = TaskReminderPlan.buildEntries(task, now: currentTime);
+      final displayName = await _displayNameStore.readDisplayName();
+      final entries = TaskReminderPlan.buildEntries(
+        task,
+        now: currentTime,
+        displayName: displayName,
+      );
       activeIds.addAll(entries.map((entry) => entry.id));
       await syncTask(task, now: currentTime);
     }
@@ -460,8 +578,13 @@ class LocalTaskReminderService implements TaskReminderService {
         id: TaskReminderPlan.dueNotificationId(taskId),
         kind: TaskReminderKind.due,
         scheduledAt: snoozeUntil,
-        title: taskTitle,
-        body: 'Snoozed task is due now.',
+        title: TaskReminderMessages.greetingTitle(
+          await _displayNameStore.readDisplayName(),
+        ),
+        body: TaskReminderMessages.dueNowBody(
+          displayName: await _displayNameStore.readDisplayName(),
+          taskTitle: taskTitle,
+        ),
       ),
     );
   }
@@ -500,20 +623,20 @@ class LocalTaskReminderService implements TaskReminderService {
       return AndroidScheduleMode.exactAllowWhileIdle;
     }
 
-    final androidImplementation =
-        _plugin.resolvePlatformSpecificImplementation<
+    final androidImplementation = _plugin
+        .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
 
-    final canScheduleExact =
-        await androidImplementation?.canScheduleExactNotifications();
+    final canScheduleExact = await androidImplementation
+        ?.canScheduleExactNotifications();
 
     if (canScheduleExact == false) {
       await androidImplementation?.requestExactAlarmsPermission();
     }
 
-    final canScheduleAfterRequest =
-        await androidImplementation?.canScheduleExactNotifications();
+    final canScheduleAfterRequest = await androidImplementation
+        ?.canScheduleExactNotifications();
 
     if (canScheduleAfterRequest == false) {
       return AndroidScheduleMode.inexactAllowWhileIdle;
@@ -538,7 +661,8 @@ class LocalTaskReminderService implements TaskReminderService {
       TaskReminderKind.due => const AndroidNotificationDetails(
         dueChannelId,
         'Task due alarms',
-        channelDescription: 'High-priority alerts when a task reaches its due time.',
+        channelDescription:
+            'High-priority alerts when a task reaches its due time.',
         importance: Importance.max,
         priority: Priority.max,
         category: AndroidNotificationCategory.alarm,
@@ -546,8 +670,17 @@ class LocalTaskReminderService implements TaskReminderService {
         icon: '@mipmap/ic_launcher',
         playSound: true,
         enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        ongoing: true,
+        autoCancel: false,
+        onlyAlertOnce: false,
         ticker: 'Task due alarm',
         actions: <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            'dismiss_alarm',
+            'Dismiss',
+            cancelNotification: true,
+          ),
           AndroidNotificationAction(
             'snooze_5m',
             'Snooze 5 min',
@@ -579,6 +712,16 @@ class LocalTaskReminderService implements TaskReminderService {
     required String taskTitle,
     required TaskReminderEntry entry,
   }) async {
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        entry.kind == TaskReminderKind.due) {
+      await _scheduleNativeDueAlarm(
+        taskId: taskId,
+        taskTitle: taskTitle,
+        entry: entry,
+      );
+      return;
+    }
+
     await _plugin.zonedSchedule(
       id: entry.id,
       title: entry.title,
@@ -597,6 +740,59 @@ class LocalTaskReminderService implements TaskReminderService {
         scheduledAt: entry.scheduledAt,
       ).toJson(),
     );
+  }
+
+  Future<void> _scheduleNativeDueAlarm({
+    required String taskId,
+    required String taskTitle,
+    required TaskReminderEntry entry,
+  }) async {
+    try {
+      await _nativeAlarmChannel.invokeMethod<void>('scheduleDueAlarm', {
+        'taskId': taskId,
+        'taskTitle': taskTitle,
+        'notificationId': entry.id,
+        'title': entry.title,
+        'body': entry.body,
+        'scheduledAt': entry.scheduledAt.millisecondsSinceEpoch,
+      });
+    } on MissingPluginException {
+      // Fall back to the local-notification due alarm when native scheduling
+      // is unavailable, such as desktop test environments.
+      await _plugin.zonedSchedule(
+        id: entry.id,
+        title: entry.title,
+        body: entry.body,
+        scheduledDate: _toScheduledDate(entry.scheduledAt),
+        notificationDetails: NotificationDetails(
+          android: _androidDetailsFor(entry.kind),
+          iOS: _darwinDetailsFor(entry.kind),
+          macOS: _darwinDetailsFor(entry.kind),
+        ),
+        androidScheduleMode: await _scheduleModeFor(entry.kind),
+        payload: TaskReminderPayload(
+          taskId: taskId,
+          taskTitle: taskTitle,
+          kind: entry.kind,
+          scheduledAt: entry.scheduledAt,
+        ).toJson(),
+      );
+    }
+  }
+
+  Future<void> _cancelNativeDueAlarm(String taskId) async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+
+    try {
+      await _nativeAlarmChannel.invokeMethod<void>('cancelDueAlarm', {
+        'taskId': taskId,
+        'notificationId': TaskReminderPlan.dueNotificationId(taskId),
+      });
+    } on MissingPluginException {
+      // The native scheduler is optional outside Android.
+    }
   }
 
   void _dispatchPayload(

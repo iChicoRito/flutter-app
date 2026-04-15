@@ -11,6 +11,7 @@ class TaskItem {
     required this.createdAt,
     required this.updatedAt,
     this.description,
+    this.spaceId,
     this.noteDocumentJson,
     this.notePlainText,
     this.startDate,
@@ -24,6 +25,7 @@ class TaskItem {
   final String id;
   final String title;
   final String? description;
+  final String? spaceId;
   final String? noteDocumentJson;
   final String? notePlainText;
   final DateTime? startDate;
@@ -100,6 +102,8 @@ class TaskItem {
     String? id,
     String? title,
     String? description,
+    String? spaceId,
+    bool clearSpaceId = false,
     String? noteDocumentJson,
     String? notePlainText,
     DateTime? startDate,
@@ -122,6 +126,7 @@ class TaskItem {
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
+      spaceId: clearSpaceId ? null : spaceId ?? this.spaceId,
       noteDocumentJson: noteDocumentJson ?? this.noteDocumentJson,
       notePlainText: notePlainText ?? this.notePlainText,
       startDate: clearStartDate ? null : startDate ?? this.startDate,

@@ -18,6 +18,9 @@ class TaskEditorScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.taskId,
+    this.lockedCategoryId,
+    this.fixedSpaceId,
+    this.appBarTitle = 'Task Notes',
     TaskReminderService? reminderService,
   }) : reminderService = reminderService ?? const NoopTaskReminderService();
 
@@ -40,6 +43,9 @@ class TaskEditorScreen extends StatefulWidget {
 
   final TaskRepository repository;
   final String taskId;
+  final String? lockedCategoryId;
+  final String? fixedSpaceId;
+  final String appBarTitle;
   final TaskReminderService reminderService;
 
   @override
@@ -251,6 +257,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
           repository: widget.repository,
           task: task,
           categories: _categories,
+          lockedCategoryId: widget.lockedCategoryId,
+          fixedSpaceId: widget.fixedSpaceId,
         ),
       ),
     );
@@ -377,7 +385,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Task Notes',
+                widget.appBarTitle,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: taskMutedText,
                   fontWeight: FontWeight.w600,
@@ -778,11 +786,10 @@ class _TaskDetailsBadge extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.icon, required this.label, this.iconColor});
+  const _InfoPill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
-  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -797,7 +804,7 @@ class _InfoPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: iconColor ?? taskPrimaryBlue),
+            Icon(icon, size: 13, color: taskPrimaryBlue),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
@@ -868,11 +875,15 @@ class _TaskDetailsSheet extends StatefulWidget {
     required this.repository,
     required this.task,
     required this.categories,
+    this.lockedCategoryId,
+    this.fixedSpaceId,
   });
 
   final TaskRepository repository;
   final TaskItem task;
   final List<TaskCategory> categories;
+  final String? lockedCategoryId;
+  final String? fixedSpaceId;
 
   @override
   State<_TaskDetailsSheet> createState() => _TaskDetailsSheetState();
@@ -899,7 +910,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     );
     _categories = [...widget.categories];
     _priority = widget.task.priority;
-    _selectedCategoryId = widget.task.categoryId;
+    _selectedCategoryId = widget.lockedCategoryId ?? widget.task.categoryId;
     _targetDate = widget.task.endDate;
     _targetTime = _toTimeOfDay(widget.task.endMinutes);
   }
@@ -1056,7 +1067,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
           title: trimmedTitle,
           description: trimmedDescription,
           priority: _priority,
-          categoryId: _selectedCategoryId,
+          categoryId: widget.lockedCategoryId ?? _selectedCategoryId,
+          spaceId: widget.fixedSpaceId ?? widget.task.spaceId,
           startDate: null,
           startMinutes: null,
           clearStartDate: true,
@@ -1131,9 +1143,6 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                         textInputAction: TextInputAction.next,
                         validator: (value) {
                           final trimmed = value?.trim() ?? '';
-                          if (trimmed.isEmpty) {
-                            return 'Short description is required.';
-                          }
                           if (trimmed.length > 30) {
                             return 'Description must be 30 characters or fewer.';
                           }
@@ -1142,7 +1151,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Maximum of 30 characters',
+                        'Optional, maximum of 30 characters',
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: taskMutedText),
@@ -1177,64 +1186,71 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                       const SizedBox(height: 16),
                       const TaskFieldLabel('Category'),
                       const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: TaskCompactDropdown<String>(
-                              buttonKey: TaskEditorScreen.categoryFieldKey,
-                              menuKeyBuilder: (value) =>
-                                  Key('task-editor-category-$value'),
-                              currentValue: _selectedCategoryId,
-                              currentLabel:
-                                  _categoryLabel(_selectedCategoryId) ??
-                                  'Category',
-                              onSelected: (value) {
-                                setState(() {
-                                  _selectedCategoryId = value;
-                                });
-                              },
-                              items: _categories
-                                  .map((item) => item.id)
-                                  .toList(),
-                              labelBuilder: (value) =>
-                                  _categoryLabel(value) ?? 'Category',
-                              leadingBuilder: (value) {
-                                final category = _categoryById(value);
-                                if (category == null) {
-                                  return null;
-                                }
-                                return Icon(
-                                  resolveTaskCategoryIcon(category.iconKey),
-                                  color: category.color,
-                                  size: 18,
-                                );
-                              },
+                      if (widget.lockedCategoryId != null)
+                        _LockedCategoryField(
+                          category: _categoryById(widget.lockedCategoryId!),
+                        )
+                      else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TaskCompactDropdown<String>(
+                                buttonKey: TaskEditorScreen.categoryFieldKey,
+                                menuKeyBuilder: (value) =>
+                                    Key('task-editor-category-$value'),
+                                currentValue: _selectedCategoryId,
+                                currentLabel:
+                                    _categoryLabel(_selectedCategoryId) ??
+                                    'Category',
+                                onSelected: (value) {
+                                  setState(() {
+                                    _selectedCategoryId = value;
+                                  });
+                                },
+                                items: _categories
+                                    .map((item) => item.id)
+                                    .toList(),
+                                labelBuilder: (value) =>
+                                    _categoryLabel(value) ?? 'Category',
+                                leadingBuilder: (value) {
+                                  final category = _categoryById(value);
+                                  if (category == null) {
+                                    return null;
+                                  }
+                                  return Icon(
+                                    resolveTaskCategoryIcon(category.iconKey),
+                                    color: category.color,
+                                    size: 18,
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            height: 44,
-                            child: OutlinedButton.icon(
-                              key: TaskEditorScreen.addCategoryButtonKey,
-                              onPressed: _addCategory,
-                              icon: const Icon(TablerIcons.plus, size: 18),
-                              label: const Text('New'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: taskPrimaryBlue,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                side: const BorderSide(color: taskBorderColor),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
+                            const SizedBox(width: 12),
+                            SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                key: TaskEditorScreen.addCategoryButtonKey,
+                                onPressed: _addCategory,
+                                icon: const Icon(TablerIcons.plus, size: 18),
+                                label: const Text('New'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: taskPrimaryBlue,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  side: const BorderSide(
+                                    color: taskBorderColor,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -1351,6 +1367,56 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       return 'Select target time';
     }
     return value.format(context);
+  }
+}
+
+class _LockedCategoryField extends StatelessWidget {
+  const _LockedCategoryField({required this.category});
+
+  final TaskCategory? category;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedCategory = category;
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: taskFilterControlHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: taskSurfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: taskBorderColor),
+      ),
+      child: Row(
+        children: [
+          if (resolvedCategory != null) ...[
+            Icon(
+              resolveTaskCategoryIcon(resolvedCategory.iconKey),
+              color: resolvedCategory.color,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              resolvedCategory?.name ?? 'Locked category',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: taskDarkText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Locked',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: taskMutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:tabler_icons/tabler_icons.dart';
+import 'dart:async';
 
 const taskPrimaryBlue = Color(0xFF066FD1);
 const taskPrimaryPressed = Color(0xFF055CB0);
@@ -76,6 +77,7 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
     end: Offset.zero,
   ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
   bool _dismissed = false;
+  Timer? _hideTimer;
 
   @override
   void initState() {
@@ -85,17 +87,20 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
 
   Future<void> _showAndHide() async {
     await _controller.forward();
-    await Future<void>.delayed(const Duration(seconds: 2));
-    if (!mounted || _dismissed) {
-      return;
-    }
-    await _controller.reverse();
-    _dismissed = true;
-    widget.onDismissed();
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 2), () async {
+      if (!mounted || _dismissed) {
+        return;
+      }
+      await _controller.reverse();
+      _dismissed = true;
+      widget.onDismissed();
+    });
   }
 
   @override
   void dispose() {
+    _hideTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -257,6 +262,7 @@ class TaskCompactDropdown<T> extends StatelessWidget {
     required this.items,
     required this.labelBuilder,
     this.leadingBuilder,
+    this.currentLeading,
   });
 
   final Key buttonKey;
@@ -267,6 +273,7 @@ class TaskCompactDropdown<T> extends StatelessWidget {
   final List<T> items;
   final String Function(T value) labelBuilder;
   final Widget? Function(T value)? leadingBuilder;
+  final Widget? currentLeading;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +322,10 @@ class TaskCompactDropdown<T> extends StatelessWidget {
         ),
         child: Row(
           children: [
+            if (currentLeading != null) ...[
+              currentLeading!,
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: Text(
                 currentLabel,

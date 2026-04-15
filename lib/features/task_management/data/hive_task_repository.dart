@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../../spaces/domain/task_space.dart';
 import 'task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -12,15 +13,19 @@ class HiveTaskRepository implements TaskRepository {
   HiveTaskRepository._({
     required Box<TaskItem> taskBox,
     required Box<TaskCategory> categoryBox,
+    required Box<TaskSpace> spaceBox,
   }) : _taskBox = taskBox,
-       _categoryBox = categoryBox;
+       _categoryBox = categoryBox,
+       _spaceBox = spaceBox;
 
   static const _taskBoxName = 'tasksBox';
   static const _categoryBoxName = 'categoriesBox';
+  static const _spaceBoxName = 'spacesBox';
   static bool _adaptersRegistered = false;
 
   final Box<TaskItem> _taskBox;
   final Box<TaskCategory> _categoryBox;
+  final Box<TaskSpace> _spaceBox;
 
   static Future<HiveTaskRepository> initialize() async {
     await Hive.initFlutter();
@@ -28,15 +33,18 @@ class HiveTaskRepository implements TaskRepository {
     if (!_adaptersRegistered) {
       Hive
         ..registerAdapter(TaskItemAdapter())
-        ..registerAdapter(TaskCategoryAdapter());
+        ..registerAdapter(TaskCategoryAdapter())
+        ..registerAdapter(TaskSpaceAdapter());
       _adaptersRegistered = true;
     }
 
     final taskBox = await _openTaskBoxWithRecovery();
     final categoryBox = await Hive.openBox<TaskCategory>(_categoryBoxName);
+    final spaceBox = await Hive.openBox<TaskSpace>(_spaceBoxName);
     final repository = HiveTaskRepository._(
       taskBox: taskBox,
       categoryBox: categoryBox,
+      spaceBox: spaceBox,
     );
     await repository.seedDefaultCategoriesIfNeeded();
     await repository.migrateLegacyTasksIfNeeded();
@@ -75,6 +83,23 @@ class HiveTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> deleteSpace(String spaceId) async {
+    await _spaceBox.delete(spaceId);
+  }
+
+  @override
+  Future<void> deleteSpaceWithTasks(String spaceId) async {
+    final taskIds = _taskBox.values
+        .where((task) => task.spaceId == spaceId)
+        .map((task) => task.id)
+        .toList();
+    if (taskIds.isNotEmpty) {
+      await _taskBox.deleteAll(taskIds);
+    }
+    await deleteSpace(spaceId);
+  }
+
+  @override
   Future<List<TaskCategory>> getCategories() async {
     final categories = _categoryBox.values.toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -104,6 +129,26 @@ class HiveTaskRepository implements TaskRepository {
     return tasks;
   }
 
+  @override
+  Future<List<TaskItem>> getTasksBySpace(String spaceId) async {
+    final tasks = (await getTasks())
+        .where((task) => task.spaceId == spaceId)
+        .toList();
+    return tasks;
+  }
+
+  @override
+  Future<TaskSpace?> getSpaceById(String spaceId) async {
+    return _spaceBox.get(spaceId);
+  }
+
+  @override
+  Future<List<TaskSpace>> getSpaces() async {
+    final spaces = _spaceBox.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return spaces;
+  }
+
   Future<void> migrateLegacyTasksIfNeeded() async {
     for (final task in _taskBox.values) {
       final normalized = normalizeTaskNoteFields(
@@ -131,6 +176,11 @@ class HiveTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<void> upsertSpace(TaskSpace space) async {
+    await _spaceBox.put(space.id, space);
+  }
+
+  @override
   Future<void> upsertTask(TaskItem task) async {
     await _taskBox.put(
       task.id,
@@ -143,18 +193,32 @@ class InMemoryTaskRepository implements TaskRepository {
   InMemoryTaskRepository({
     List<TaskItem>? tasks,
     List<TaskCategory>? categories,
+    List<TaskSpace>? spaces,
     bool seedDefaults = true,
   }) : _tasks = [...?tasks],
        _categories = categories != null
            ? [...categories]
-           : (seedDefaults ? buildDefaultTaskCategories() : <TaskCategory>[]);
+           : (seedDefaults ? buildDefaultTaskCategories() : <TaskCategory>[]),
+       _spaces = [...?spaces];
 
   final List<TaskItem> _tasks;
   final List<TaskCategory> _categories;
+  final List<TaskSpace> _spaces;
 
   @override
   Future<void> deleteTask(String taskId) async {
     _tasks.removeWhere((task) => task.id == taskId);
+  }
+
+  @override
+  Future<void> deleteSpace(String spaceId) async {
+    _spaces.removeWhere((space) => space.id == spaceId);
+  }
+
+  @override
+  Future<void> deleteSpaceWithTasks(String spaceId) async {
+    _tasks.removeWhere((task) => task.spaceId == spaceId);
+    await deleteSpace(spaceId);
   }
 
   @override
@@ -179,6 +243,22 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<TaskSpace?> getSpaceById(String spaceId) async {
+    final index = _spaces.indexWhere((space) => space.id == spaceId);
+    if (index < 0) {
+      return null;
+    }
+    return _spaces[index];
+  }
+
+  @override
+  Future<List<TaskSpace>> getSpaces() async {
+    final spaces = [..._spaces]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return spaces;
+  }
+
+  @override
   Future<List<TaskItem>> getTasks() async {
     final tasks =
         _tasks
@@ -192,6 +272,14 @@ class InMemoryTaskRepository implements TaskRepository {
   }
 
   @override
+  Future<List<TaskItem>> getTasksBySpace(String spaceId) async {
+    final tasks = (await getTasks())
+        .where((task) => task.spaceId == spaceId)
+        .toList();
+    return tasks;
+  }
+
+  @override
   Future<void> upsertCategory(TaskCategory category) async {
     final index = _categories.indexWhere((item) => item.id == category.id);
     if (index >= 0) {
@@ -200,6 +288,16 @@ class InMemoryTaskRepository implements TaskRepository {
     }
 
     _categories.add(category);
+  }
+
+  @override
+  Future<void> upsertSpace(TaskSpace space) async {
+    final index = _spaces.indexWhere((item) => item.id == space.id);
+    if (index >= 0) {
+      _spaces[index] = space;
+      return;
+    }
+    _spaces.add(space);
   }
 
   @override
@@ -260,11 +358,13 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
     final notePlainText = reader.availableBytes > 0
         ? reader.read() as String?
         : null;
+    final spaceId = reader.availableBytes > 0 ? reader.read() as String? : null;
 
     return TaskItem(
       id: id,
       title: title,
       description: description,
+      spaceId: spaceId,
       noteDocumentJson: noteDocumentJson,
       notePlainText: notePlainText,
       startDate: startDate,
@@ -299,7 +399,8 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(_writeDateValue(obj.endDate, dateOnly: true))
       ..write(obj.endMinutes)
       ..write(obj.noteDocumentJson)
-      ..write(obj.notePlainText);
+      ..write(obj.notePlainText)
+      ..write(obj.spaceId);
   }
 
   static DateTime? _readDateValue(dynamic value, {bool dateOnly = false}) {
@@ -354,5 +455,39 @@ class TaskCategoryAdapter extends TypeAdapter<TaskCategory> {
       ..writeString(obj.iconKey)
       ..writeInt(obj.colorValue)
       ..write(TaskItemAdapter._writeDateValue(obj.createdAt));
+  }
+}
+
+class TaskSpaceAdapter extends TypeAdapter<TaskSpace> {
+  @override
+  final int typeId = 2;
+
+  @override
+  TaskSpace read(BinaryReader reader) {
+    return TaskSpace(
+      id: reader.readString(),
+      name: reader.readString(),
+      description: reader.readString(),
+      categoryId: reader.readString(),
+      colorValue: reader.readInt(),
+      createdAt:
+          TaskItemAdapter._readDateValue(reader.read()) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt:
+          TaskItemAdapter._readDateValue(reader.read()) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, TaskSpace obj) {
+    writer
+      ..writeString(obj.id)
+      ..writeString(obj.name)
+      ..writeString(obj.description)
+      ..writeString(obj.categoryId)
+      ..writeInt(obj.colorValue)
+      ..write(TaskItemAdapter._writeDateValue(obj.createdAt))
+      ..write(TaskItemAdapter._writeDateValue(obj.updatedAt));
   }
 }

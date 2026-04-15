@@ -2,35 +2,47 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/services/task_reminder_service.dart';
+import '../../spaces/domain/task_space.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
+
+enum TaskStatusFilter { all, today, upcoming, overdue, completed }
+enum TaskPriorityFilter { all, low, medium, high, urgent }
 
 class TaskManagementController extends ChangeNotifier {
   TaskManagementController(
     this._repository, {
     TaskReminderService? reminderService,
     Uuid? uuid,
+    this.fixedSpaceId,
+    this.lockedCategoryId,
   }) : _reminderService = reminderService ?? const NoopTaskReminderService(),
        _uuid = uuid ?? const Uuid();
 
   final TaskRepository _repository;
   final TaskReminderService _reminderService;
   final Uuid _uuid;
+  final String? fixedSpaceId;
+  final String? lockedCategoryId;
 
   bool isLoading = true;
   bool isSaving = false;
   String? errorMessage;
   String searchQuery = '';
   String? categoryFilterId;
-  TaskPriority? _priorityFilter;
+  TaskPriorityFilter _priorityFilter = TaskPriorityFilter.all;
+  TaskStatusFilter _statusFilter = TaskStatusFilter.all;
   List<TaskItem> _tasks = [];
   List<TaskCategory> _categories = [];
+  List<TaskSpace> _spaces = [];
 
   List<TaskItem> get tasks => _tasks;
   List<TaskCategory> get categories => _categories;
-  TaskPriority? get priorityFilter => _priorityFilter;
+  List<TaskSpace> get spaces => _spaces;
+  TaskPriorityFilter get priorityFilter => _priorityFilter;
+  TaskStatusFilter get statusFilter => _statusFilter;
 
   Future<void> load() async {
     isLoading = true;
@@ -40,8 +52,10 @@ class TaskManagementController extends ChangeNotifier {
     try {
       final tasks = await _repository.getTasks();
       final categories = await _repository.getCategories();
+      final spaces = await _repository.getSpaces();
       _tasks = tasks;
       _categories = categories;
+      _spaces = spaces;
     } catch (_) {
       errorMessage = 'Unable to load your tasks right now.';
     } finally {
@@ -61,6 +75,7 @@ class TaskManagementController extends ChangeNotifier {
     required TaskPriority priority,
     DateTime? endDate,
     int? endMinutes,
+    String? spaceId,
   }) async {
     final now = DateTime.now();
     final task = TaskItem(
@@ -69,10 +84,11 @@ class TaskManagementController extends ChangeNotifier {
       description: description?.trim().isEmpty ?? true
           ? null
           : description!.trim(),
+      spaceId: spaceId ?? fixedSpaceId,
       noteDocumentJson: buildPlainTextNoteDocumentJson(null),
       notePlainText: null,
       priority: priority,
-      categoryId: categoryId,
+      categoryId: lockedCategoryId ?? categoryId,
       endDate: endDate,
       endMinutes: endMinutes,
       createdAt: now,
@@ -131,8 +147,13 @@ class TaskManagementController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updatePriorityFilter(TaskPriority? value) {
+  void updatePriorityFilter(TaskPriorityFilter value) {
     _priorityFilter = value;
+    notifyListeners();
+  }
+
+  void updateStatusFilter(TaskStatusFilter value) {
+    _statusFilter = value;
     notifyListeners();
   }
 
@@ -140,6 +161,18 @@ class TaskManagementController extends ChangeNotifier {
     for (final category in _categories) {
       if (category.id == categoryId) {
         return category;
+      }
+    }
+    return null;
+  }
+
+  TaskSpace? spaceFor(String? spaceId) {
+    if (spaceId == null) {
+      return null;
+    }
+    for (final space in _spaces) {
+      if (space.id == spaceId) {
+        return space;
       }
     }
     return null;
@@ -161,10 +194,31 @@ class TaskManagementController extends ChangeNotifier {
           (categoryLookup[task.categoryId]?.toLowerCase().contains(query) ??
               false);
       final matchesCategory =
-          categoryFilterId == null || task.categoryId == categoryFilterId;
-      final matchesPriority =
-          _priorityFilter == null || task.priority == _priorityFilter;
-      return matchesSearch && matchesCategory && matchesPriority;
+          lockedCategoryId != null
+          ? task.categoryId == lockedCategoryId
+          : categoryFilterId == null || task.categoryId == categoryFilterId;
+      final matchesPriority = switch (_priorityFilter) {
+        TaskPriorityFilter.all => true,
+        TaskPriorityFilter.low => task.priority == TaskPriority.low,
+        TaskPriorityFilter.medium => task.priority == TaskPriority.medium,
+        TaskPriorityFilter.high => task.priority == TaskPriority.high,
+        TaskPriorityFilter.urgent => task.priority == TaskPriority.urgent,
+      };
+      final matchesSpace =
+          fixedSpaceId == null || task.spaceId == fixedSpaceId;
+      final matchesStatus = switch (_statusFilter) {
+        TaskStatusFilter.all => true,
+        TaskStatusFilter.today => _isTodayBucket(task, now),
+        TaskStatusFilter.upcoming => _isUpcomingBucket(task, now),
+        TaskStatusFilter.overdue =>
+          !task.isCompleted && task.statusAt(now) == TaskStatus.overdue,
+        TaskStatusFilter.completed => task.isCompleted,
+      };
+      return matchesSearch &&
+          matchesCategory &&
+          matchesPriority &&
+          matchesSpace &&
+          matchesStatus;
     }).toList();
 
     filtered.sort((a, b) {
@@ -187,5 +241,35 @@ class TaskManagementController extends ChangeNotifier {
       TaskPriority.high => 3,
       TaskPriority.urgent => 4,
     };
+  }
+
+  static bool _isTodayBucket(TaskItem task, DateTime now) {
+    if (task.isCompleted || task.statusAt(now) == TaskStatus.overdue) {
+      return false;
+    }
+
+    final dueAt = task.endDateTime;
+    if (dueAt == null) {
+      return false;
+    }
+
+    return dueAt.year == now.year &&
+        dueAt.month == now.month &&
+        dueAt.day == now.day;
+  }
+
+  static bool _isUpcomingBucket(TaskItem task, DateTime now) {
+    if (task.isCompleted || task.statusAt(now) == TaskStatus.overdue) {
+      return false;
+    }
+
+    final dueAt = task.endDateTime;
+    if (dueAt == null) {
+      return false;
+    }
+
+    final today = DateTime(now.year, now.month, now.day);
+    final dueDate = DateTime(dueAt.year, dueAt.month, dueAt.day);
+    return dueDate.isAfter(today);
   }
 }

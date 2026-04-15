@@ -12,6 +12,7 @@ import '../../task_management/presentation/task_editor_screen.dart';
 import '../../task_management/presentation/task_management_controller.dart';
 import '../../task_management/presentation/task_management_screen.dart';
 import '../../task_management/presentation/task_management_ui.dart';
+import '../../spaces/presentation/spaces_page.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, required this.displayNameStore});
@@ -64,10 +65,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       description: 'Your offline task, note, and reminder hub.',
     ),
     _DashboardTab(
-      label: 'Analysis',
-      assetPath: 'assets/icons/chart_pie_filled.svg',
-      title: 'Analysis',
-      description: 'Insights will appear here as your task history grows.',
+      label: 'Spaces',
+      assetPath: 'assets/icons/briefcase_filled.svg',
+      title: 'Spaces',
+      description: 'Organize your task spaces and open scoped work quickly.',
     ),
     _DashboardTab(
       label: 'Profile',
@@ -180,6 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       description: request.description,
       categoryId: request.categoryId,
       priority: request.priority,
+      spaceId: request.spaceId,
       endDate: request.endDate,
       endMinutes: request.endMinutes,
     );
@@ -272,6 +274,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   repository: repository,
                   controller: taskController!,
                 ),
+              )
+            : _currentIndex == 2
+            ? SpacesPage(
+                repository: repository,
+                reminderService: TaskReminderScope.of(context),
               )
             : _currentIndex == 3
             ? _AlarmReliabilityTab(theme: theme)

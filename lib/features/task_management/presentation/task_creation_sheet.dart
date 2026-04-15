@@ -22,6 +22,7 @@ class TaskCreationRequest {
     required this.description,
     required this.categoryId,
     required this.priority,
+    this.spaceId,
     this.endDate,
     this.endMinutes,
   });
@@ -30,6 +31,7 @@ class TaskCreationRequest {
   final String description;
   final String categoryId;
   final TaskPriority priority;
+  final String? spaceId;
   final DateTime? endDate;
   final int? endMinutes;
 }
@@ -39,10 +41,16 @@ class TaskCreationScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.categories,
+    this.lockedCategoryId,
+    this.spaceId,
+    this.appBarTitle = 'Add Task',
   });
 
   final TaskRepository repository;
   final List<TaskCategory> categories;
+  final String? lockedCategoryId;
+  final String? spaceId;
+  final String appBarTitle;
 
   @override
   State<TaskCreationScreen> createState() => _TaskCreationScreenState();
@@ -66,7 +74,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     super.initState();
     _categories = [...widget.categories];
     _priority = TaskPriority.medium;
-    _selectedCategoryId = _categories.isNotEmpty ? _categories.first.id : null;
+    _selectedCategoryId =
+        widget.lockedCategoryId ??
+        (_categories.isNotEmpty ? _categories.first.id : null);
   }
 
   @override
@@ -224,6 +234,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId!,
         priority: _priority,
+        spaceId: widget.spaceId,
         endDate: _targetDate,
         endMinutes: _targetTime == null
             ? null
@@ -237,7 +248,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     final scheduleValidationMessage = _scheduleValidationMessage();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Task')),
+      appBar: AppBar(title: Text(widget.appBarTitle)),
       backgroundColor: taskSurface,
       body: SafeArea(
         child: Form(
@@ -283,9 +294,6 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       textInputAction: TextInputAction.next,
                       validator: (value) {
                         final trimmed = value?.trim() ?? '';
-                        if (trimmed.isEmpty) {
-                          return 'Short description is required.';
-                        }
                         if (trimmed.length > 30) {
                           return 'Description must be 30 characters or fewer.';
                         }
@@ -294,7 +302,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Maximum of 30 characters',
+                      'Optional, maximum of 30 characters',
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: taskMutedText),
@@ -329,62 +337,67 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     const SizedBox(height: 16),
                     const TaskFieldLabel('Category'),
                     const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: TaskCompactDropdown<String>(
-                            buttonKey: createCategoryFieldKey,
-                            menuKeyBuilder: (value) =>
-                                Key('task-create-category-$value'),
-                            currentValue: _selectedCategoryId!,
-                            currentLabel:
-                                _categoryLabel(_selectedCategoryId!) ??
-                                'Category',
-                            onSelected: (value) {
-                              setState(() {
-                                _selectedCategoryId = value;
-                              });
-                            },
-                            items: _categories.map((item) => item.id).toList(),
-                            labelBuilder: (value) =>
-                                _categoryLabel(value) ?? 'Category',
-                            leadingBuilder: (value) {
-                              final category = _categoryById(value);
-                              if (category == null) {
-                                return null;
-                              }
-                              return Icon(
-                                resolveTaskCategoryIcon(category.iconKey),
-                                color: category.color,
-                                size: 18,
-                              );
-                            },
+                    if (widget.lockedCategoryId != null)
+                      _LockedCategoryField(
+                        category: _categoryById(widget.lockedCategoryId!),
+                      )
+                    else
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TaskCompactDropdown<String>(
+                              buttonKey: createCategoryFieldKey,
+                              menuKeyBuilder: (value) =>
+                                  Key('task-create-category-$value'),
+                              currentValue: _selectedCategoryId!,
+                              currentLabel:
+                                  _categoryLabel(_selectedCategoryId!) ??
+                                  'Category',
+                              onSelected: (value) {
+                                setState(() {
+                                  _selectedCategoryId = value;
+                                });
+                              },
+                              items: _categories.map((item) => item.id).toList(),
+                              labelBuilder: (value) =>
+                                  _categoryLabel(value) ?? 'Category',
+                              leadingBuilder: (value) {
+                                final category = _categoryById(value);
+                                if (category == null) {
+                                  return null;
+                                }
+                                return Icon(
+                                  resolveTaskCategoryIcon(category.iconKey),
+                                  color: category.color,
+                                  size: 18,
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 44,
-                          child: OutlinedButton.icon(
-                            key: createAddCategoryButtonKey,
-                            onPressed: _addCategory,
-                            icon: const Icon(TablerIcons.plus, size: 18),
-                            label: const Text('New'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: taskPrimaryBlue,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              side: const BorderSide(color: taskBorderColor),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 44,
+                            child: OutlinedButton.icon(
+                              key: createAddCategoryButtonKey,
+                              onPressed: _addCategory,
+                              icon: const Icon(TablerIcons.plus, size: 18),
+                              label: const Text('New'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: taskPrimaryBlue,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                side: const BorderSide(color: taskBorderColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -499,6 +512,56 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       return 'Select target time';
     }
     return value.format(context);
+  }
+}
+
+class _LockedCategoryField extends StatelessWidget {
+  const _LockedCategoryField({required this.category});
+
+  final TaskCategory? category;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedCategory = category;
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: taskFilterControlHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: taskSurfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: taskBorderColor),
+      ),
+      child: Row(
+        children: [
+          if (resolvedCategory != null) ...[
+            Icon(
+              resolveTaskCategoryIcon(resolvedCategory.iconKey),
+              color: resolvedCategory.color,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              resolvedCategory?.name ?? 'Locked category',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: taskDarkText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Locked',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: taskMutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

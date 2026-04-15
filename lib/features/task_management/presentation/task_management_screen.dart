@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/task_reminder_scope.dart';
+import '../../spaces/domain/task_space.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -16,6 +17,13 @@ class TaskManagementScreen extends StatefulWidget {
     super.key,
     required this.repository,
     required this.controller,
+    this.appBarTitle,
+    this.lockedCategoryId,
+    this.fixedSpaceId,
+    this.fabLabel = 'Add Task',
+    this.emptyTitle = 'No tasks yet',
+    this.emptyMessage =
+        'Create a task to start capturing notes, details, and schedules in one place.',
   });
 
   static const Key markerKey = Key('task-management-screen');
@@ -29,6 +37,7 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key priorityDropdownKey = Key(
     'task-management-priority-dropdown',
   );
+  static const Key statusDropdownKey = Key('task-management-status-dropdown');
   static const Key allCategoriesKey = Key('task-category-filter-all');
   static const Key createTitleFieldKey = Key('task-create-title-field');
   static const Key createDescriptionFieldKey = Key(
@@ -40,6 +49,8 @@ class TaskManagementScreen extends StatefulWidget {
 
   static Key priorityFilterKey(String value) =>
       Key('task-priority-filter-$value');
+
+  static Key statusFilterKey(String value) => Key('task-status-filter-$value');
 
   static Key categoryFilterKey(String id) => Key('task-category-filter-$id');
 
@@ -54,6 +65,12 @@ class TaskManagementScreen extends StatefulWidget {
 
   final TaskRepository repository;
   final TaskManagementController controller;
+  final String? appBarTitle;
+  final String? lockedCategoryId;
+  final String? fixedSpaceId;
+  final String fabLabel;
+  final String emptyTitle;
+  final String emptyMessage;
 
   @override
   State<TaskManagementScreen> createState() => _TaskManagementScreenState();
@@ -104,6 +121,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         builder: (context) => TaskCreationScreen(
           repository: widget.repository,
           categories: _controller.categories,
+          lockedCategoryId: widget.lockedCategoryId,
+          spaceId: widget.fixedSpaceId,
+          appBarTitle: widget.fixedSpaceId == null ? 'Add Task' : 'Add Space Task',
         ),
       ),
     );
@@ -117,6 +137,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         description: request.description,
         categoryId: request.categoryId,
         priority: request.priority,
+        spaceId: request.spaceId,
         endDate: request.endDate,
         endMinutes: request.endMinutes,
       );
@@ -144,6 +165,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         builder: (context) => TaskEditorScreen(
           repository: widget.repository,
           taskId: taskId,
+          lockedCategoryId: widget.lockedCategoryId,
+          fixedSpaceId: widget.fixedSpaceId,
+          appBarTitle: widget.fixedSpaceId == null ? 'Task Notes' : 'Space Task',
           reminderService: TaskReminderScope.of(context),
         ),
       ),
@@ -189,6 +213,118 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
   }
 
+  Future<void> _moveTaskToSpace(TaskItem task) async {
+    final spaces = await widget.repository.getSpaces();
+    if (!mounted) {
+      return;
+    }
+
+    final selectedSpaceId = await showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: taskMutedBorderColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Move to Space',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: taskDarkText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Choose where this task should live.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: taskSecondaryText,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _SpaceDestinationTile(
+                  title: 'No Space',
+                  subtitle: 'Keep this task outside any space.',
+                  isSelected: task.spaceId == null,
+                  onTap: () => Navigator.of(context).pop(''),
+                ),
+                if (spaces.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  for (final space in spaces) ...[
+                    _SpaceDestinationTile(
+                      title: space.name,
+                      subtitle: space.description.isEmpty
+                          ? 'Category-based task space'
+                          : space.description,
+                      isSelected: task.spaceId == space.id,
+                      accentColor: space.color,
+                      onTap: () => Navigator.of(context).pop(space.id),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || selectedSpaceId == null) {
+      return;
+    }
+
+    TaskSpace? selectedSpace;
+    if (selectedSpaceId.isNotEmpty) {
+      for (final space in spaces) {
+        if (space.id == selectedSpaceId) {
+          selectedSpace = space;
+          break;
+        }
+      }
+    }
+
+    try {
+      await _controller.saveTask(
+        task.copyWith(
+          spaceId: selectedSpaceId.isEmpty ? null : selectedSpaceId,
+          categoryId: selectedSpace?.categoryId ?? task.categoryId,
+          clearSpaceId: selectedSpaceId.isEmpty,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(context, message: 'Task moved successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to move the task right now.',
+        isError: true,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -201,6 +337,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       child: Scaffold(
         key: TaskManagementScreen.markerKey,
         backgroundColor: taskSurface,
+        appBar: widget.appBarTitle == null
+            ? null
+            : AppBar(
+                title: Text(widget.appBarTitle!),
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.white,
+              ),
         body: SafeArea(
           child: AnimatedBuilder(
             animation: _controller,
@@ -238,6 +381,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                             'Search across task titles, note previews, and categories.',
                         isExpanded: _isFiltersExpanded,
                         onHeaderTap: () {
+                          if (_isSelectionMode) {
+                            _clearSelectionMode();
+                            return;
+                          }
                           setState(() {
                             _isFiltersExpanded = !_isFiltersExpanded;
                           });
@@ -247,87 +394,72 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: TaskCompactDropdown<String?>(
+                                  child: TaskCompactDropdown<TaskStatusFilter>(
                                     buttonKey: TaskManagementScreen
-                                        .categoryDropdownKey,
-                                    menuKeyBuilder: (value) => Key(
-                                      'task-category-dropdown-${value ?? 'all'}',
+                                        .statusDropdownKey,
+                                    menuKeyBuilder: (value) =>
+                                        TaskManagementScreen.statusFilterKey(
+                                          value.name,
+                                        ),
+                                    currentValue: _controller.statusFilter,
+                                    currentLabel: _statusLabel(
+                                      _controller.statusFilter,
                                     ),
-                                    currentValue: _controller.categoryFilterId,
-                                    currentLabel:
-                                        _controller.categoryFilterId == null
-                                        ? 'All Categories'
-                                        : (_controller
-                                                  .categoryFor(
-                                                    _controller
-                                                        .categoryFilterId!,
-                                                  )
-                                                  ?.name ??
-                                              'All Categories'),
-                                    onSelected:
-                                        _controller.updateCategoryFilter,
-                                    items: [
-                                      null,
-                                      ..._controller.categories.map(
-                                        (item) => item.id,
-                                      ),
-                                    ],
-                                    labelBuilder: (value) => value == null
-                                        ? 'All Categories'
-                                        : (_controller
-                                                  .categoryFor(value)
-                                                  ?.name ??
-                                              'All Categories'),
+                                    onSelected: _controller.updateStatusFilter,
+                                    items: TaskStatusFilter.values,
+                                    labelBuilder: _statusLabel,
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: TaskCompactDropdown<TaskPriority?>(
+                                  child: TaskCompactDropdown<TaskPriorityFilter>(
                                     buttonKey: TaskManagementScreen
                                         .priorityDropdownKey,
                                     menuKeyBuilder: (value) =>
                                         TaskManagementScreen.priorityFilterKey(
-                                          value?.name ?? 'all',
+                                          value.name,
                                         ),
                                     currentValue: _controller.priorityFilter,
-                                    currentLabel:
-                                        _controller.priorityFilter == null
-                                        ? 'Priority'
-                                        : _priorityLabel(
-                                            _controller.priorityFilter!,
-                                          ),
+                                    currentLabel: _priorityFilterLabel(
+                                      _controller.priorityFilter,
+                                    ),
                                     onSelected:
                                         _controller.updatePriorityFilter,
-                                    items: [null, ...TaskPriority.values],
-                                    labelBuilder: (value) => value == null
-                                        ? 'Priority'
-                                        : _priorityLabel(value),
+                                    items: TaskPriorityFilter.values,
+                                    labelBuilder: _priorityFilterLabel,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            _CategoryFilterRow(
-                              categories: _controller.categories,
-                              selectedCategoryId: _controller.categoryFilterId,
-                              onSelected: _controller.updateCategoryFilter,
-                            ),
+                            if (widget.lockedCategoryId == null) ...[
+                              const SizedBox(height: 12),
+                              _CategoryFilterRow(
+                                categories: _controller.categories,
+                                selectedCategoryId: _controller.categoryFilterId,
+                                onSelected: _controller.updateCategoryFilter,
+                              ),
+                            ],
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
                       if (filteredTasks.isEmpty)
-                        const _EmptyState()
+                        _EmptyState(
+                          title: widget.emptyTitle,
+                          message: widget.emptyMessage,
+                        )
                       else
                         ...filteredTasks.map((task) {
                           final category = _controller.categoryFor(
                             task.categoryId,
                           );
+                          final space = _controller.spaceFor(task.spaceId);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 16),
                             child: _TaskCard(
                               task: task,
                               category: category,
+                              space: space,
                               showCheckbox: _isSelectionMode,
                               onTap: () => _isSelectionMode
                                   ? _controller.toggleTaskCompletion(task)
@@ -339,7 +471,14 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                               },
                               onToggle: () =>
                                   _controller.toggleTaskCompletion(task),
-                              onDelete: () => _confirmDelete(task),
+                              onMenuSelected: (action) async {
+                                switch (action) {
+                                  case _TaskMenuAction.moveToSpace:
+                                    await _moveTaskToSpace(task);
+                                  case _TaskMenuAction.delete:
+                                    await _confirmDelete(task);
+                                }
+                              },
                             ),
                           );
                         }),
@@ -357,21 +496,34 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           foregroundColor: Colors.white,
           elevation: 2,
           icon: const Icon(TablerIcons.plus, size: 18),
-          label: const Text('Add Task'),
+          label: Text(widget.fabLabel),
         ),
       ),
     );
   }
 
-  static String _priorityLabel(TaskPriority priority) {
-    return switch (priority) {
-      TaskPriority.low => 'Low',
-      TaskPriority.medium => 'Medium',
-      TaskPriority.high => 'High',
-      TaskPriority.urgent => 'Urgent',
+  static String _priorityFilterLabel(TaskPriorityFilter filter) {
+    return switch (filter) {
+      TaskPriorityFilter.all => 'All Priority',
+      TaskPriorityFilter.low => 'Low',
+      TaskPriorityFilter.medium => 'Medium',
+      TaskPriorityFilter.high => 'High',
+      TaskPriorityFilter.urgent => 'Urgent',
+    };
+  }
+
+  static String _statusLabel(TaskStatusFilter status) {
+    return switch (status) {
+      TaskStatusFilter.all => 'All Status',
+      TaskStatusFilter.today => 'Today',
+      TaskStatusFilter.upcoming => 'Upcoming',
+      TaskStatusFilter.overdue => 'Overdue',
+      TaskStatusFilter.completed => 'Completed',
     };
   }
 }
+
+enum _TaskMenuAction { moveToSpace, delete }
 
 class _SearchField extends StatelessWidget {
   const _SearchField({required this.controller, required this.onChanged});
@@ -591,20 +743,22 @@ class _TaskCard extends StatelessWidget {
   const _TaskCard({
     required this.task,
     required this.category,
+    required this.space,
     required this.showCheckbox,
     required this.onTap,
     required this.onLongPress,
     required this.onToggle,
-    required this.onDelete,
+    required this.onMenuSelected,
   });
 
   final TaskItem task;
   final TaskCategory? category;
+  final TaskSpace? space;
   final bool showCheckbox;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onToggle;
-  final VoidCallback onDelete;
+  final Future<void> Function(_TaskMenuAction action) onMenuSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -718,22 +872,41 @@ class _TaskCard extends StatelessWidget {
                           width: trailingSlotWidth,
                           child: Align(
                             alignment: Alignment.topRight,
-                            child: IconButton(
+                            child: PopupMenuButton<_TaskMenuAction>(
                               key: TaskManagementScreen.taskMenuButtonKey(
                                 task.id,
                               ),
-                              onPressed: onDelete,
-                              visualDensity: VisualDensity.compact,
-                              splashRadius: 18,
+                              color: Colors.white,
+                              surfaceTintColor: Colors.white,
+                              onSelected: (value) => onMenuSelected(value),
+                              itemBuilder: (context) => [
+                                const PopupMenuItem<_TaskMenuAction>(
+                                  value: _TaskMenuAction.moveToSpace,
+                                  child: Text('Move to Space'),
+                                ),
+                                PopupMenuItem<_TaskMenuAction>(
+                                  value: _TaskMenuAction.delete,
+                                  child: Text(
+                                    'Delete',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: taskDangerText,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                              ],
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(
                                 minWidth: 24,
                                 minHeight: 24,
                               ),
                               icon: const Icon(
-                                TablerIcons.trash,
+                                TablerIcons.dots_vertical,
                                 size: 18,
-                                color: taskDangerText,
+                                color: taskMutedText,
                               ),
                             ),
                           ),
@@ -741,8 +914,15 @@ class _TaskCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: cardStackSpacing),
-                    if (category != null) ...[
-                      _CategoryBadge(category: category!),
+                    if (category != null || space != null) ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (category != null) _CategoryBadge(category: category!),
+                          if (space != null) _SpaceBadge(space: space!),
+                        ],
+                      ),
                       const SizedBox(height: cardStackSpacing),
                     ],
                     IntrinsicHeight(
@@ -778,6 +958,124 @@ class _TaskCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpaceBadge extends StatelessWidget {
+  const _SpaceBadge({required this.space});
+
+  final TaskSpace space;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: space.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            TablerIcons.folder,
+            size: 12,
+            color: space.color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            space.name,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: space.color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpaceDestinationTile extends StatelessWidget {
+  const _SpaceDestinationTile({
+    required this.title,
+    required this.subtitle,
+    required this.isSelected,
+    required this.onTap,
+    this.accentColor,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = accentColor ?? taskPrimaryBlue;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? tone.withValues(alpha: 0.10) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? tone : taskBorderColor,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                TablerIcons.folder,
+                color: tone,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: taskDarkText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: taskMutedText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                TablerIcons.check,
+                color: tone,
+                size: 18,
+              ),
+          ],
         ),
       ),
     );
@@ -820,7 +1118,10 @@ class _CategoryBadge extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.title, required this.message});
+
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -849,7 +1150,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            'No tasks yet',
+            title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: taskDarkText,
               fontWeight: FontWeight.w700,
@@ -857,7 +1158,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Create a task to start capturing notes, details, and schedules in one place.',
+            message,
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: taskMutedText, height: 1.5),

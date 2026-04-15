@@ -143,6 +143,13 @@ class _SpacesPageState extends State<SpacesPage> {
   }
 
   Future<void> _deleteSpace(TaskSpace space) async {
+    if (!await _confirmVaultProtectedSpaceAction(space)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => _DeleteSpaceDialog(spaceName: space.name),
@@ -207,6 +214,24 @@ class _SpacesPageState extends State<SpacesPage> {
       ),
     );
     await _controller.load();
+  }
+
+  Future<void> _handleSpaceMenuAction(
+    TaskSpace space,
+    _SpaceAction action,
+  ) async {
+    switch (action) {
+      case _SpaceAction.edit:
+        if (!await _confirmVaultProtectedSpaceAction(space)) {
+          return;
+        }
+        if (!mounted) {
+          return;
+        }
+        await _openSpaceForm(initialSpace: space);
+      case _SpaceAction.delete:
+        await _deleteSpace(space);
+    }
   }
 
   Future<void> _showSpaceActions(TaskSpace space) async {
@@ -431,7 +456,7 @@ class _SpacesPageState extends State<SpacesPage> {
                               crossAxisCount: 2,
                               mainAxisSpacing: 12,
                               crossAxisSpacing: 12,
-                              childAspectRatio: 0.62,
+                              childAspectRatio: 0.56,
                         ),
                         itemBuilder: (context, index) {
                           final space = filteredSpaces[index];
@@ -448,14 +473,8 @@ class _SpacesPageState extends State<SpacesPage> {
                             ),
                             onTap: () => _openSpace(space),
                             onLongPress: () => _showSpaceActions(space),
-                            onMenuSelected: (action) async {
-                              switch (action) {
-                                case _SpaceAction.edit:
-                                  await _openSpaceForm(initialSpace: space);
-                                case _SpaceAction.delete:
-                                  await _deleteSpace(space);
-                              }
-                            },
+                            onMenuSelected: (action) =>
+                                _handleSpaceMenuAction(space, action),
                           );
                         },
                       ),
@@ -960,7 +979,7 @@ class _SpaceGridCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                height: 34,
+                height: 30,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1016,9 +1035,9 @@ class _SpaceGridCard extends StatelessWidget {
                 thickness: 1,
                 color: taskMutedBorderColor,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               SizedBox(
-                height: 98,
+                height: 90,
                 child: Center(
                   child: _FolderAccent(
                     color: space.color,
@@ -1027,38 +1046,29 @@ class _SpaceGridCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
+              if (space.vaultConfig?.isEnabled == true) ...[
+                const _SpaceLockBadge(),
+                const SizedBox(height: 4),
+              ],
               SizedBox(
-                height: 42,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        space.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: taskDarkText,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
+                height: 24,
+                child: Center(
+                  child: Text(
+                    space.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: taskDarkText,
+                      fontWeight: FontWeight.w700,
                     ),
-                    if (space.vaultConfig?.isEnabled == true) ...[
-                      const SizedBox(width: 6),
-                      const Icon(
-                        TablerIcons.lock,
-                        size: 14,
-                        color: taskMutedText,
-                      ),
-                    ],
-                  ],
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               SizedBox(
-                height: 38,
+                height: 26,
                 child: Text(
                   previewProtected
                       ? 'Protected content'
@@ -1095,10 +1105,10 @@ class _FolderAccent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final folderSize = large ? 72.0 : 42.0;
-    final iconSize = large ? 38.0 : 24.0;
-    final badgeSize = large ? 28.0 : 18.0;
-    final frameSize = large ? 96.0 : 48.0;
+    final folderSize = large ? 68.0 : 42.0;
+    final iconSize = large ? 36.0 : 24.0;
+    final badgeSize = large ? 26.0 : 18.0;
+    final frameSize = large ? 90.0 : 48.0;
 
     return SizedBox(
       width: frameSize,
@@ -1122,8 +1132,8 @@ class _FolderAccent extends StatelessWidget {
           ),
           if (count > 0)
             Positioned(
-              top: large ? 2 : -1,
-              right: large ? 6 : -1,
+              top: large ? 1 : -1,
+              right: large ? 5 : -1,
               child: Container(
                 width: badgeSize,
                 height: badgeSize,
@@ -1143,6 +1153,41 @@ class _FolderAccent extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _SpaceLockBadge extends StatelessWidget {
+  const _SpaceLockBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: taskSurface,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              TablerIcons.lock,
+              size: 12,
+              color: taskSecondaryText,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Locked',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: taskSecondaryText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

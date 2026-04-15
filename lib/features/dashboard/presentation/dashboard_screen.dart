@@ -1028,31 +1028,39 @@ class _HomeTaskTile extends StatelessWidget {
               visualDensity: VisualDensity.compact,
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    task.title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w700,
-                      decoration: task.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: taskDarkText,
+                                  fontWeight: FontWeight.w700,
+                                  decoration: task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  if (task.vaultConfig?.isEnabled == true) ...[
-                    const SizedBox(height: 4),
-                    const Icon(
-                      TablerIcons.lock,
-                      size: 14,
-                      color: taskMutedText,
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  Text(
-                    preview,
+                    if (task.vaultConfig?.isEnabled == true) ...[
+                      const SizedBox(height: 6),
+                      const _LockedBadge(),
+                    ],
+                    const SizedBox(height: 6),
+                    Text(
+                      preview,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1103,6 +1111,39 @@ class _DashboardEmptyState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LockedBadge extends StatelessWidget {
+  const _LockedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: taskSurface,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            TablerIcons.lock,
+            size: 12,
+            color: taskSecondaryText,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Locked',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: taskSecondaryText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

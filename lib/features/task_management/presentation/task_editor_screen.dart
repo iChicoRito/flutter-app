@@ -14,6 +14,7 @@ import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
+import '../../spaces/domain/task_space.dart';
 import 'task_management_ui.dart';
 
 class TaskEditorScreen extends StatefulWidget {
@@ -64,6 +65,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
   quill.QuillController? _noteController;
   TaskItem? _task;
+  TaskSpace? _parentSpace;
   List<TaskCategory> _categories = [];
   Timer? _autosaveTimer;
   bool _isLoading = true;
@@ -112,7 +114,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         return;
       }
 
-      _bindTask(task: task, categories: categories);
+      final parentSpace = task.spaceId == null
+          ? null
+          : await widget.repository.getSpaceById(task.spaceId!);
+      if (!mounted) {
+        return;
+      }
+
+      _bindTask(task: task, categories: categories, parentSpace: parentSpace);
       setState(() {
         _isLoading = false;
       });
@@ -130,12 +139,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   void _bindTask({
     required TaskItem task,
     required List<TaskCategory> categories,
+    required TaskSpace? parentSpace,
   }) {
     _isHydrating = true;
     _noteController?.removeListener(_scheduleAutosave);
     _noteController?.dispose();
 
     _task = task;
+    _parentSpace = parentSpace;
     _categories = categories;
 
     final document = quill.Document.fromJson(
@@ -365,6 +376,67 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     }
   }
 
+  void _relockTask() {
+    final task = _task;
+    if (task == null) {
+      return;
+    }
+
+    final vaultService = VaultServiceScope.of(context);
+    final hasTaskVault = task.vaultConfig?.isEnabled == true;
+    final hasSpaceVault = _parentSpace?.vaultConfig?.isEnabled == true;
+    if (!hasTaskVault && !hasSpaceVault) {
+      return;
+    }
+
+    if (hasTaskVault) {
+      vaultService.clearUnlocked(taskVaultEntityKey(task.id));
+    }
+    if (hasSpaceVault && _parentSpace != null) {
+      vaultService.clearUnlocked(spaceVaultEntityKey(_parentSpace!.id));
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {});
+
+    final message = hasTaskVault && hasSpaceVault
+        ? 'Task and space locked again.'
+        : hasTaskVault
+        ? 'Task locked again.'
+        : 'Space locked again.';
+    showTaskToast(context, message: message);
+  }
+
+  bool get _hasVaultProtection {
+    final task = _task;
+    if (task == null) {
+      return false;
+    }
+    return task.vaultConfig?.isEnabled == true ||
+        _parentSpace?.vaultConfig?.isEnabled == true;
+  }
+
+  bool get _isVaultCurrentlyUnlocked {
+    final task = _task;
+    if (task == null) {
+      return false;
+    }
+
+    final vaultService = VaultServiceScope.of(context);
+    final taskUnlocked = task.vaultConfig?.isEnabled == true &&
+        vaultService.isUnlocked(taskVaultEntityKey(task.id));
+    if (taskUnlocked) {
+      return true;
+    }
+
+    final parentSpace = _parentSpace;
+    return parentSpace?.vaultConfig?.isEnabled == true &&
+        vaultService.isUnlocked(spaceVaultEntityKey(parentSpace!.id));
+  }
+
   TaskCategory? _categoryFor(String categoryId) {
     for (final category in _categories) {
       if (category.id == categoryId) {
@@ -502,6 +574,32 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             ],
           ),
           actions: [
+            if (_hasVaultProtection)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Material(
+                  color: _isVaultCurrentlyUnlocked
+                      ? const Color(0xFFEAF3FE)
+                      : const Color(0xFFFFEBEE),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: _relockTask,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(
+                        _isVaultCurrentlyUnlocked
+                            ? TablerIcons.lock_open
+                            : TablerIcons.lock,
+                        size: 18,
+                        color: _isVaultCurrentlyUnlocked
+                            ? taskPrimaryBlue
+                            : taskDangerText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: PopupMenuButton<_EditorMenuAction>(

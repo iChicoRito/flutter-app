@@ -20,6 +20,7 @@ class TaskManagementScreen extends StatefulWidget {
     required this.repository,
     required this.controller,
     this.appBarTitle,
+    this.space,
     this.lockedCategoryId,
     this.fixedSpaceId,
     this.fabLabel = 'Add Task',
@@ -68,6 +69,7 @@ class TaskManagementScreen extends StatefulWidget {
   final TaskRepository repository;
   final TaskManagementController controller;
   final String? appBarTitle;
+  final TaskSpace? space;
   final String? lockedCategoryId;
   final String? fixedSpaceId;
   final String fabLabel;
@@ -106,6 +108,64 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     setState(() {
       _isSelectionMode = false;
     });
+  }
+
+  bool get _isCurrentSpaceUnlocked {
+    final currentSpace = widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
+    if (currentSpace?.vaultConfig?.isEnabled != true) {
+      return false;
+    }
+    return VaultServiceScope.of(context).isUnlocked(
+      spaceVaultEntityKey(currentSpace!.id),
+    );
+  }
+
+  Future<void> _toggleCurrentSpaceVault() async {
+    final currentSpace = widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
+    if (currentSpace?.vaultConfig?.isEnabled != true) {
+      return;
+    }
+
+    final vaultService = VaultServiceScope.of(context);
+    final entityKey = spaceVaultEntityKey(currentSpace!.id);
+
+    if (vaultService.isUnlocked(entityKey)) {
+      vaultService.clearUnlocked(entityKey);
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+      showTaskToast(context, message: 'Space locked again.');
+      return;
+    }
+
+    final result = await ensureUnlocked(
+      context: context,
+      vaultService: vaultService,
+      entityKey: entityKey,
+      title: currentSpace.name,
+      entityKind: VaultEntityKind.space,
+      config: currentSpace.vaultConfig,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result == VaultUnlockResult.failed) {
+      showTaskToast(
+        context,
+        message: 'Incorrect vault password or PIN.',
+        backgroundColor: const Color(0xFFFFEBEE),
+        foregroundColor: taskDangerText,
+      );
+      return;
+    }
+    if (result == VaultUnlockResult.cancelled) {
+      return;
+    }
+    if (result == VaultUnlockResult.unlocked) {
+      setState(() {});
+      showTaskToast(context, message: 'Space unlocked successfully.');
+    }
   }
 
   Future<void> _openCreateFlow() async {
@@ -496,6 +556,37 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 title: Text(widget.appBarTitle!),
                 backgroundColor: Colors.white,
                 surfaceTintColor: Colors.white,
+                actions: [
+                  if ((widget.space ?? _controller.spaceFor(widget.fixedSpaceId))
+                          ?.vaultConfig
+                          ?.isEnabled ==
+                      true)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Material(
+                        color: _isCurrentSpaceUnlocked
+                            ? const Color(0xFFEAF3FE)
+                            : const Color(0xFFFFEBEE),
+                        borderRadius: BorderRadius.circular(14),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: _toggleCurrentSpaceVault,
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(
+                              _isCurrentSpaceUnlocked
+                                  ? TablerIcons.lock_open
+                                  : TablerIcons.lock,
+                              size: 18,
+                              color: _isCurrentSpaceUnlocked
+                                  ? taskPrimaryBlue
+                                  : taskDangerText,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
         body: SafeArea(
           child: AnimatedBuilder(
@@ -1007,27 +1098,28 @@ class _TaskCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                task.title,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(
-                                      color: taskDarkText,
-                                      fontWeight: FontWeight.w700,
-                                      height: 0.98,
-                                      decoration: task.isCompleted
-                                          ? TextDecoration.lineThrough
-                                          : null,
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      task.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.headlineSmall?.copyWith(
+                                        color: taskDarkText,
+                                        fontWeight: FontWeight.w700,
+                                        height: 0.98,
+                                        decoration: task.isCompleted
+                                            ? TextDecoration.lineThrough
+                                            : null,
+                                      ),
                                     ),
+                                  ),
+                                ],
                               ),
-                              if (task.vaultConfig?.isEnabled == true ||
-                                  space?.vaultConfig?.isEnabled == true) ...[
-                                const SizedBox(height: 6),
-                                const Icon(
-                                  TablerIcons.lock,
-                                  size: 14,
-                                  color: taskMutedText,
-                                ),
-                              ],
                               if (descriptionText.isNotEmpty) ...[
                                 const SizedBox(height: cardStackSpacing),
                                 Text(
@@ -1097,6 +1189,9 @@ class _TaskCard extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          if (task.vaultConfig?.isEnabled == true ||
+                              space?.vaultConfig?.isEnabled == true)
+                            const _LockedBadge(),
                           if (category != null) _CategoryBadge(category: category!),
                           if (space != null) _SpaceBadge(space: space!),
                         ],
@@ -1168,6 +1263,39 @@ class _SpaceBadge extends StatelessWidget {
             space.name,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: space.color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LockedBadge extends StatelessWidget {
+  const _LockedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: taskSurface,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            TablerIcons.lock,
+            size: 12,
+            color: taskSecondaryText,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Locked',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: taskSecondaryText,
               fontWeight: FontWeight.w700,
             ),
           ),

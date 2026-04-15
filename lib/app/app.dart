@@ -12,6 +12,8 @@ import '../core/services/onboarding_status_store.dart';
 import '../core/services/task_reminder_scope.dart';
 import '../core/services/task_reminder_service.dart';
 import '../core/services/task_repository_scope.dart';
+import '../core/services/vault_service.dart';
+import '../core/services/vault_service_scope.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/task_reminder/presentation/task_alarm_screen.dart';
@@ -25,18 +27,21 @@ class MyApp extends StatefulWidget {
     DisplayNameStore? displayNameStore,
     TaskRepository? taskRepository,
     TaskReminderService? reminderService,
+    VaultService? vaultService,
   }) : onboardingStatusStore =
            onboardingStatusStore ??
            const SharedPreferencesOnboardingStatusStore(),
        displayNameStore =
            displayNameStore ?? const SharedPreferencesDisplayNameStore(),
        taskRepository = taskRepository ?? InMemoryTaskRepository(),
-       reminderService = reminderService ?? const NoopTaskReminderService();
+       reminderService = reminderService ?? const NoopTaskReminderService(),
+       vaultService = vaultService ?? LocalVaultService();
 
   final OnboardingStatusStore onboardingStatusStore;
   final DisplayNameStore displayNameStore;
   final TaskRepository taskRepository;
   final TaskReminderService reminderService;
+  final VaultService vaultService;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -226,7 +231,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       reminderService: widget.reminderService,
       child: TaskRepositoryScope(
         repository: widget.taskRepository,
-        child: MaterialApp(
+        child: VaultServiceScope(
+          vaultService: widget.vaultService,
+          child: MaterialApp(
           navigatorKey: _navigatorKey,
           builder: (context, child) {
             return Stack(
@@ -277,6 +284,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             onboardingStatusStore: widget.onboardingStatusStore,
             displayNameStore: widget.displayNameStore,
           ),
+        ),
         ),
       ),
     );

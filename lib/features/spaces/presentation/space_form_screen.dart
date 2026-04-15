@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/vault_service_scope.dart';
+import '../../../core/vault/vault_models.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/presentation/task_management_ui.dart';
 import '../domain/task_space.dart';
@@ -11,6 +13,7 @@ class SpaceFormResult {
     required this.description,
     required this.categoryId,
     required this.colorValue,
+    required this.vaultDraft,
   });
 
   final String? id;
@@ -18,6 +21,7 @@ class SpaceFormResult {
   final String description;
   final String categoryId;
   final int colorValue;
+  final VaultDraft vaultDraft;
 }
 
 class SpaceFormScreen extends StatefulWidget {
@@ -38,8 +42,13 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _vaultSecretController;
   late String _selectedCategoryId;
   late Color _selectedColor;
+  bool _vaultEnabled = false;
+  VaultMethod _vaultMethod = VaultMethod.password;
+  bool? _isDeviceSecurityAvailable;
+  bool _didLoadDeviceSecurityAvailability = false;
 
   bool get _isEditing => widget.initialSpace != null;
 
@@ -51,17 +60,45 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
     _descriptionController = TextEditingController(
       text: initialSpace?.description ?? '',
     );
+    _vaultSecretController = TextEditingController();
     _selectedCategoryId =
         initialSpace?.categoryId ??
         (widget.categories.isNotEmpty ? widget.categories.first.id : '');
     _selectedColor = initialSpace?.color ?? taskPrimaryBlue;
+    if (initialSpace?.vaultConfig case final vaultConfig?) {
+      _vaultEnabled = vaultConfig.isEnabled;
+      _vaultMethod = vaultConfig.method;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoadDeviceSecurityAvailability) {
+      return;
+    }
+    _didLoadDeviceSecurityAvailability = true;
+    _loadDeviceSecurityAvailability();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _vaultSecretController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDeviceSecurityAvailability() async {
+    final available = await VaultServiceScope.of(
+      context,
+    ).isDeviceSecurityAvailable();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isDeviceSecurityAvailable = available;
+    });
   }
 
   TaskCategory? _categoryById(String id) {
@@ -78,6 +115,17 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
       return;
     }
 
+    if (_vaultEnabled &&
+        _vaultMethod == VaultMethod.deviceSecurity &&
+        _isDeviceSecurityAvailable == false) {
+      showTaskToast(
+        context,
+        message: 'Device security is not available on this device.',
+        isError: true,
+      );
+      return;
+    }
+
     Navigator.of(context).pop(
       SpaceFormResult(
         id: widget.initialSpace?.id,
@@ -85,6 +133,15 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId,
         colorValue: _selectedColor.toARGB32(),
+        vaultDraft: VaultDraft(
+          isEnabled: _vaultEnabled,
+          method: _vaultEnabled ? _vaultMethod : null,
+          secret: _vaultSecretController.text.trim(),
+          keepExistingSecret:
+              widget.initialSpace?.vaultConfig?.secretKeyRef != null &&
+              _vaultSecretController.text.trim().isEmpty &&
+              _vaultMethod == widget.initialSpace?.vaultConfig?.method,
+        ),
       ),
     );
   }
@@ -212,6 +269,41 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 16),
+              VaultSettingsFields(
+                enabled: _vaultEnabled,
+                method: _vaultMethod,
+                secretController: _vaultSecretController,
+                hasExistingSecret:
+                    widget.initialSpace?.vaultConfig?.secretKeyRef != null,
+                isDeviceSecurityAvailable: _isDeviceSecurityAvailable,
+                onEnabledChanged: (value) {
+                  setState(() {
+                    _vaultEnabled = value;
+                    if (!value) {
+                      _vaultSecretController.clear();
+                    }
+                  });
+                },
+                onMethodChanged: (value) async {
+                  bool? available = _isDeviceSecurityAvailable;
+                  if (value == VaultMethod.deviceSecurity && available == null) {
+                    available = await VaultServiceScope.of(
+                      context,
+                    ).isDeviceSecurityAvailable();
+                  }
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _vaultMethod = value;
+                    _isDeviceSecurityAvailable = available;
+                    if (value == VaultMethod.deviceSecurity) {
+                      _vaultSecretController.clear();
+                    }
+                  });
+                },
               ),
             ],
           ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/services/vault_service_scope.dart';
+import '../../../core/vault/vault_models.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
@@ -22,6 +24,7 @@ class TaskCreationRequest {
     required this.description,
     required this.categoryId,
     required this.priority,
+    required this.vaultDraft,
     this.spaceId,
     this.endDate,
     this.endMinutes,
@@ -31,6 +34,7 @@ class TaskCreationRequest {
   final String description;
   final String categoryId;
   final TaskPriority priority;
+  final VaultDraft vaultDraft;
   final String? spaceId;
   final DateTime? endDate;
   final int? endMinutes;
@@ -60,6 +64,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _vaultSecretController = TextEditingController();
   final _pickerFocusNode = FocusNode();
   final _uuid = const Uuid();
 
@@ -68,6 +73,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   String? _selectedCategoryId;
   DateTime? _targetDate;
   TimeOfDay? _targetTime;
+  bool _vaultEnabled = false;
+  VaultMethod _vaultMethod = VaultMethod.password;
+  bool? _isDeviceSecurityAvailable;
+  bool _didLoadDeviceSecurityAvailability = false;
 
   @override
   void initState() {
@@ -80,9 +89,20 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoadDeviceSecurityAvailability) {
+      return;
+    }
+    _didLoadDeviceSecurityAvailability = true;
+    _loadDeviceSecurityAvailability();
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _vaultSecretController.dispose();
     _pickerFocusNode.dispose();
     super.dispose();
   }
@@ -92,6 +112,18 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       return;
     }
     FocusScope.of(context).requestFocus(_pickerFocusNode);
+  }
+
+  Future<void> _loadDeviceSecurityAvailability() async {
+    final available = await VaultServiceScope.of(
+      context,
+    ).isDeviceSecurityAvailable();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isDeviceSecurityAvailable = available;
+    });
   }
 
   String? _scheduleValidationMessage() {
@@ -228,12 +260,28 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       return;
     }
 
+    if (_vaultEnabled &&
+        _vaultMethod == VaultMethod.deviceSecurity &&
+        _isDeviceSecurityAvailable == false) {
+      showTaskToast(
+        context,
+        message: 'Device security is not available on this device.',
+        isError: true,
+      );
+      return;
+    }
+
     Navigator.of(context).pop(
       TaskCreationRequest(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId!,
         priority: _priority,
+        vaultDraft: VaultDraft(
+          isEnabled: _vaultEnabled,
+          method: _vaultEnabled ? _vaultMethod : null,
+          secret: _vaultSecretController.text.trim(),
+        ),
         spaceId: widget.spaceId,
         endDate: _targetDate,
         endMinutes: _targetTime == null
@@ -435,6 +483,47 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                     ],
                   ],
                 ),
+              ),
+              const SizedBox(height: 16),
+              VaultSettingsFields(
+                enabled: _vaultEnabled,
+                method: _vaultMethod,
+                secretController: _vaultSecretController,
+                hasExistingSecret: false,
+                isDeviceSecurityAvailable: _isDeviceSecurityAvailable,
+                onEnabledChanged: (value) async {
+                  final vaultService = VaultServiceScope.of(context);
+                  bool? available = _isDeviceSecurityAvailable;
+                  available ??= await vaultService.isDeviceSecurityAvailable();
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _isDeviceSecurityAvailable = available;
+                    _vaultEnabled = value;
+                    if (!value) {
+                      _vaultSecretController.clear();
+                    }
+                  });
+                },
+                onMethodChanged: (value) async {
+                  bool? available = _isDeviceSecurityAvailable;
+                  if (value == VaultMethod.deviceSecurity && available == null) {
+                    available = await VaultServiceScope.of(
+                      context,
+                    ).isDeviceSecurityAvailable();
+                  }
+                  if (!mounted) {
+                    return;
+                  }
+                  setState(() {
+                    _vaultMethod = value;
+                    _isDeviceSecurityAvailable = available;
+                    if (value == VaultMethod.deviceSecurity) {
+                      _vaultSecretController.clear();
+                    }
+                  });
+                },
               ),
             ],
           ),

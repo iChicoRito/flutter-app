@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/vault/vault_models.dart';
+
 class TaskSpace {
   const TaskSpace({
     required this.id,
@@ -9,6 +11,7 @@ class TaskSpace {
     required this.colorValue,
     required this.createdAt,
     required this.updatedAt,
+    this.vaultConfig,
   });
 
   final String id;
@@ -18,6 +21,7 @@ class TaskSpace {
   final int colorValue;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final VaultConfig? vaultConfig;
 
   Color get color => Color(colorValue);
 
@@ -29,6 +33,8 @@ class TaskSpace {
     int? colorValue,
     DateTime? createdAt,
     DateTime? updatedAt,
+    VaultConfig? vaultConfig,
+    bool clearVaultConfig = false,
   }) {
     return TaskSpace(
       id: id ?? this.id,
@@ -38,6 +44,7 @@ class TaskSpace {
       colorValue: colorValue ?? this.colorValue,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      vaultConfig: clearVaultConfig ? null : vaultConfig ?? this.vaultConfig,
     );
   }
 }

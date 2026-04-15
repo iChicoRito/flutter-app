@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 import 'dart:async';
 
+import '../../../core/vault/vault_models.dart';
+
 const taskPrimaryBlue = Color(0xFF066FD1);
 const taskPrimaryPressed = Color(0xFF055CB0);
 const taskSecondaryBlue = Color(0xFF90CAF9);
@@ -25,6 +27,8 @@ void showTaskToast(
   BuildContext context, {
   required String message,
   bool isError = false,
+  Color? backgroundColor,
+  Color? foregroundColor,
 }) {
   _currentTaskToastEntry?.remove();
   final overlay = Overlay.maybeOf(context);
@@ -37,6 +41,8 @@ void showTaskToast(
     builder: (context) => _TaskToastOverlay(
       message: message,
       isError: isError,
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
       onDismissed: () {
         if (_currentTaskToastEntry == entry) {
           _currentTaskToastEntry = null;
@@ -54,11 +60,15 @@ class _TaskToastOverlay extends StatefulWidget {
   const _TaskToastOverlay({
     required this.message,
     required this.isError,
+    this.backgroundColor,
+    this.foregroundColor,
     required this.onDismissed,
   });
 
   final String message;
   final bool isError;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
   final VoidCallback onDismissed;
 
   @override
@@ -107,10 +117,14 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = widget.isError
+    final backgroundColor =
+        widget.backgroundColor ??
+        (widget.isError
         ? taskDangerText
-        : const Color(0xFFE6F6F1);
-    final foregroundColor = widget.isError ? Colors.white : taskSuccessText;
+        : const Color(0xFFE6F6F1));
+    final foregroundColor =
+        widget.foregroundColor ??
+        (widget.isError ? Colors.white : taskSuccessText);
 
     return Positioned(
       left: 16,
@@ -492,4 +506,150 @@ ThemeData buildTaskPickerTheme(ThemeData baseTheme) {
       ),
     ),
   );
+}
+
+class VaultSettingsFields extends StatelessWidget {
+  const VaultSettingsFields({
+    super.key,
+    required this.enabled,
+    required this.method,
+    required this.secretController,
+    required this.hasExistingSecret,
+    required this.isDeviceSecurityAvailable,
+    required this.onEnabledChanged,
+    required this.onMethodChanged,
+  });
+
+  final bool enabled;
+  final VaultMethod? method;
+  final TextEditingController secretController;
+  final bool hasExistingSecret;
+  final bool? isDeviceSecurityAvailable;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<VaultMethod> onMethodChanged;
+
+  bool get _showsSecretField =>
+      method == VaultMethod.password || method == VaultMethod.pin;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskSectionCard(
+      title: 'Vault',
+      subtitle: 'Protect this item with a password, PIN, or device security.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile.adaptive(
+            value: enabled,
+            onChanged: onEnabledChanged,
+            contentPadding: EdgeInsets.zero,
+            activeThumbColor: Colors.white,
+            activeTrackColor: taskPrimaryBlue,
+            title: Text(
+              'Enable Vault',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: taskDarkText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            subtitle: Text(
+              'Require authentication before opening this content.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
+            ),
+          ),
+          if (enabled) ...[
+            const SizedBox(height: 8),
+            const TaskFieldLabel('Security Method'),
+            const SizedBox(height: 8),
+            TaskCompactDropdown<VaultMethod>(
+              buttonKey: const Key('vault-method-dropdown'),
+              menuKeyBuilder: (value) => Key('vault-method-${value.name}'),
+              currentValue: method ?? VaultMethod.password,
+              currentLabel: _vaultMethodLabel(method ?? VaultMethod.password),
+              onSelected: onMethodChanged,
+              items: VaultMethod.values,
+              labelBuilder: _vaultMethodLabel,
+            ),
+            if (_showsSecretField) ...[
+              const SizedBox(height: 16),
+              TaskFieldLabel(
+                method == VaultMethod.pin ? '4-Digit PIN' : 'Password',
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: secretController,
+                keyboardType: method == VaultMethod.pin
+                    ? TextInputType.number
+                    : TextInputType.text,
+                obscureText: true,
+                maxLength: method == VaultMethod.pin ? 4 : null,
+                decoration: taskInputDecoration(
+                  context: context,
+                  hintText: hasExistingSecret
+                      ? method == VaultMethod.pin
+                            ? 'Leave blank to keep the current PIN'
+                            : 'Leave blank to keep the current password'
+                      : method == VaultMethod.pin
+                      ? 'Enter 4-digit PIN'
+                      : 'Enter password',
+                ).copyWith(counterText: ''),
+                validator: (value) {
+                  if (!enabled) {
+                    return null;
+                  }
+                  final trimmed = value?.trim() ?? '';
+                  if (trimmed.isEmpty) {
+                    return hasExistingSecret
+                        ? null
+                        : method == VaultMethod.pin
+                        ? 'PIN is required.'
+                        : 'Password is required.';
+                  }
+                  if (method == VaultMethod.pin &&
+                      !RegExp(r'^\d{4}$').hasMatch(trimmed)) {
+                    return 'PIN must be exactly 4 digits.';
+                  }
+                  return null;
+                },
+              ),
+            ],
+            if (method == VaultMethod.deviceSecurity) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: taskAccentBlue,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: taskBorderColor),
+                ),
+                child: Text(
+                  isDeviceSecurityAvailable == false
+                      ? 'Device security is not available on this device yet.'
+                      : 'This uses your phone biometric or device passcode prompt.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isDeviceSecurityAvailable == false
+                        ? taskDangerText
+                        : taskPrimaryBlue,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _vaultMethodLabel(VaultMethod method) {
+    return switch (method) {
+      VaultMethod.password => 'Custom Password',
+      VaultMethod.pin => '4-digit PIN',
+      VaultMethod.deviceSecurity => 'Device Security',
+    };
+  }
 }

@@ -7,6 +7,9 @@ import 'package:tabler_icons/tabler_icons.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/services/task_reminder_service.dart';
+import '../../../core/services/vault_service_scope.dart';
+import '../../../core/vault/vault_access.dart';
+import '../../../core/vault/vault_models.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -250,6 +253,12 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     if (task == null) {
       return;
     }
+    if (!await _confirmVaultProtectedAction(task)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
 
     final result = await Navigator.of(context).push<_TaskDetailsResult>(
       MaterialPageRoute<_TaskDetailsResult>(
@@ -268,9 +277,19 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     }
 
     try {
-      await widget.repository.upsertTask(result.task);
-      await widget.reminderService.syncTask(result.task);
-      final latest = await widget.repository.getTaskById(result.task.id);
+      final vaultService = VaultServiceScope.of(context);
+      final resolvedVaultConfig = await vaultService.resolveConfig(
+        entityKey: 'task:${result.task.id}',
+        draft: result.vaultDraft,
+        existingConfig: task.vaultConfig,
+      );
+      final updatedTask = result.task.copyWith(
+        vaultConfig: resolvedVaultConfig,
+        clearVaultConfig: resolvedVaultConfig == null,
+      );
+      await widget.repository.upsertTask(updatedTask);
+      await widget.reminderService.syncTask(updatedTask);
+      final latest = await widget.repository.getTaskById(updatedTask.id);
       if (!mounted) {
         return;
       }
@@ -312,6 +331,12 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     if (task == null) {
       return;
     }
+    if (!await _confirmVaultProtectedAction(task)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
 
     final shouldDelete = await showDialog<bool>(
       context: context,
@@ -347,6 +372,78 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       }
     }
     return null;
+  }
+
+  Future<bool> _confirmVaultProtectedAction(TaskItem task) async {
+    final vaultService = VaultServiceScope.of(context);
+
+    if (task.vaultConfig != null) {
+      final result = await ensureUnlocked(
+        context: context,
+        vaultService: vaultService,
+        entityKey: taskVaultEntityKey(task.id),
+        title: task.title,
+        entityKind: VaultEntityKind.task,
+        config: task.vaultConfig,
+        forcePrompt: true,
+      );
+      if (!mounted) {
+        return false;
+      }
+      if (result == VaultUnlockResult.failed) {
+        showTaskToast(
+          context,
+          message: 'Incorrect vault password or PIN.',
+          backgroundColor: const Color(0xFFFFEBEE),
+          foregroundColor: taskDangerText,
+        );
+        return false;
+      }
+      if (result == VaultUnlockResult.cancelled) {
+        return false;
+      }
+      if (result == VaultUnlockResult.unlocked) {
+        showTaskToast(context, message: 'Unlocked successfully.');
+      }
+      return true;
+    }
+
+    final parentSpaceId = task.spaceId;
+    if (parentSpaceId == null) {
+      return true;
+    }
+    final parentSpace = await widget.repository.getSpaceById(parentSpaceId);
+    if (!mounted || parentSpace?.vaultConfig == null) {
+      return mounted;
+    }
+    final result = await ensureUnlocked(
+      context: context,
+      vaultService: vaultService,
+      entityKey: spaceVaultEntityKey(parentSpace!.id),
+      title: parentSpace.name,
+      entityKind: VaultEntityKind.space,
+      config: parentSpace.vaultConfig,
+      forcePrompt: true,
+    );
+    if (!mounted) {
+      return false;
+    }
+    if (result == VaultUnlockResult.failed) {
+      showTaskToast(
+        context,
+        message: 'Incorrect vault password or PIN.',
+        backgroundColor: const Color(0xFFFFEBEE),
+        foregroundColor: taskDangerText,
+      );
+      return false;
+    }
+    if (result == VaultUnlockResult.cancelled) {
+      return false;
+    }
+    if (result == VaultUnlockResult.unlocked) {
+      showTaskToast(context, message: 'Unlocked successfully.');
+    }
+    return true;
   }
 
   @override
@@ -864,10 +961,15 @@ class _EditorErrorState extends StatelessWidget {
 }
 
 class _TaskDetailsResult {
-  const _TaskDetailsResult({required this.task, required this.categories});
+  const _TaskDetailsResult({
+    required this.task,
+    required this.categories,
+    required this.vaultDraft,
+  });
 
   final TaskItem task;
   final List<TaskCategory> categories;
+  final VaultDraft vaultDraft;
 }
 
 class _TaskDetailsSheet extends StatefulWidget {
@@ -895,11 +997,16 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   final _uuid = const Uuid();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _vaultSecretController;
   late List<TaskCategory> _categories;
   late TaskPriority _priority;
   late String _selectedCategoryId;
   DateTime? _targetDate;
   TimeOfDay? _targetTime;
+  bool _vaultEnabled = false;
+  VaultMethod _vaultMethod = VaultMethod.password;
+  bool? _isDeviceSecurityAvailable;
+  bool _didLoadDeviceSecurityAvailability = false;
 
   @override
   void initState() {
@@ -908,19 +1015,47 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     _descriptionController = TextEditingController(
       text: widget.task.description ?? '',
     );
+    _vaultSecretController = TextEditingController();
     _categories = [...widget.categories];
     _priority = widget.task.priority;
     _selectedCategoryId = widget.lockedCategoryId ?? widget.task.categoryId;
     _targetDate = widget.task.endDate;
     _targetTime = _toTimeOfDay(widget.task.endMinutes);
+    if (widget.task.vaultConfig case final vaultConfig?) {
+      _vaultEnabled = vaultConfig.isEnabled;
+      _vaultMethod = vaultConfig.method;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didLoadDeviceSecurityAvailability) {
+      return;
+    }
+    _didLoadDeviceSecurityAvailability = true;
+    _loadDeviceSecurityAvailability();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _vaultSecretController.dispose();
     _pickerFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDeviceSecurityAvailability() async {
+    final available = await VaultServiceScope.of(
+      context,
+    ).isDeviceSecurityAvailable();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isDeviceSecurityAvailable = available;
+    });
   }
 
   void _parkFocus() {
@@ -1058,6 +1193,17 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       return;
     }
 
+    if (_vaultEnabled &&
+        _vaultMethod == VaultMethod.deviceSecurity &&
+        _isDeviceSecurityAvailable == false) {
+      showTaskToast(
+        context,
+        message: 'Device security is not available on this device.',
+        isError: true,
+      );
+      return;
+    }
+
     final trimmedTitle = _titleController.text.trim();
     final trimmedDescription = _descriptionController.text.trim();
 
@@ -1082,6 +1228,15 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
           updatedAt: DateTime.now(),
         ),
         categories: _categories,
+        vaultDraft: VaultDraft(
+          isEnabled: _vaultEnabled,
+          method: _vaultEnabled ? _vaultMethod : null,
+          secret: _vaultSecretController.text.trim(),
+          keepExistingSecret:
+              widget.task.vaultConfig?.secretKeyRef != null &&
+              _vaultSecretController.text.trim().isEmpty &&
+              _vaultMethod == widget.task.vaultConfig?.method,
+        ),
       ),
     );
   }
@@ -1290,6 +1445,40 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+                VaultSettingsFields(
+                  enabled: _vaultEnabled,
+                  method: _vaultMethod,
+                  secretController: _vaultSecretController,
+                  hasExistingSecret: widget.task.vaultConfig?.secretKeyRef != null,
+                  isDeviceSecurityAvailable: _isDeviceSecurityAvailable,
+                  onEnabledChanged: (value) {
+                    setState(() {
+                      _vaultEnabled = value;
+                      if (!value) {
+                        _vaultSecretController.clear();
+                      }
+                    });
+                  },
+                  onMethodChanged: (value) async {
+                    bool? available = _isDeviceSecurityAvailable;
+                    if (value == VaultMethod.deviceSecurity && available == null) {
+                      available = await VaultServiceScope.of(
+                        context,
+                      ).isDeviceSecurityAvailable();
+                    }
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {
+                      _vaultMethod = value;
+                      _isDeviceSecurityAvailable = available;
+                      if (value == VaultMethod.deviceSecurity) {
+                        _vaultSecretController.clear();
+                      }
+                    });
+                  },
+                ),
               ],
             ),
           ),
@@ -1430,46 +1619,79 @@ class _DeleteTaskDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Delete Task',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
+            Align(
+              child: Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFECEC),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: taskDangerText,
+                  size: 28,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Text(
-              'This removes the task and its notes from your device.',
+              'Delete Task',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: taskDangerText,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Deleting "$taskTitle" will remove the task and its notes from your device.',
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: taskSecondaryText,
                 height: 1.45,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 4),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(
-                    'Delete',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: taskDangerText,
-                      fontWeight: FontWeight.w700,
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: const Color(0xFFF1F3F5),
+                      foregroundColor: taskDarkText,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: taskDangerText,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Delete Task'),
                   ),
                 ),
               ],

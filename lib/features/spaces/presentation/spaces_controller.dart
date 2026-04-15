@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/vault/vault_models.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/domain/task_item.dart';
@@ -101,6 +102,7 @@ class SpacesController extends ChangeNotifier {
     required String description,
     required String categoryId,
     required int colorValue,
+    VaultConfig? vaultConfig,
   }) async {
     isSaving = true;
     notifyListeners();
@@ -114,6 +116,7 @@ class SpacesController extends ChangeNotifier {
       colorValue: colorValue,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      vaultConfig: vaultConfig,
     );
 
     try {

@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/task_reminder_service.dart';
+import '../../../core/services/vault_service_scope.dart';
+import '../../../core/vault/vault_access.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/domain/task_repository.dart';
 import '../../task_management/presentation/task_management_ui.dart';
@@ -98,14 +100,26 @@ class _SpacesPageState extends State<SpacesPage> {
     if (result == null) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
 
     try {
+      final vaultService = VaultServiceScope.of(context);
+      final resolvedVaultConfig = await vaultService.resolveConfig(
+        entityKey: initialSpace == null
+            ? 'space:create:${DateTime.now().microsecondsSinceEpoch}'
+            : spaceVaultEntityKey(initialSpace.id),
+        draft: result.vaultDraft,
+        existingConfig: initialSpace?.vaultConfig,
+      );
       await _controller.saveSpace(
         id: result.id,
         name: result.name,
         description: result.description,
         categoryId: result.categoryId,
         colorValue: result.colorValue,
+        vaultConfig: resolvedVaultConfig,
       );
       if (!mounted) {
         return;
@@ -156,6 +170,33 @@ class _SpacesPageState extends State<SpacesPage> {
   }
 
   Future<void> _openSpace(TaskSpace space) async {
+    final vaultService = VaultServiceScope.of(context);
+    final unlockResult = await ensureUnlocked(
+      context: context,
+      vaultService: vaultService,
+      entityKey: spaceVaultEntityKey(space.id),
+      title: space.name,
+      entityKind: VaultEntityKind.space,
+      config: space.vaultConfig,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (unlockResult == VaultUnlockResult.failed) {
+      showTaskToast(
+        context,
+        message: 'Incorrect vault password or PIN.',
+        backgroundColor: const Color(0xFFFFEBEE),
+        foregroundColor: taskDangerText,
+      );
+      return;
+    }
+    if (unlockResult == VaultUnlockResult.cancelled) {
+      return;
+    }
+    if (unlockResult == VaultUnlockResult.unlocked) {
+      showTaskToast(context, message: 'Unlocked successfully.');
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (context) => SpaceDetailScreen(
@@ -169,6 +210,12 @@ class _SpacesPageState extends State<SpacesPage> {
   }
 
   Future<void> _showSpaceActions(TaskSpace space) async {
+    if (!await _confirmVaultProtectedSpaceAction(space)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     final action = await showModalBottomSheet<_SpaceAction>(
       context: context,
       backgroundColor: Colors.white,
@@ -221,6 +268,41 @@ class _SpacesPageState extends State<SpacesPage> {
       case _SpaceAction.delete:
         await _deleteSpace(space);
     }
+  }
+
+  Future<bool> _confirmVaultProtectedSpaceAction(TaskSpace space) async {
+    if (space.vaultConfig == null) {
+      return true;
+    }
+
+    final result = await ensureUnlocked(
+      context: context,
+      vaultService: VaultServiceScope.of(context),
+      entityKey: spaceVaultEntityKey(space.id),
+      title: space.name,
+      entityKind: VaultEntityKind.space,
+      config: space.vaultConfig,
+      forcePrompt: true,
+    );
+    if (!mounted) {
+      return false;
+    }
+    if (result == VaultUnlockResult.failed) {
+      showTaskToast(
+        context,
+        message: 'Incorrect vault password or PIN.',
+        backgroundColor: const Color(0xFFFFEBEE),
+        foregroundColor: taskDangerText,
+      );
+      return false;
+    }
+    if (result == VaultUnlockResult.cancelled) {
+      return false;
+    }
+    if (result == VaultUnlockResult.unlocked) {
+      showTaskToast(context, message: 'Unlocked successfully.');
+    }
+    return true;
   }
 
   @override
@@ -319,6 +401,13 @@ class _SpacesPageState extends State<SpacesPage> {
                             space: space,
                             category: _controller.categoryFor(space.categoryId),
                             taskCount: _controller.taskCountFor(space.id),
+                            previewProtected: isPreviewProtected(
+                              vaultService: VaultServiceScope.of(context),
+                              ownVault: space.vaultConfig,
+                              ownEntityKey: spaceVaultEntityKey(space.id),
+                              inheritedVault: null,
+                              inheritedEntityKey: null,
+                            ),
                             onTap: () => _openSpace(space),
                             onLongPress: () => _showSpaceActions(space),
                             onMenuSelected: (action) async {
@@ -350,6 +439,13 @@ class _SpacesPageState extends State<SpacesPage> {
                             space: space,
                             category: _controller.categoryFor(space.categoryId),
                             taskCount: _controller.taskCountFor(space.id),
+                            previewProtected: isPreviewProtected(
+                              vaultService: VaultServiceScope.of(context),
+                              ownVault: space.vaultConfig,
+                              ownEntityKey: spaceVaultEntityKey(space.id),
+                              inheritedVault: null,
+                              inheritedEntityKey: null,
+                            ),
                             onTap: () => _openSpace(space),
                             onLongPress: () => _showSpaceActions(space),
                             onMenuSelected: (action) async {
@@ -708,6 +804,7 @@ class _SpaceListCard extends StatelessWidget {
     required this.space,
     required this.category,
     required this.taskCount,
+    required this.previewProtected,
     required this.onTap,
     required this.onLongPress,
     required this.onMenuSelected,
@@ -716,6 +813,7 @@ class _SpaceListCard extends StatelessWidget {
   final TaskSpace space;
   final TaskCategory? category;
   final int taskCount;
+  final bool previewProtected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Future<void> Function(_SpaceAction action) onMenuSelected;
@@ -758,6 +856,14 @@ class _SpaceListCard extends StatelessWidget {
                                 ),
                           ),
                         ),
+                        if (space.vaultConfig?.isEnabled == true) ...[
+                          const SizedBox(width: 6),
+                          const Icon(
+                            TablerIcons.lock,
+                            size: 14,
+                            color: taskMutedText,
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         if (category != null)
                           _CategoryPill(
@@ -768,7 +874,9 @@ class _SpaceListCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      space.description.isEmpty
+                      previewProtected
+                          ? 'Protected content'
+                          : space.description.isEmpty
                           ? 'Folder short description'
                           : space.description,
                       maxLines: 1,
@@ -819,6 +927,7 @@ class _SpaceGridCard extends StatelessWidget {
     required this.space,
     required this.category,
     required this.taskCount,
+    required this.previewProtected,
     required this.onTap,
     required this.onLongPress,
     required this.onMenuSelected,
@@ -827,6 +936,7 @@ class _SpaceGridCard extends StatelessWidget {
   final TaskSpace space;
   final TaskCategory? category;
   final int taskCount;
+  final bool previewProtected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Future<void> Function(_SpaceAction action) onMenuSelected;
@@ -920,24 +1030,39 @@ class _SpaceGridCard extends StatelessWidget {
               const SizedBox(height: 10),
               SizedBox(
                 height: 42,
-                child: Center(
-                  child: Text(
-                    space.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w700,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        space.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: taskDarkText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
+                    if (space.vaultConfig?.isEnabled == true) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        TablerIcons.lock,
+                        size: 14,
+                        color: taskMutedText,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(height: 4),
               SizedBox(
                 height: 38,
                 child: Text(
-                  space.description.isEmpty
+                  previewProtected
+                      ? 'Protected content'
+                      : space.description.isEmpty
                       ? 'Folder short description'
                       : space.description,
                   maxLines: 2,
@@ -1161,46 +1286,79 @@ class _DeleteSpaceDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: Colors.white,
       surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Delete Space',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
+            Align(
+              child: Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFECEC),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: taskDangerText,
+                  size: 28,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
+            Text(
+              'Delete Space',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: taskDangerText,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 12),
             Text(
               'Deleting "$spaceName" will remove all tasks inside. This action cannot be undone.',
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: taskSecondaryText,
                 height: 1.45,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 4),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(
-                    'Delete',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: taskDangerText,
-                      fontWeight: FontWeight.w700,
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: const Color(0xFFF1F3F5),
+                      foregroundColor: taskDarkText,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: taskDangerText,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Delete Space'),
                   ),
                 ),
               ],

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../../../core/vault/vault_models.dart';
 import '../../spaces/domain/task_space.dart';
 import 'task_note_codec.dart';
 import '../domain/task_category.dart';
@@ -34,7 +35,9 @@ class HiveTaskRepository implements TaskRepository {
       Hive
         ..registerAdapter(TaskItemAdapter())
         ..registerAdapter(TaskCategoryAdapter())
-        ..registerAdapter(TaskSpaceAdapter());
+        ..registerAdapter(TaskSpaceAdapter())
+        ..registerAdapter(VaultConfigAdapter())
+        ..registerAdapter(VaultMethodAdapter());
       _adaptersRegistered = true;
     }
 
@@ -359,12 +362,16 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
         ? reader.read() as String?
         : null;
     final spaceId = reader.availableBytes > 0 ? reader.read() as String? : null;
+    final vaultConfig = reader.availableBytes > 0
+        ? reader.read() as VaultConfig?
+        : null;
 
     return TaskItem(
       id: id,
       title: title,
       description: description,
       spaceId: spaceId,
+      vaultConfig: vaultConfig,
       noteDocumentJson: noteDocumentJson,
       notePlainText: notePlainText,
       startDate: startDate,
@@ -400,7 +407,8 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(obj.endMinutes)
       ..write(obj.noteDocumentJson)
       ..write(obj.notePlainText)
-      ..write(obj.spaceId);
+      ..write(obj.spaceId)
+      ..write(obj.vaultConfig);
   }
 
   static DateTime? _readDateValue(dynamic value, {bool dateOnly = false}) {
@@ -476,6 +484,9 @@ class TaskSpaceAdapter extends TypeAdapter<TaskSpace> {
       updatedAt:
           TaskItemAdapter._readDateValue(reader.read()) ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      vaultConfig: reader.availableBytes > 0
+          ? reader.read() as VaultConfig?
+          : null,
     );
   }
 
@@ -488,6 +499,44 @@ class TaskSpaceAdapter extends TypeAdapter<TaskSpace> {
       ..writeString(obj.categoryId)
       ..writeInt(obj.colorValue)
       ..write(TaskItemAdapter._writeDateValue(obj.createdAt))
-      ..write(TaskItemAdapter._writeDateValue(obj.updatedAt));
+      ..write(TaskItemAdapter._writeDateValue(obj.updatedAt))
+      ..write(obj.vaultConfig);
+  }
+}
+
+class VaultMethodAdapter extends TypeAdapter<VaultMethod> {
+  @override
+  final int typeId = 3;
+
+  @override
+  VaultMethod read(BinaryReader reader) {
+    return VaultMethod.values[reader.readInt()];
+  }
+
+  @override
+  void write(BinaryWriter writer, VaultMethod obj) {
+    writer.writeInt(obj.index);
+  }
+}
+
+class VaultConfigAdapter extends TypeAdapter<VaultConfig> {
+  @override
+  final int typeId = 4;
+
+  @override
+  VaultConfig read(BinaryReader reader) {
+    return VaultConfig(
+      isEnabled: reader.readBool(),
+      method: reader.read() as VaultMethod,
+      secretKeyRef: reader.read() as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, VaultConfig obj) {
+    writer
+      ..writeBool(obj.isEnabled)
+      ..write(obj.method)
+      ..write(obj.secretKeyRef);
   }
 }

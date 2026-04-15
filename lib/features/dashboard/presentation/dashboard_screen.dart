@@ -6,6 +6,8 @@ import '../../../core/services/display_name_store.dart';
 import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/task_repository_scope.dart';
+import '../../../core/services/vault_service_scope.dart';
+import '../../../core/vault/vault_access.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/presentation/task_creation_sheet.dart';
 import '../../task_management/presentation/task_editor_screen.dart';
@@ -176,6 +178,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
+    final vaultService = VaultServiceScope.of(context);
+    final resolvedVaultConfig = await vaultService.resolveConfig(
+      entityKey: 'task:create:${DateTime.now().microsecondsSinceEpoch}',
+      draft: request.vaultDraft,
+    );
     final task = await taskController.createTask(
       title: request.title,
       description: request.description,
@@ -184,6 +191,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       spaceId: request.spaceId,
       endDate: request.endDate,
       endMinutes: request.endMinutes,
+      vaultConfig: resolvedVaultConfig,
     );
 
     if (!mounted) {
@@ -193,12 +201,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openEditor(String taskId) async {
+    final repository = TaskRepositoryScope.of(context);
+    final task = await repository.getTaskById(taskId);
+    if (!mounted || task == null) {
+      return;
+    }
+    final vaultService = VaultServiceScope.of(context);
+    final reminderService = TaskReminderScope.of(context);
+    final parentSpace = _taskController?.spaceFor(task.spaceId);
+    final taskUnlockResult = await ensureUnlocked(
+      context: context,
+      vaultService: vaultService,
+      entityKey: taskVaultEntityKey(task.id),
+      title: task.title,
+      entityKind: VaultEntityKind.task,
+      config: task.vaultConfig,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (taskUnlockResult == VaultUnlockResult.failed) {
+      showTaskToast(
+        context,
+        message: 'Incorrect vault password or PIN.',
+        backgroundColor: const Color(0xFFFFEBEE),
+        foregroundColor: taskDangerText,
+      );
+      return;
+    }
+    if (taskUnlockResult == VaultUnlockResult.cancelled) {
+      return;
+    }
+    if (taskUnlockResult == VaultUnlockResult.unlocked) {
+      showTaskToast(context, message: 'Unlocked successfully.');
+    }
+    if (task.vaultConfig == null && parentSpace != null) {
+      final spaceUnlockResult = await ensureUnlocked(
+          context: context,
+          vaultService: vaultService,
+          entityKey: spaceVaultEntityKey(parentSpace.id),
+          title: parentSpace.name,
+          entityKind: VaultEntityKind.space,
+          config: parentSpace.vaultConfig,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (spaceUnlockResult == VaultUnlockResult.failed) {
+        showTaskToast(
+          context,
+          message: 'Incorrect vault password or PIN.',
+          backgroundColor: const Color(0xFFFFEBEE),
+          foregroundColor: taskDangerText,
+        );
+        return;
+      }
+      if (spaceUnlockResult == VaultUnlockResult.cancelled) {
+        return;
+      }
+      if (spaceUnlockResult == VaultUnlockResult.unlocked) {
+        showTaskToast(context, message: 'Unlocked successfully.');
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+
     await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (context) => TaskEditorScreen(
-          repository: TaskRepositoryScope.of(context),
+          repository: repository,
           taskId: taskId,
-          reminderService: TaskReminderScope.of(context),
+          reminderService: reminderService,
         ),
       ),
     );
@@ -412,6 +486,7 @@ class _DashboardHomeTab extends StatelessWidget {
             onHeaderTap: onTodayExpandedChanged,
             child: _TaskListBody(
               tasks: todayTasks,
+              controller: controller,
               emptyTitle: 'Nothing for today',
               emptyMessage:
                   'Create a task to begin a new note or plan the next step.',
@@ -430,6 +505,7 @@ class _DashboardHomeTab extends StatelessWidget {
             onHeaderTap: onUpcomingExpandedChanged,
             child: _TaskListBody(
               tasks: upcomingTasks,
+              controller: controller,
               emptyTitle: 'Nothing upcoming',
               emptyMessage: 'Future scheduled tasks will appear here.',
               onTaskOpened: onTaskOpened,
@@ -447,6 +523,7 @@ class _DashboardHomeTab extends StatelessWidget {
             onHeaderTap: onOverdueExpandedChanged,
             child: _TaskListBody(
               tasks: overdueTasks,
+              controller: controller,
               emptyTitle: 'No overdue tasks',
               emptyMessage: 'You are caught up on everything past due.',
               onTaskOpened: onTaskOpened,
@@ -464,6 +541,7 @@ class _DashboardHomeTab extends StatelessWidget {
             onHeaderTap: onCompletedExpandedChanged,
             child: _TaskListBody(
               tasks: completedTasks,
+              controller: controller,
               emptyTitle: 'Nothing completed yet',
               emptyMessage:
                   'Completed tasks will appear here as you check them off.',
@@ -862,6 +940,7 @@ class _DashboardSection extends StatelessWidget {
 class _TaskListBody extends StatelessWidget {
   const _TaskListBody({
     required this.tasks,
+    required this.controller,
     required this.emptyTitle,
     required this.emptyMessage,
     required this.onTaskOpened,
@@ -869,6 +948,7 @@ class _TaskListBody extends StatelessWidget {
   });
 
   final List<TaskItem> tasks;
+  final TaskManagementController controller;
   final String emptyTitle;
   final String emptyMessage;
   final Future<void> Function(TaskItem task) onTaskOpened;
@@ -887,6 +967,15 @@ class _TaskListBody extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 12),
             child: _HomeTaskTile(
               task: task,
+              previewProtected: isPreviewProtected(
+                vaultService: VaultServiceScope.of(context),
+                ownVault: task.vaultConfig,
+                ownEntityKey: taskVaultEntityKey(task.id),
+                inheritedVault: controller.spaceFor(task.spaceId)?.vaultConfig,
+                inheritedEntityKey: task.spaceId == null
+                    ? null
+                    : spaceVaultEntityKey(task.spaceId!),
+              ),
               onOpen: () => onTaskOpened(task),
               onToggle: () => onTaskToggled(task),
             ),
@@ -899,17 +988,21 @@ class _TaskListBody extends StatelessWidget {
 class _HomeTaskTile extends StatelessWidget {
   const _HomeTaskTile({
     required this.task,
+    required this.previewProtected,
     required this.onOpen,
     required this.onToggle,
   });
 
   final TaskItem task;
+  final bool previewProtected;
   final VoidCallback onOpen;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final preview = task.notePlainText?.trim().isNotEmpty == true
+    final preview = previewProtected
+        ? 'Protected content'
+        : task.notePlainText?.trim().isNotEmpty == true
         ? task.notePlainText!.trim()
         : 'Open the note editor to add rich content.';
 
@@ -949,6 +1042,14 @@ class _HomeTaskTile extends StatelessWidget {
                           : null,
                     ),
                   ),
+                  if (task.vaultConfig?.isEnabled == true) ...[
+                    const SizedBox(height: 4),
+                    const Icon(
+                      TablerIcons.lock,
+                      size: 14,
+                      color: taskMutedText,
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text(
                     preview,

@@ -1,3 +1,5 @@
+import '../../../core/vault/vault_models.dart';
+
 enum TaskPriority { low, medium, high, urgent }
 
 enum TaskStatus { pending, completed, overdue }
@@ -12,6 +14,7 @@ class TaskItem {
     required this.updatedAt,
     this.description,
     this.spaceId,
+    this.vaultConfig,
     this.noteDocumentJson,
     this.notePlainText,
     this.startDate,
@@ -26,6 +29,7 @@ class TaskItem {
   final String title;
   final String? description;
   final String? spaceId;
+  final VaultConfig? vaultConfig;
   final String? noteDocumentJson;
   final String? notePlainText;
   final DateTime? startDate;
@@ -104,6 +108,8 @@ class TaskItem {
     String? description,
     String? spaceId,
     bool clearSpaceId = false,
+    VaultConfig? vaultConfig,
+    bool clearVaultConfig = false,
     String? noteDocumentJson,
     String? notePlainText,
     DateTime? startDate,
@@ -127,6 +133,7 @@ class TaskItem {
       title: title ?? this.title,
       description: description ?? this.description,
       spaceId: clearSpaceId ? null : spaceId ?? this.spaceId,
+      vaultConfig: clearVaultConfig ? null : vaultConfig ?? this.vaultConfig,
       noteDocumentJson: noteDocumentJson ?? this.noteDocumentJson,
       notePlainText: notePlainText ?? this.notePlainText,
       startDate: clearStartDate ? null : startDate ?? this.startDate,

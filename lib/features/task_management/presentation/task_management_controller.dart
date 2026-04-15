@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/vault/vault_models.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../spaces/domain/task_space.dart';
 import '../data/task_note_codec.dart';
@@ -76,6 +77,7 @@ class TaskManagementController extends ChangeNotifier {
     DateTime? endDate,
     int? endMinutes,
     String? spaceId,
+    VaultConfig? vaultConfig,
   }) async {
     final now = DateTime.now();
     final task = TaskItem(
@@ -85,6 +87,7 @@ class TaskManagementController extends ChangeNotifier {
           ? null
           : description!.trim(),
       spaceId: spaceId ?? fixedSpaceId,
+      vaultConfig: vaultConfig,
       noteDocumentJson: buildPlainTextNoteDocumentJson(null),
       notePlainText: null,
       priority: priority,

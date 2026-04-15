@@ -6,7 +6,7 @@ import 'package:flutter_app/core/services/display_name_store.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
-import 'package:flutter_app/features/splash/presentation/splash_screen.dart';
+import 'package:flutter_app/shared/widgets/first_run_handoff_dialogs.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
@@ -40,7 +40,6 @@ void main() {
     onboardingStatusStore.completed = true;
     displayNameStore.displayName = 'Mark';
     await pumpApp(tester);
-    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
   }
 
@@ -78,65 +77,95 @@ void main() {
     );
   }
 
-  testWidgets('shows splash screen first', (WidgetTester tester) async {
-    await pumpApp(tester);
-
-    expect(find.byKey(SplashScreen.markerKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.markerKey), findsNothing);
-    expect(find.text('Flutter App'), findsOneWidget);
-  });
-
-  testWidgets('navigates to onboarding after five seconds on first launch', (
+  testWidgets('opens onboarding immediately on first launch', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
-    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(SplashScreen.markerKey), findsNothing);
     expect(find.byKey(OnboardingScreen.markerKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.homeTabKey), findsNothing);
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.byKey(DashboardScreen.markerKey), findsNothing);
+    expect(find.text('Welcome to Remindly'), findsOneWidget);
   });
 
-  testWidgets('completing onboarding writes the flag and opens dashboard', (
+  testWidgets('opens dashboard directly for returning users', (
+    WidgetTester tester,
+  ) async {
+    onboardingStatusStore.completed = true;
+    displayNameStore.displayName = 'Mark';
+    await pumpApp(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(OnboardingScreen.markerKey), findsNothing);
+    expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
+    expect(find.text('Hi, Mark'), findsOneWidget);
+  });
+
+  testWidgets('onboarding shows the new Remindly copy and matching icons', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
-    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Remindly'), findsOneWidget);
+    expect(find.byIcon(Icons.task_alt_rounded), findsOneWidget);
 
     await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();
+    expect(find.text('Create Tasks Easily'), findsOneWidget);
+    expect(find.byIcon(Icons.edit_note_rounded), findsOneWidget);
+
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
+    expect(find.text('Never Miss a Reminder'), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
+
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-
-    expect(onboardingStatusStore.completed, isTrue);
-    expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
-
-    await tester.enterText(find.byKey(DashboardScreen.nameFieldKey), 'Mark');
-    await tester.pump();
-    await tester.tap(find.byKey(DashboardScreen.nameSaveButtonKey));
-    await tester.pumpAndSettle();
-
-    expect(displayNameStore.displayName, 'Mark');
-    expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.welcomeButtonKey), findsNothing);
-
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(DashboardScreen.welcomeButtonKey), findsOneWidget);
-    await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Hi, Mark'), findsOneWidget);
+    expect(find.text('Stay Focused & Productive'), findsOneWidget);
+    expect(find.byIcon(Icons.timer_rounded), findsOneWidget);
   });
+
+  testWidgets(
+    'completing onboarding opens dashboard and keeps the dashboard prompt flow',
+    (WidgetTester tester) async {
+      await pumpApp(tester);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Get Started'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      expect(onboardingStatusStore.completed, isTrue);
+      expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
+      expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
+
+      await tester.enterText(find.byKey(DashboardScreen.nameFieldKey), 'Mark');
+      await tester.pump();
+      await tester.tap(find.byKey(DashboardScreen.nameSaveButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(displayNameStore.displayName, 'Mark');
+      expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
+      expect(find.byKey(DashboardScreen.welcomeButtonKey), findsNothing);
+
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(DashboardScreen.welcomeButtonKey), findsOneWidget);
+      await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
+      expect(find.text('Hi, Mark'), findsOneWidget);
+    },
+  );
 
   testWidgets('dashboard asks for a name when none is saved', (
     WidgetTester tester,
@@ -144,7 +173,6 @@ void main() {
     onboardingStatusStore.completed = true;
 
     await pumpApp(tester);
-    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
 
     expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
@@ -163,6 +191,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hi, Jamie'), findsOneWidget);
+  });
+
+  testWidgets('welcome modal CTA uses a full-width rounded rectangle style', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    await tester.pumpWidget(
+      wrapWithMaterial(const WelcomeHandoffDialog(displayName: 'Mark')),
+    );
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    final buttonFinder = find.byKey(DashboardScreen.welcomeButtonKey);
+    final buttonSize = tester.getSize(buttonFinder);
+    final dialogSize = tester.getSize(
+      find.byKey(DashboardScreen.welcomeScreenKey),
+    );
+    final button = tester.widget<FilledButton>(buttonFinder);
+    final shape = button.style?.shape?.resolve(<WidgetState>{});
+
+    expect(buttonSize.width, greaterThan(280));
+    expect(buttonSize.width, lessThan(dialogSize.width));
+    expect(shape, isA<RoundedRectangleBorder>());
+    expect(
+      (shape! as RoundedRectangleBorder).borderRadius,
+      BorderRadius.circular(12),
+    );
   });
 
   testWidgets('dashboard home shows live task summary content', (
@@ -225,28 +281,32 @@ void main() {
     expect(find.text('Send recap to leadership'), findsOneWidget);
   });
 
-  testWidgets('task card shows description and actual note preview separately', (
-    WidgetTester tester,
-  ) async {
-    taskRepository = InMemoryTaskRepository(
-      tasks: [
-        buildTask(
-          id: 'preview-task',
-          title: 'Prepare weekly report',
-          priority: TaskPriority.medium,
-          categoryId: 'work',
-          noteText: 'Full meeting notes for leadership sync',
-        ).copyWith(description: 'Send recap to leadership'),
-      ],
-    );
+  testWidgets(
+    'task card shows description and actual note preview separately',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'preview-task',
+            title: 'Prepare weekly report',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+            noteText: 'Full meeting notes for leadership sync',
+          ).copyWith(description: 'Send recap to leadership'),
+        ],
+      );
 
-    await openDashboard(tester);
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Send recap to leadership'), findsOneWidget);
-    expect(find.text('Full meeting notes for leadership sync'), findsOneWidget);
-  });
+      expect(find.text('Send recap to leadership'), findsOneWidget);
+      expect(
+        find.text('Full meeting notes for leadership sync'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('creation description stays separate from the note body', (
     WidgetTester tester,
@@ -267,39 +327,40 @@ void main() {
     expect(createdTask.notePlainText, isNull);
   });
 
-  testWidgets('editor autosaves title changes and reopens with persisted data', (
-    WidgetTester tester,
-  ) async {
-    await openDashboard(tester);
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'editor autosaves title changes and reopens with persisted data',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
 
-    await createTaskThroughUi(tester, title: 'Prepare weekly report');
+      await createTaskThroughUi(tester, title: 'Prepare weekly report');
 
-    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(TaskEditorScreen.titleFieldKey),
-      'Prepare monthly report',
-    );
-    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 900));
-    await tester.pumpAndSettle();
-    expect(find.byKey(TaskEditorScreen.autosaveStatusKey), findsOneWidget);
+      await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(TaskEditorScreen.titleFieldKey),
+        'Prepare monthly report',
+      );
+      await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pumpAndSettle();
+      expect(find.byKey(TaskEditorScreen.autosaveStatusKey), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Prepare monthly report'), findsOneWidget);
+      expect(find.text('Prepare monthly report'), findsOneWidget);
 
-    await tester.tap(find.text('Prepare monthly report'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Prepare monthly report'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Prepare monthly report'), findsOneWidget);
-  });
+      expect(find.text('Prepare monthly report'), findsOneWidget);
+    },
+  );
 
   testWidgets('editor metadata changes autosave and update timestamps', (
     WidgetTester tester,
@@ -314,10 +375,7 @@ void main() {
 
     await tester.pumpWidget(
       wrapWithMaterial(
-        TaskEditorScreen(
-          repository: taskRepository,
-          taskId: task.id,
-        ),
+        TaskEditorScreen(repository: taskRepository, taskId: task.id),
       ),
     );
     await tester.pumpAndSettle();

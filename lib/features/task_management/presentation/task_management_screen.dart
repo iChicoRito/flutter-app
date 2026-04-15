@@ -475,7 +475,11 @@ class _CategoryChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        constraints: const BoxConstraints(
+          minHeight: taskFilterControlHeight,
+          maxHeight: taskFilterControlHeight,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: selected ? taskPrimaryBlue : Colors.white,
           borderRadius: BorderRadius.circular(14),

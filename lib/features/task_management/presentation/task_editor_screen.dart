@@ -34,6 +34,7 @@ class TaskEditorScreen extends StatefulWidget {
   static const Key saveButtonKey = Key('task-editor-save-button');
   static const Key autosaveStatusKey = Key('task-editor-autosave-status');
   static const Key metadataCardKey = Key('task-editor-metadata-card');
+  static const Key viewDetailsButtonKey = Key('task-editor-view-details');
   static const Key editDetailsButtonKey = Key('task-editor-edit-details');
   static const Key deleteButtonKey = Key('task-editor-delete');
 
@@ -45,7 +46,7 @@ class TaskEditorScreen extends StatefulWidget {
   State<TaskEditorScreen> createState() => _TaskEditorScreenState();
 }
 
-enum _EditorMenuAction { edit, delete }
+enum _EditorMenuAction { viewDetails, edit, delete }
 
 class _TaskEditorScreenState extends State<TaskEditorScreen> {
   final _titleController = TextEditingController();
@@ -60,7 +61,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   bool _isHydrating = false;
   bool _isPersisting = false;
   bool _hasPendingChanges = false;
-  bool _isTaskDetailsExpanded = false;
   String? _loadError;
 
   @override
@@ -284,6 +284,21 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     }
   }
 
+  Future<void> _showDetailsDialog() async {
+    final task = _task;
+    if (task == null) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _TaskDetailsDialog(
+        task: task,
+        category: _categoryFor(task.categoryId),
+      ),
+    );
+  }
+
   Future<void> _deleteTask() async {
     final task = _task;
     if (task == null) {
@@ -396,6 +411,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 ),
                 onSelected: (value) {
                   switch (value) {
+                    case _EditorMenuAction.viewDetails:
+                      _showDetailsDialog();
                     case _EditorMenuAction.edit:
                       _openDetailsSheet();
                     case _EditorMenuAction.delete:
@@ -403,6 +420,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   }
                 },
                 itemBuilder: (context) => [
+                  const PopupMenuItem<_EditorMenuAction>(
+                    key: TaskEditorScreen.viewDetailsButtonKey,
+                    value: _EditorMenuAction.viewDetails,
+                    child: Text('View Details'),
+                  ),
                   PopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.editDetailsButtonKey,
                     value: _EditorMenuAction.edit,
@@ -452,38 +474,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         onRetry: _loadEditorState,
       );
     }
-
-    final viewInsets = MediaQuery.viewInsetsOf(context);
-
-    final isWritingMode = viewInsets.bottom > 0;
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            child: !isWritingMode
-                ? Padding(
-                    key: const ValueKey('details-visible'),
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _MetadataCard(
-                      key: TaskEditorScreen.metadataCardKey,
-                      task: task,
-                      category: _categoryFor(task.categoryId),
-                      isExpanded: _isTaskDetailsExpanded,
-                      onHeaderTap: () {
-                        setState(() {
-                          _isTaskDetailsExpanded = !_isTaskDetailsExpanded;
-                        });
-                      },
-                    ),
-                  )
-                : const SizedBox.shrink(key: ValueKey('details-hidden')),
-          ),
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -551,121 +546,132 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   }
 }
 
-class _MetadataCard extends StatelessWidget {
-  const _MetadataCard({
-    super.key,
-    required this.task,
-    required this.category,
-    required this.isExpanded,
-    required this.onHeaderTap,
-  });
+class _TaskDetailsDialog extends StatelessWidget {
+  const _TaskDetailsDialog({required this.task, required this.category});
 
   final TaskItem task;
   final TaskCategory? category;
-  final bool isExpanded;
-  final VoidCallback onHeaderTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: taskBorderColor),
+    final description = task.description?.trim().isNotEmpty == true
+        ? task.description!.trim()
+        : 'No short description added yet.';
+    final detailChips = <Widget>[
+      _InfoPill(
+        icon: TablerIcons.calendar_event,
+        label: 'Created ${_formatDateTime(task.createdAt)}',
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: onHeaderTap,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Task Details',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: taskDarkText,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Keep the note attached to the right category, priority, and target schedule.',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: taskMutedText,
-                                      height: 1.45,
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Icon(
-                            isExpanded
-                                ? TablerIcons.chevron_up
-                                : TablerIcons.chevron_down,
-                            size: 18,
-                            color: taskMutedText,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (isExpanded) ...[
-            const SizedBox(height: 18),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              runSpacing: 12,
+      _InfoPill(
+        icon: TablerIcons.clock_edit,
+        label: 'Updated ${_formatDateTime(task.updatedAt)}',
+      ),
+      _InfoPill(icon: TablerIcons.flag_3, label: _priorityLabel(task.priority)),
+      _InfoPill(icon: TablerIcons.calendar_due, label: _scheduleLabel(task)),
+    ];
+
+    return Dialog(
+      key: TaskEditorScreen.metadataCardKey,
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                _InfoPill(
-                  icon: TablerIcons.calendar_event,
-                  label: 'Created ${_formatDateTime(task.createdAt)}',
-                ),
-                _InfoPill(
-                  icon: TablerIcons.clock_edit,
-                  label: 'Updated ${_formatDateTime(task.updatedAt)}',
-                ),
-                if (category != null)
-                  _InfoPill(
-                    icon: resolveTaskCategoryIcon(category!.iconKey),
-                    label: category!.name,
-                    iconColor: category!.color,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Task Details',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: taskDarkText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
                   ),
-                _InfoPill(
-                  icon: TablerIcons.flag_3,
-                  label: _priorityLabel(task.priority),
                 ),
-                _InfoPill(
-                  icon: TablerIcons.calendar_due,
-                  label: _scheduleLabel(task),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(
+                    TablerIcons.x,
+                    size: 18,
+                    color: taskMutedText,
+                  ),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            const Divider(height: 1, thickness: 1, color: taskBorderColor),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: taskDarkText,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+                if (category != null) ...[
+                  const SizedBox(width: 10),
+                  _TaskDetailsBadge(category: category!),
+                ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: taskMutedText,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(spacing: 10, runSpacing: 12, children: detailChips),
+            ),
+            const SizedBox(height: 20),
+            const Divider(height: 1, thickness: 1, color: taskBorderColor),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(40),
+                  backgroundColor: const Color(0xFFDCE7F6),
+                  foregroundColor: taskPrimaryBlue,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('Close'),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -732,6 +738,42 @@ class _MetadataCard extends StatelessWidget {
     return left.year == right.year &&
         left.month == right.month &&
         left.day == right.day;
+  }
+}
+
+class _TaskDetailsBadge extends StatelessWidget {
+  const _TaskDetailsBadge({required this.category});
+
+  final TaskCategory category;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: category.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: category.color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            resolveTaskCategoryIcon(category.iconKey),
+            size: 11,
+            color: category.color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            category.name,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: category.color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -1,29 +1,40 @@
+import 'package:flutter/material.dart';
+
 class OnboardingStepData {
-  const OnboardingStepData({required this.title, required this.description});
+  const OnboardingStepData({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
 
   final String title;
   final String description;
+  final IconData icon;
 }
 
 const onboardingSteps = <OnboardingStepData>[
   OnboardingStepData(
-    title: 'Welcome Aboard',
+    title: 'Welcome to Remindly',
     description:
-        'Placeholder text for your opening message. Use this step to introduce the app in a simple, friendly way.',
+        'Your smart task companion that helps you remember what matters. Stay on top of your day with simple, powerful tools.',
+    icon: Icons.task_alt_rounded,
   ),
   OnboardingStepData(
-    title: 'Discover Features',
+    title: 'Create Tasks Easily',
     description:
-        'Placeholder text for key capabilities. Highlight the main things users can do without overcrowding the layout.',
+        'Add tasks in seconds, organize them by category, and set priorities so you always know what to focus on.',
+    icon: Icons.edit_note_rounded,
   ),
   OnboardingStepData(
-    title: 'Stay Organized',
+    title: 'Never Miss a Reminder',
     description:
-        'Placeholder text for helpful routines, reminders, or tools that make the experience feel clear and manageable.',
+        'Set reminders for your tasks and get notified right on time, even when you\'re offline.',
+    icon: Icons.notifications_active_rounded,
   ),
   OnboardingStepData(
-    title: 'Ready To Begin',
+    title: 'Stay Focused & Productive',
     description:
-        'Placeholder text for the final onboarding message. Encourage users to continue into the app with confidence.',
+        'Use built-in timers to stay focused, manage your time better, and complete your tasks with confidence.',
+    icon: Icons.timer_rounded,
   ),
 ];

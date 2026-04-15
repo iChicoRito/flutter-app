@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/display_name_store.dart';
+import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/task_repository_scope.dart';
 import '../../task_management/domain/task_item.dart';
@@ -26,11 +25,11 @@ class DashboardScreen extends StatefulWidget {
   static const Key overdueHeaderKey = Key('dashboard-overdue-header');
   static const Key completedHeaderKey = Key('dashboard-completed-header');
   static const Key progressLabelKey = Key('dashboard-progress-label');
-  static const Key namePromptKey = Key('dashboard-name-prompt');
-  static const Key nameFieldKey = Key('dashboard-name-field');
-  static const Key nameSaveButtonKey = Key('dashboard-name-save');
-  static const Key welcomeScreenKey = Key('dashboard-welcome-screen');
-  static const Key welcomeButtonKey = Key('dashboard-welcome-start');
+  static const Key namePromptKey = FirstRunHandoffKeys.namePrompt;
+  static const Key nameFieldKey = FirstRunHandoffKeys.nameField;
+  static const Key nameSaveButtonKey = FirstRunHandoffKeys.nameSaveButton;
+  static const Key welcomeScreenKey = FirstRunHandoffKeys.welcomeScreen;
+  static const Key welcomeButtonKey = FirstRunHandoffKeys.welcomeButton;
 
   static Key taskToggleKey(String taskId) => Key('task-toggle-$taskId');
   static Key summaryCountKey(String label) => Key('summary-count-$label');
@@ -127,7 +126,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final enteredName = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const _DisplayNamePromptDialog(),
+      builder: (context) => const DisplayNamePromptDialog(),
     );
     _isPromptOpen = false;
 
@@ -148,7 +147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _WelcomeHandoffDialog(displayName: trimmed),
+      builder: (context) => WelcomeHandoffDialog(displayName: trimmed),
     );
   }
 
@@ -994,167 +993,6 @@ class _DashboardEmptyState extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DisplayNamePromptDialog extends StatefulWidget {
-  const _DisplayNamePromptDialog();
-
-  @override
-  State<_DisplayNamePromptDialog> createState() =>
-      _DisplayNamePromptDialogState();
-}
-
-class _DisplayNamePromptDialogState extends State<_DisplayNamePromptDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    Navigator.of(context).pop(_controller.text.trim());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      key: DashboardScreen.namePromptKey,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'What should we call you?',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your name personalizes the dashboard and welcome flow.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              key: DashboardScreen.nameFieldKey,
-              controller: _controller,
-              decoration: taskInputDecoration(
-                context: context,
-                hintText: 'Enter your name',
-              ),
-              autofocus: true,
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              key: DashboardScreen.nameSaveButtonKey,
-              onPressed: _submit,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(50),
-                backgroundColor: taskPrimaryBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WelcomeHandoffDialog extends StatefulWidget {
-  const _WelcomeHandoffDialog({required this.displayName});
-
-  final String displayName;
-
-  @override
-  State<_WelcomeHandoffDialog> createState() => _WelcomeHandoffDialogState();
-}
-
-class _WelcomeHandoffDialogState extends State<_WelcomeHandoffDialog> {
-  bool _showButton = false;
-
-  @override
-  void initState() {
-    super.initState();
-    Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _showButton = true;
-        });
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      key: DashboardScreen.welcomeScreenKey,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: taskAccentBlue,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Icon(
-                TablerIcons.sparkles,
-                color: taskPrimaryBlue,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Welcome, ${widget.displayName}',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your dashboard is ready with live task notes and quick writing flows.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: taskSecondaryText,
-                height: 1.5,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 18),
-            if (_showButton)
-              FilledButton(
-                key: DashboardScreen.welcomeButtonKey,
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: taskPrimaryBlue,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Let\'s Go'),
-              ),
           ],
         ),
       ),

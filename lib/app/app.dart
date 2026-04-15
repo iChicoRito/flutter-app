@@ -12,10 +12,11 @@ import '../core/services/onboarding_status_store.dart';
 import '../core/services/task_reminder_scope.dart';
 import '../core/services/task_reminder_service.dart';
 import '../core/services/task_repository_scope.dart';
+import '../features/dashboard/presentation/dashboard_screen.dart';
+import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/task_reminder/presentation/task_alarm_screen.dart';
 import '../features/task_management/data/hive_task_repository.dart';
 import '../features/task_management/domain/task_repository.dart';
-import '../features/splash/presentation/splash_screen.dart';
 
 class MyApp extends StatefulWidget {
   MyApp({
@@ -254,7 +255,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               ],
             );
           },
-          title: 'Flutter App',
+          title: 'Remindly',
           debugShowCheckedModeBanner: false,
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
@@ -268,16 +269,49 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               seedColor: primaryBlue,
               brightness: Brightness.light,
             ),
-            scaffoldBackgroundColor: primaryBlue,
+            scaffoldBackgroundColor: Colors.white,
             textTheme: GoogleFonts.poppinsTextTheme(),
             primaryTextTheme: GoogleFonts.poppinsTextTheme(),
           ),
-          home: SplashScreen(
+          home: _InitialLaunchGate(
             onboardingStatusStore: widget.onboardingStatusStore,
             displayNameStore: widget.displayNameStore,
           ),
         ),
       ),
+    );
+  }
+}
+
+class _InitialLaunchGate extends StatelessWidget {
+  const _InitialLaunchGate({
+    required this.onboardingStatusStore,
+    required this.displayNameStore,
+  });
+
+  final OnboardingStatusStore onboardingStatusStore;
+  final DisplayNameStore displayNameStore;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: onboardingStatusStore.isCompleted(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: SafeArea(child: Center(child: CircularProgressIndicator())),
+          );
+        }
+
+        if (snapshot.data ?? false) {
+          return DashboardScreen(displayNameStore: displayNameStore);
+        }
+
+        return OnboardingScreen(
+          onboardingStatusStore: onboardingStatusStore,
+          displayNameStore: displayNameStore,
+        );
+      },
     );
   }
 }

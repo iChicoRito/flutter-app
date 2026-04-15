@@ -14,6 +14,7 @@ const taskDarkText = Color(0xFF333333);
 const taskSecondaryText = Color(0xFF6B7280);
 const taskMutedText = Color(0xFF999999);
 const taskDangerText = Color(0xFFD63939);
+const taskFilterControlHeight = 44.0;
 const taskSuccessText = Color(0xFF0CA678);
 const taskWarningText = Color(0xFFF59F00);
 
@@ -302,8 +303,11 @@ class TaskCompactDropdown<T> extends StatelessWidget {
         }).toList();
       },
       child: Container(
-        constraints: const BoxConstraints(minHeight: 44),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        constraints: const BoxConstraints(
+          minHeight: taskFilterControlHeight,
+          maxHeight: taskFilterControlHeight,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),

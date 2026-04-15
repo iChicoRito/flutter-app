@@ -161,7 +161,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     const Spacer(),
                     _OnboardingVisual(
-                      index: _currentIndex,
+                      step: step,
                       primary: primary,
                       secondary: secondary,
                       accent: accent,
@@ -302,26 +302,19 @@ class _OnboardingBackdrop extends StatelessWidget {
 
 class _OnboardingVisual extends StatelessWidget {
   const _OnboardingVisual({
-    required this.index,
+    required this.step,
     required this.primary,
     required this.secondary,
     required this.accent,
   });
 
-  final int index;
+  final OnboardingStepData step;
   final Color primary;
   final Color secondary;
   final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final icon = switch (index) {
-      0 => Icons.rocket_launch_rounded,
-      1 => Icons.explore_rounded,
-      2 => Icons.auto_awesome_motion_rounded,
-      _ => Icons.check_circle_rounded,
-    };
-
     return AnimatedContainer(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
@@ -331,7 +324,14 @@ class _OnboardingVisual extends StatelessWidget {
         shape: BoxShape.circle,
         color: secondary.withValues(alpha: 0.35),
       ),
-      child: Center(child: Icon(icon, size: 54, color: primary)),
+      child: Center(
+        child: Icon(
+          step.icon,
+          key: ValueKey(step.title),
+          size: 54,
+          color: primary,
+        ),
+      ),
     );
   }
 }

@@ -10,6 +10,7 @@ import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
+import 'package:flutter_app/features/spaces/presentation/spaces_page.dart';
 import 'package:flutter_app/shared/widgets/first_run_handoff_dialogs.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
@@ -632,6 +633,119 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Planning session'), findsOneWidget);
+  });
+
+  testWidgets('task filters can show only vault-protected tasks', (
+    WidgetTester tester,
+  ) async {
+    const vaultConfig = VaultConfig(
+      isEnabled: true,
+      method: VaultMethod.password,
+      secretKeyRef: 'secret',
+    );
+    final now = DateTime(2026, 4, 13, 9);
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'direct-vault-task',
+          title: 'Direct Vault Task',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+          vaultConfig: vaultConfig,
+        ),
+        buildTask(
+          id: 'space-vault-task',
+          title: 'Inherited Vault Task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(spaceId: 'vault-space'),
+        buildTask(
+          id: 'plain-task',
+          title: 'Plain Task',
+          priority: TaskPriority.low,
+          categoryId: 'work',
+        ),
+      ],
+      spaces: [
+        TaskSpace(
+          id: 'vault-space',
+          name: 'Locked Space',
+          description: 'Protected space',
+          categoryId: 'work',
+          colorValue: Colors.blue.toARGB32(),
+          createdAt: now,
+          updatedAt: now,
+          vaultConfig: vaultConfig,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskManagementScreen.vaultDropdownKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(TaskManagementScreen.vaultFilterKey('vaultOnly')).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Direct Vault Task'), findsOneWidget);
+    expect(find.text('Inherited Vault Task'), findsOneWidget);
+    expect(find.text('Plain Task'), findsNothing);
+  });
+
+  testWidgets('spaces filters can show only non-vault spaces', (
+    WidgetTester tester,
+  ) async {
+    const vaultConfig = VaultConfig(
+      isEnabled: true,
+      method: VaultMethod.password,
+      secretKeyRef: 'secret',
+    );
+    final now = DateTime(2026, 4, 13, 9);
+    taskRepository = InMemoryTaskRepository(
+      spaces: [
+        TaskSpace(
+          id: 'vault-space',
+          name: 'Vault Space',
+          description: 'Protected',
+          categoryId: 'work',
+          colorValue: Colors.blue.toARGB32(),
+          createdAt: now,
+          updatedAt: now,
+          vaultConfig: vaultConfig,
+        ),
+        TaskSpace(
+          id: 'plain-space',
+          name: 'Plain Space',
+          description: 'Open',
+          categoryId: 'work',
+          colorValue: Colors.green.toARGB32(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Spaces'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(SpacesPage.vaultDropdownKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(SpacesPage.vaultFilterKey('nonVaultOnly')).last,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Plain Space'), findsWidgets);
+    expect(find.text('Vault Space'), findsNothing);
   });
 
   testWidgets('task editor opens from both tasks tab and dashboard home', (

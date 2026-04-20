@@ -23,6 +23,10 @@ class SpacesPage extends StatefulWidget {
     required this.reminderService,
   });
 
+  static const Key vaultDropdownKey = Key('spaces-vault-dropdown');
+
+  static Key vaultFilterKey(String value) => Key('spaces-vault-filter-$value');
+
   final TaskRepository repository;
   final TaskReminderService reminderService;
 
@@ -384,14 +388,14 @@ class _SpacesPageState extends State<SpacesPage> {
         }
 
         return ColoredBox(
-          color: Colors.white,
+          color: taskSurface,
           child: Stack(
             children: [
               RefreshIndicator(
                 color: taskPrimaryBlue,
                 onRefresh: _controller.load,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 120),
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,7 +440,9 @@ class _SpacesPageState extends State<SpacesPage> {
                       child: _SpacesCategoryFilterRow(
                         categories: _controller.categories,
                         selectedCategoryId: _controller.categoryFilterId,
-                        onSelected: _controller.updateCategoryFilter,
+                        selectedVaultFilter: _controller.vaultFilter,
+                        onCategorySelected: _controller.updateCategoryFilter,
+                        onVaultSelected: _controller.updateVaultFilter,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -560,13 +566,6 @@ class _SpacesViewToggle extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: taskBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -697,50 +696,77 @@ class _SpacesCategoryFilterRow extends StatelessWidget {
   const _SpacesCategoryFilterRow({
     required this.categories,
     required this.selectedCategoryId,
-    required this.onSelected,
+    required this.selectedVaultFilter,
+    required this.onCategorySelected,
+    required this.onVaultSelected,
   });
 
   final List<TaskCategory> categories;
   final String? selectedCategoryId;
-  final ValueChanged<String?> onSelected;
+  final SpacesVaultFilter selectedVaultFilter;
+  final ValueChanged<String?> onCategorySelected;
+  final ValueChanged<SpacesVaultFilter> onVaultSelected;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: _SpacesCategoryChip(
-              label: 'All Categories',
-              icon: null,
-              iconColor: selectedCategoryId == null
-                  ? Colors.white
-                  : taskMutedText,
-              selected: selectedCategoryId == null,
-              onTap: () => onSelected(null),
-            ),
-          ),
-          ...categories.map((category) {
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _SpacesCategoryChip(
-                label: category.name,
-                icon: resolveTaskCategoryIcon(category.iconKey),
-                iconColor: selectedCategoryId == category.id
-                    ? Colors.white
-                    : category.color,
-                selected: selectedCategoryId == category.id,
-                onTap: () => onSelected(
-                  selectedCategoryId == category.id ? null : category.id,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TaskCompactDropdown<SpacesVaultFilter>(
+          buttonKey: SpacesPage.vaultDropdownKey,
+          menuKeyBuilder: (value) => SpacesPage.vaultFilterKey(value.name),
+          currentValue: selectedVaultFilter,
+          currentLabel: _vaultFilterLabel(selectedVaultFilter),
+          onSelected: onVaultSelected,
+          items: SpacesVaultFilter.values,
+          labelBuilder: _vaultFilterLabel,
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _SpacesCategoryChip(
+                  label: 'All Categories',
+                  icon: null,
+                  iconColor: selectedCategoryId == null
+                      ? Colors.white
+                      : taskMutedText,
+                  selected: selectedCategoryId == null,
+                  onTap: () => onCategorySelected(null),
                 ),
               ),
-            );
-          }),
-        ],
-      ),
+              ...categories.map((category) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _SpacesCategoryChip(
+                    label: category.name,
+                    icon: resolveTaskCategoryIcon(category.iconKey),
+                    iconColor: selectedCategoryId == category.id
+                        ? Colors.white
+                        : category.color,
+                    selected: selectedCategoryId == category.id,
+                    onTap: () => onCategorySelected(
+                      selectedCategoryId == category.id ? null : category.id,
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
     );
+  }
+
+  static String _vaultFilterLabel(SpacesVaultFilter filter) {
+    return switch (filter) {
+      SpacesVaultFilter.all => 'All Vault',
+      SpacesVaultFilter.vaultOnly => 'Vault',
+      SpacesVaultFilter.nonVaultOnly => 'Non-Vault',
+    };
   }
 }
 

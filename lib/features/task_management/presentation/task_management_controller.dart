@@ -10,7 +10,10 @@ import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 
 enum TaskStatusFilter { all, today, upcoming, overdue, completed }
+
 enum TaskPriorityFilter { all, low, medium, high, urgent }
+
+enum TaskVaultFilter { all, vaultOnly, nonVaultOnly }
 
 class TaskManagementController extends ChangeNotifier {
   TaskManagementController(
@@ -35,6 +38,7 @@ class TaskManagementController extends ChangeNotifier {
   String? categoryFilterId;
   TaskPriorityFilter _priorityFilter = TaskPriorityFilter.all;
   TaskStatusFilter _statusFilter = TaskStatusFilter.all;
+  TaskVaultFilter _vaultFilter = TaskVaultFilter.all;
   List<TaskItem> _tasks = [];
   List<TaskCategory> _categories = [];
   List<TaskSpace> _spaces = [];
@@ -44,6 +48,7 @@ class TaskManagementController extends ChangeNotifier {
   List<TaskSpace> get spaces => _spaces;
   TaskPriorityFilter get priorityFilter => _priorityFilter;
   TaskStatusFilter get statusFilter => _statusFilter;
+  TaskVaultFilter get vaultFilter => _vaultFilter;
 
   Future<void> load() async {
     isLoading = true;
@@ -160,6 +165,11 @@ class TaskManagementController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateVaultFilter(TaskVaultFilter value) {
+    _vaultFilter = value;
+    notifyListeners();
+  }
+
   TaskCategory? categoryFor(String categoryId) {
     for (final category in _categories) {
       if (category.id == categoryId) {
@@ -196,8 +206,7 @@ class TaskManagementController extends ChangeNotifier {
           noteText.contains(query) ||
           (categoryLookup[task.categoryId]?.toLowerCase().contains(query) ??
               false);
-      final matchesCategory =
-          lockedCategoryId != null
+      final matchesCategory = lockedCategoryId != null
           ? task.categoryId == lockedCategoryId
           : categoryFilterId == null || task.categoryId == categoryFilterId;
       final matchesPriority = switch (_priorityFilter) {
@@ -207,8 +216,7 @@ class TaskManagementController extends ChangeNotifier {
         TaskPriorityFilter.high => task.priority == TaskPriority.high,
         TaskPriorityFilter.urgent => task.priority == TaskPriority.urgent,
       };
-      final matchesSpace =
-          fixedSpaceId == null || task.spaceId == fixedSpaceId;
+      final matchesSpace = fixedSpaceId == null || task.spaceId == fixedSpaceId;
       final matchesStatus = switch (_statusFilter) {
         TaskStatusFilter.all => true,
         TaskStatusFilter.today => _isTodayBucket(task, now),
@@ -217,11 +225,20 @@ class TaskManagementController extends ChangeNotifier {
           !task.isCompleted && task.statusAt(now) == TaskStatus.overdue,
         TaskStatusFilter.completed => task.isCompleted,
       };
+      final isVaultProtected =
+          task.vaultConfig?.isEnabled == true ||
+          spaceFor(task.spaceId)?.vaultConfig?.isEnabled == true;
+      final matchesVault = switch (_vaultFilter) {
+        TaskVaultFilter.all => true,
+        TaskVaultFilter.vaultOnly => isVaultProtected,
+        TaskVaultFilter.nonVaultOnly => !isVaultProtected,
+      };
       return matchesSearch &&
           matchesCategory &&
           matchesPriority &&
           matchesSpace &&
-          matchesStatus;
+          matchesStatus &&
+          matchesVault;
     }).toList();
 
     filtered.sort((a, b) {

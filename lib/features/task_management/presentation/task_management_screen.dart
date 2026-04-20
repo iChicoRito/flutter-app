@@ -41,6 +41,7 @@ class TaskManagementScreen extends StatefulWidget {
     'task-management-priority-dropdown',
   );
   static const Key statusDropdownKey = Key('task-management-status-dropdown');
+  static const Key vaultDropdownKey = Key('task-management-vault-dropdown');
   static const Key allCategoriesKey = Key('task-category-filter-all');
   static const Key createTitleFieldKey = Key('task-create-title-field');
   static const Key createDescriptionFieldKey = Key(
@@ -54,6 +55,8 @@ class TaskManagementScreen extends StatefulWidget {
       Key('task-priority-filter-$value');
 
   static Key statusFilterKey(String value) => Key('task-status-filter-$value');
+
+  static Key vaultFilterKey(String value) => Key('task-vault-filter-$value');
 
   static Key categoryFilterKey(String id) => Key('task-category-filter-$id');
 
@@ -83,7 +86,7 @@ class TaskManagementScreen extends StatefulWidget {
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSelectionMode = false;
-  bool _isFiltersExpanded = true;
+  bool _isFiltersExpanded = false;
 
   TaskManagementController get _controller => widget.controller;
 
@@ -775,6 +778,21 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 12),
+                            TaskCompactDropdown<TaskVaultFilter>(
+                              buttonKey: TaskManagementScreen.vaultDropdownKey,
+                              menuKeyBuilder: (value) =>
+                                  TaskManagementScreen.vaultFilterKey(
+                                    value.name,
+                                  ),
+                              currentValue: _controller.vaultFilter,
+                              currentLabel: _vaultFilterLabel(
+                                _controller.vaultFilter,
+                              ),
+                              onSelected: _controller.updateVaultFilter,
+                              items: TaskVaultFilter.values,
+                              labelBuilder: _vaultFilterLabel,
+                            ),
                             if (widget.lockedCategoryId == null) ...[
                               const SizedBox(height: 12),
                               _CategoryFilterRow(
@@ -849,7 +867,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           onPressed: _controller.isSaving ? null : _openCreateFlow,
           backgroundColor: taskPrimaryBlue,
           foregroundColor: Colors.white,
-          elevation: 2,
+          elevation: 0,
+          focusElevation: 0,
+          hoverElevation: 0,
+          highlightElevation: 0,
           icon: const Icon(TablerIcons.plus, size: 18),
           label: Text(widget.fabLabel),
         ),
@@ -864,6 +885,14 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       TaskPriorityFilter.medium => 'Medium',
       TaskPriorityFilter.high => 'High',
       TaskPriorityFilter.urgent => 'Urgent',
+    };
+  }
+
+  static String _vaultFilterLabel(TaskVaultFilter filter) {
+    return switch (filter) {
+      TaskVaultFilter.all => 'All Vault',
+      TaskVaultFilter.vaultOnly => 'Vault',
+      TaskVaultFilter.nonVaultOnly => 'Non-Vault',
     };
   }
 

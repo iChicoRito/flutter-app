@@ -163,6 +163,7 @@ InputDecoration taskInputDecoration({
   required BuildContext context,
   required String hintText,
   Widget? prefixIcon,
+  Color? fillColor,
 }) {
   return InputDecoration(
     hintText: hintText,
@@ -171,7 +172,7 @@ InputDecoration taskInputDecoration({
     ).textTheme.bodyMedium?.copyWith(color: taskMutedText),
     prefixIcon: prefixIcon,
     filled: true,
-    fillColor: Colors.white,
+    fillColor: fillColor ?? Colors.white,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(18),

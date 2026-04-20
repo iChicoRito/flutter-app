@@ -1483,25 +1483,26 @@ class _ProfileTab extends StatelessWidget {
     return ColoredBox(
       color: taskSurface,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 58, 18, 112),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 112),
         children: [
           Text(
             'My Profile',
-            style: theme.textTheme.titleMedium?.copyWith(
+            style: theme.textTheme.headlineSmall?.copyWith(
               color: taskDarkText,
               fontWeight: FontWeight.w700,
+              fontSize: 19,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text(
             'Manage and update your profile',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: const Color(0xFF777777),
-              fontSize: 13,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: taskMutedText,
+              fontSize: 14,
               height: 1.35,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 18),
           _ProfileSummaryCard(
             name: name,
             profileImageData: profileImageData,

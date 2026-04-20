@@ -8,6 +8,8 @@ import '../../task_management/domain/task_item.dart';
 import '../../task_management/domain/task_repository.dart';
 import '../domain/task_space.dart';
 
+enum SpacesVaultFilter { all, vaultOnly, nonVaultOnly }
+
 class SpacesController extends ChangeNotifier {
   SpacesController(
     this._repository, {
@@ -25,12 +27,14 @@ class SpacesController extends ChangeNotifier {
   String? errorMessage;
   String searchQuery = '';
   String? categoryFilterId;
+  SpacesVaultFilter _vaultFilter = SpacesVaultFilter.all;
   List<TaskSpace> _spaces = [];
   List<TaskCategory> _categories = [];
   List<TaskItem> _tasks = [];
 
   List<TaskSpace> get spaces => _spaces;
   List<TaskCategory> get categories => _categories;
+  SpacesVaultFilter get vaultFilter => _vaultFilter;
 
   Future<void> load() async {
     isLoading = true;
@@ -77,6 +81,11 @@ class SpacesController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateVaultFilter(SpacesVaultFilter value) {
+    _vaultFilter = value;
+    notifyListeners();
+  }
+
   List<TaskSpace> filteredSpaces() {
     final query = searchQuery.trim().toLowerCase();
     final categoryLookup = {
@@ -92,7 +101,13 @@ class SpacesController extends ChangeNotifier {
               false);
       final matchesCategory =
           categoryFilterId == null || space.categoryId == categoryFilterId;
-      return matchesSearch && matchesCategory;
+      final isVaultProtected = space.vaultConfig?.isEnabled == true;
+      final matchesVault = switch (_vaultFilter) {
+        SpacesVaultFilter.all => true,
+        SpacesVaultFilter.vaultOnly => isVaultProtected,
+        SpacesVaultFilter.nonVaultOnly => !isVaultProtected,
+      };
+      return matchesSearch && matchesCategory && matchesVault;
     }).toList();
   }
 

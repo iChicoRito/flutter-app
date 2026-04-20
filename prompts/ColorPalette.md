@@ -1,182 +1,177 @@
-{
-  "theme": {
-    "ratio": {
-      "primary": "60%",
-      "secondary": "30%",
-      "accent": "10%"
-    },
-    "primary": {
-      "base": "#066FD1",
-      "pressed": "#055CB0",
-      "disabled": "#A9CBEF",
-      "contrastText": "#FFFFFF"
-    },
-    "secondary": {
-      "base": "#90CAF9",
-      "pressed": "#74B6F2",
-      "disabled": "#D6EAFB",
-      "contrastText": "#0F172A"
-    },
-    "accent": {
-      "base": "#E6F0FA"
-    },
-    "background": {
-      "base": "#FFFFFF",
-      "surface": "#F9FAFB",
-      "surfaceAlt": "#F3F6F9"
-    },
-    "border": {
-      "default": "#E5E8EC",
-      "muted": "#EEF1F4",
-      "focus": "#066FD1",
-      "error": "#D63939"
-    },
-    "text": {
-      "primary": "#333333",
-      "secondary": "#6B7280",
-      "muted": "#999999",
-      "inverse": "#FFFFFF",
-      "placeholder": "#B0B7C3",
-      "disabled": "#C7CDD6",
-      "link": "#066FD1"
-    },
-    "icon": {
-      "primary": "#333333",
-      "secondary": "#6B7280",
-      "muted": "#999999",
-      "inverse": "#FFFFFF",
-      "disabled": "#C7CDD6"
-    }
-  },
-  "components": {
-    "badge": {
-      "primary": {
-        "background": "#E6F0FA",
-        "text": "#066FD1"
-      },
-      "secondary": {
-        "background": "#F9FAFB",
-        "text": "#6B7280"
-      },
-      "success": {
-        "background": "#E6F6F1",
-        "text": "#0CA678"
-      },
-      "warning": {
-        "background": "#FEF5E5",
-        "text": "#F59F00"
-      },
-      "danger": {
-        "background": "#FBEBEB",
-        "text": "#D63939"
-      },
-      "dark": {
-        "background": "#E8E9EB",
-        "text": "#1F2937"
-      }
-    },
-    "button": {
-      "primary": {
-        "background": "#066FD1",
-        "text": "#FFFFFF",
-        "pressed": "#055CB0",
-        "disabledBackground": "#A9CBEF",
-        "disabledText": "#FFFFFF"
-      },
-      "secondary": {
-        "background": "#E6F0FA",
-        "text": "#066FD1",
-        "pressed": "#D7E8F8",
-        "disabledBackground": "#EEF4FA",
-        "disabledText": "#9BB8D4"
-      },
-      "soft": {
-        "primary": {
-          "background": "#E6F0FA",
-          "text": "#066FD1",
-          "pressed": "#D7E8F8",
-          "disabledBackground": "#EEF4FA",
-          "disabledText": "#9BB8D4"
-        },
-        "secondary": {
-          "background": "#F9FAFB",
-          "text": "#6B7280",
-          "pressed": "#F3F4F6",
-          "disabledBackground": "#F9FAFB",
-          "disabledText": "#C7CDD6"
-        },
-        "success": {
-          "background": "#E6F6F1",
-          "text": "#0CA678",
-          "pressed": "#D0EEE6",
-          "disabledBackground": "#F0F9F5",
-          "disabledText": "#9BD5C1"
-        },
-        "warning": {
-          "background": "#FEF5E5",
-          "text": "#F59F00",
-          "pressed": "#FDEACE",
-          "disabledBackground": "#FFF8EE",
-          "disabledText": "#FCD48C"
-        },
-        "danger": {
-          "background": "#FBEBEB",
-          "text": "#D63939",
-          "pressed": "#F7DCDC",
-          "disabledBackground": "#FDF3F3",
-          "disabledText": "#EAA9A9"
-        },
-        "dark": {
-          "background": "#E8E9EB",
-          "text": "#1F2937",
-          "pressed": "#DEE0E3",
-          "disabledBackground": "#F3F4F5",
-          "disabledText": "#B0B5BD"
-        }
-      }
-    },
-    "input": {
-      "background": "#FFFFFF",
-      "text": "#333333",
-      "placeholder": "#B0B7C3",
-      "border": "#E5E8EC",
-      "focusBorder": "#066FD1",
-      "errorBorder": "#D63939",
-      "disabledBackground": "#F3F6F9",
-      "disabledText": "#999999"
-    },
-    "card": {
-      "background": "#F9FAFB",
-      "border": "#E5E8EC"
-    },
-    "divider": {
-      "color": "#EEF1F4"
-    }
-  },
-  "status": {
-    "success": {
-      "base": "#0CA678",
-      "background": "#E6F6F1",
-      "text": "#0CA678"
-    },
-    "warning": {
-      "base": "#F59F00",
-      "background": "#FEF5E5",
-      "text": "#F59F00"
-    },
-    "danger": {
-      "base": "#D63939",
-      "background": "#FBEBEB",
-      "text": "#D63939"
-    },
-    "info": {
-      "base": "#066FD1",
-      "background": "#E6F0FA",
-      "text": "#066FD1"
-    }
-  },
-  "effects": {
-    "focusRing": "#066FD1",
-    "overlay": "#0f172a14"
-  }
-}
+Theme Overview (60–30–10 Rule)
+- Primary (60%) → #066FD1
+- Secondary (30%) → #90CAF9
+- Accent (10%) → #E6F0FA
+
+────────────────────────────────────────────
+
+Core Colors
+
+Primary
+- Base: #066FD1
+- Pressed: #055CB0
+- Disabled: #A9CBEF
+- Text on Primary: #FFFFFF
+
+Secondary
+- Base: #90CAF9
+- Pressed: #74B6F2
+- Disabled: #D6EAFB
+- Text on Secondary: #0F172A
+
+Accent
+- Base: #E6F0FA
+
+
+Background Colors
+- Base: #FFFFFF
+- Surface: #F9FAFB
+- Surface Alt: #F3F6F9
+
+
+Borders
+- Default: #E5E8EC
+- Muted: #EEF1F4
+- Focus: #066FD1
+- Error: #D63939
+
+
+Text Colors
+- Primary: #333333
+- Secondary: #6B7280
+- Muted: #999999
+- Inverse: #FFFFFF
+- Placeholder: #B0B7C3
+- Disabled: #C7CDD6
+- Link: #066FD1
+
+
+Icon Colors
+- Primary: #333333
+- Secondary: #6B7280
+- Muted: #999999
+- Inverse: #FFFFFF
+- Disabled: #C7CDD6
+
+────────────────────────────────────────────
+
+Badges
+
+Primary
+- Background: #E6F0FA
+- Text: #066FD1
+
+Secondary
+- Background: #F9FAFB
+- Text: #6B7280
+
+Success
+- Background: #E6F6F1
+- Text: #0CA678
+
+Warning
+- Background: #FEF5E5
+- Text: #F59F00
+
+Danger
+- Background: #FBEBEB
+- Text: #D63939
+
+Dark
+- Background: #E8E9EB
+- Text: #1F2937
+
+────────────────────────────────────────────
+
+Buttons
+
+Primary Button
+- Background: #066FD1
+- Text: #FFFFFF
+- Pressed: #055CB0
+- Disabled Background: #A9CBEF
+- Disabled Text: #FFFFFF
+
+Secondary Button
+- Background: #E6F0FA
+- Text: #066FD1
+- Pressed: #D7E8F8
+- Disabled Background: #EEF4FA
+- Disabled Text: #9BB8D4
+
+────────────────────────────────────────────
+
+Soft Buttons
+
+Primary
+- Background: #E6F0FA
+- Text: #066FD1
+
+Secondary
+- Background: #F9FAFB
+- Text: #6B7280
+
+Success
+- Background: #E6F6F1
+- Text: #0CA678
+
+Warning
+- Background: #FEF5E5
+- Text: #F59F00
+
+Danger
+- Background: #FBEBEB
+- Text: #D63939
+
+Dark
+- Background: #E8E9EB
+- Text: #1F2937
+
+────────────────────────────────────────────
+
+Inputs
+- Background: #FFFFFF
+- Text: #333333
+- Placeholder: #B0B7C3
+- Border: #E5E8EC
+- Focus Border: #066FD1
+- Error Border: #D63939
+- Disabled Background: #F3F6F9
+- Disabled Text: #999999
+
+────────────────────────────────────────────
+
+Cards
+- Background: #F9FAFB
+- Border: #E5E8EC
+
+────────────────────────────────────────────
+
+Divider
+- Color: #EEF1F4
+
+────────────────────────────────────────────
+
+Status Colors
+
+Success
+- Base: #0CA678
+- Background: #E6F6F1
+
+Warning
+- Base: #F59F00
+- Background: #FEF5E5
+
+Danger
+- Base: #D63939
+- Background: #FBEBEB
+
+Info
+- Base: #066FD1
+- Background: #E6F0FA
+
+────────────────────────────────────────────
+
+Effects
+- Focus Ring: #066FD1
+- Overlay: #0F172A14

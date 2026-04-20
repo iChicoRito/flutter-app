@@ -119,9 +119,7 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
   Widget build(BuildContext context) {
     final backgroundColor =
         widget.backgroundColor ??
-        (widget.isError
-        ? taskDangerText
-        : const Color(0xFFE6F6F1));
+        (widget.isError ? taskDangerText : const Color(0xFFE6F6F1));
     final foregroundColor =
         widget.foregroundColor ??
         (widget.isError ? Colors.white : taskSuccessText);
@@ -518,6 +516,9 @@ class VaultSettingsFields extends StatelessWidget {
     required this.isDeviceSecurityAvailable,
     required this.onEnabledChanged,
     required this.onMethodChanged,
+    this.isEditing = false,
+    this.changeVault = false,
+    this.onChangeVaultChanged,
   });
 
   final bool enabled;
@@ -527,9 +528,23 @@ class VaultSettingsFields extends StatelessWidget {
   final bool? isDeviceSecurityAvailable;
   final ValueChanged<bool> onEnabledChanged;
   final ValueChanged<VaultMethod> onMethodChanged;
+  final bool isEditing;
+  final bool changeVault;
+  final ValueChanged<bool>? onChangeVaultChanged;
 
   bool get _showsSecretField =>
       method == VaultMethod.password || method == VaultMethod.pin;
+
+  bool get _usesEditChangeFlow =>
+      isEditing && hasExistingSecret && _showsSecretField;
+
+  bool get _shouldShowSecretField =>
+      _showsSecretField && enabled && (!_usesEditChangeFlow || changeVault);
+
+  bool get _shouldShowMethodDropdown => enabled && !_usesEditChangeFlow;
+
+  bool get _shouldValidateSecret =>
+      enabled && _showsSecretField && (!_usesEditChangeFlow || changeVault);
 
   @override
   Widget build(BuildContext context) {
@@ -539,43 +554,94 @@ class VaultSettingsFields extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SwitchListTile.adaptive(
-            value: enabled,
-            onChanged: onEnabledChanged,
-            contentPadding: EdgeInsets.zero,
-            activeThumbColor: Colors.white,
-            activeTrackColor: taskPrimaryBlue,
-            title: Text(
-              'Enable Vault',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
+          if (_usesEditChangeFlow)
+            SwitchListTile.adaptive(
+              value: changeVault,
+              onChanged: onChangeVaultChanged,
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: Colors.white,
+              activeTrackColor: taskPrimaryBlue,
+              title: Text(
+                'Change Vault',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: taskDarkText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                'Leave this off to keep the current ${method == VaultMethod.pin ? 'PIN' : 'password'} unchanged.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
+              ),
+            )
+          else
+            SwitchListTile.adaptive(
+              value: enabled,
+              onChanged: onEnabledChanged,
+              contentPadding: EdgeInsets.zero,
+              activeThumbColor: Colors.white,
+              activeTrackColor: taskPrimaryBlue,
+              title: Text(
+                'Enable Vault',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: taskDarkText,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                'Require authentication before opening this content.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
               ),
             ),
-            subtitle: Text(
-              'Require authentication before opening this content.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
-            ),
-          ),
-          if (enabled) ...[
+          if (_usesEditChangeFlow && !changeVault) ...[
             const SizedBox(height: 8),
-            const TaskFieldLabel('Security Method'),
-            const SizedBox(height: 8),
-            TaskCompactDropdown<VaultMethod>(
-              buttonKey: const Key('vault-method-dropdown'),
-              menuKeyBuilder: (value) => Key('vault-method-${value.name}'),
-              currentValue: method ?? VaultMethod.password,
-              currentLabel: _vaultMethodLabel(method ?? VaultMethod.password),
-              onSelected: onMethodChanged,
-              items: VaultMethod.values,
-              labelBuilder: _vaultMethodLabel,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: taskAccentBlue,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: taskBorderColor),
+              ),
+              child: Text(
+                'Current security method: ${_vaultMethodLabel(method ?? VaultMethod.password)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: taskPrimaryBlue,
+                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            if (_showsSecretField) ...[
+          ],
+          if (enabled &&
+              (_shouldShowMethodDropdown || _shouldShowSecretField)) ...[
+            const SizedBox(height: 8),
+            if (_shouldShowMethodDropdown) ...[
+              const TaskFieldLabel('Security Method'),
+              const SizedBox(height: 8),
+              TaskCompactDropdown<VaultMethod>(
+                buttonKey: const Key('vault-method-dropdown'),
+                menuKeyBuilder: (value) => Key('vault-method-${value.name}'),
+                currentValue: method ?? VaultMethod.password,
+                currentLabel: _vaultMethodLabel(method ?? VaultMethod.password),
+                onSelected: onMethodChanged,
+                items: VaultMethod.values,
+                labelBuilder: _vaultMethodLabel,
+              ),
+            ],
+            if (_shouldShowSecretField) ...[
               const SizedBox(height: 16),
               TaskFieldLabel(
-                method == VaultMethod.pin ? '4-Digit PIN' : 'Password',
+                _usesEditChangeFlow
+                    ? method == VaultMethod.pin
+                          ? 'New 4-Digit PIN'
+                          : 'New Password'
+                    : method == VaultMethod.pin
+                    ? '4-Digit PIN'
+                    : 'Password',
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -588,7 +654,11 @@ class VaultSettingsFields extends StatelessWidget {
                 decoration: taskInputDecoration(
                   context: context,
                   hintText: hasExistingSecret
-                      ? method == VaultMethod.pin
+                      ? _usesEditChangeFlow
+                            ? method == VaultMethod.pin
+                                  ? 'Enter a new 4-digit PIN'
+                                  : 'Enter a new password'
+                            : method == VaultMethod.pin
                             ? 'Leave blank to keep the current PIN'
                             : 'Leave blank to keep the current password'
                       : method == VaultMethod.pin
@@ -596,13 +666,17 @@ class VaultSettingsFields extends StatelessWidget {
                       : 'Enter password',
                 ).copyWith(counterText: ''),
                 validator: (value) {
-                  if (!enabled) {
+                  if (!_shouldValidateSecret) {
                     return null;
                   }
                   final trimmed = value?.trim() ?? '';
                   if (trimmed.isEmpty) {
                     return hasExistingSecret
-                        ? null
+                        ? _usesEditChangeFlow
+                              ? method == VaultMethod.pin
+                                    ? 'PIN is required.'
+                                    : 'Password is required.'
+                              : null
                         : method == VaultMethod.pin
                         ? 'PIN is required.'
                         : 'Password is required.';
@@ -615,7 +689,8 @@ class VaultSettingsFields extends StatelessWidget {
                 },
               ),
             ],
-            if (method == VaultMethod.deviceSecurity) ...[
+            if (_shouldShowMethodDropdown &&
+                method == VaultMethod.deviceSecurity) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,

@@ -288,15 +288,23 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     }
 
     try {
-      final vaultService = VaultServiceScope.of(context);
-      final vaultResolution = await vaultService.resolveConfig(
-        entityKey: 'task:${result.task.id}',
-        draft: result.vaultDraft,
-        existingConfig: task.vaultConfig,
-      );
+      VaultConfig? nextVaultConfig = task.vaultConfig;
+      List<String> recoveryKeys = const [];
+      if (!result.vaultDraft.preserveExistingConfig) {
+        final vaultService = VaultServiceScope.of(context);
+        final vaultResolution = await vaultService.resolveConfig(
+          entityKey: 'task:${result.task.id}',
+          draft: result.vaultDraft,
+          existingConfig: task.vaultConfig,
+        );
+        nextVaultConfig = vaultResolution.config;
+        recoveryKeys = vaultResolution.recoveryKeys;
+      }
       final updatedTask = result.task.copyWith(
-        vaultConfig: vaultResolution.config,
-        clearVaultConfig: vaultResolution.config == null,
+        vaultConfig: nextVaultConfig,
+        clearVaultConfig:
+            !result.vaultDraft.preserveExistingConfig &&
+            nextVaultConfig == null,
       );
       await widget.repository.upsertTask(updatedTask);
       await widget.reminderService.syncTask(updatedTask);
@@ -306,14 +314,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       }
 
       setState(() {
-        _task = latest ?? result.task;
+        _task = latest ?? updatedTask;
         _categories = result.categories;
       });
       showTaskToast(context, message: 'Task updated successfully.');
-      if (vaultResolution.recoveryKeys.isNotEmpty) {
+      if (recoveryKeys.isNotEmpty) {
         await showVaultRecoveryKeysDialog(
           context: context,
-          recoveryKeys: vaultResolution.recoveryKeys,
+          recoveryKeys: recoveryKeys,
         );
       }
     } catch (_) {
@@ -1135,8 +1143,16 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   TimeOfDay? _targetTime;
   bool _vaultEnabled = false;
   VaultMethod _vaultMethod = VaultMethod.password;
+  bool _changeVault = false;
   bool? _isDeviceSecurityAvailable;
   bool _didLoadDeviceSecurityAvailability = false;
+
+  bool get _hasExistingSecretVault =>
+      widget.task.vaultConfig?.secretKeyRef != null &&
+      (widget.task.vaultConfig?.usesSecret ?? false);
+
+  bool get _shouldPreserveExistingVault =>
+      _hasExistingSecretVault && !_changeVault;
 
   @override
   void initState() {
@@ -1323,7 +1339,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       return;
     }
 
-    if (_vaultEnabled &&
+    if (!_shouldPreserveExistingVault &&
+        _vaultEnabled &&
         _vaultMethod == VaultMethod.deviceSecurity &&
         _isDeviceSecurityAvailable == false) {
       showTaskToast(
@@ -1362,7 +1379,9 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
           isEnabled: _vaultEnabled,
           method: _vaultEnabled ? _vaultMethod : null,
           secret: _vaultSecretController.text.trim(),
+          preserveExistingConfig: _shouldPreserveExistingVault,
           keepExistingSecret:
+              !_shouldPreserveExistingVault &&
               widget.task.vaultConfig?.secretKeyRef != null &&
               _vaultSecretController.text.trim().isEmpty &&
               _vaultMethod == widget.task.vaultConfig?.method,
@@ -1582,10 +1601,20 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                   secretController: _vaultSecretController,
                   hasExistingSecret:
                       widget.task.vaultConfig?.secretKeyRef != null,
+                  isEditing: true,
+                  changeVault: _changeVault,
                   isDeviceSecurityAvailable: _isDeviceSecurityAvailable,
                   onEnabledChanged: (value) {
                     setState(() {
                       _vaultEnabled = value;
+                      if (!value) {
+                        _vaultSecretController.clear();
+                      }
+                    });
+                  },
+                  onChangeVaultChanged: (value) {
+                    setState(() {
+                      _changeVault = value;
                       if (!value) {
                         _vaultSecretController.clear();
                       }

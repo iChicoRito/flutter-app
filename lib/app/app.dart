@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/display_name_store.dart';
@@ -66,6 +69,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     widget.reminderService.bindAlarmHandler(_handleAlarmEvent);
     _startForegroundAlarmPoller();
     unawaited(_restoreLatchedAlarm());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_requestPhotoLibraryPermissionOnStartup());
+    });
   }
 
   @override
@@ -198,6 +204,25 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     await prefs.remove(_latchedAlarmPayloadKey);
   }
 
+  Future<void> _requestPhotoLibraryPermissionOnStartup() async {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
+
+    try {
+      final status = await Permission.photos.status;
+      if (status.isDenied || status.isRestricted) {
+        await Permission.photos.request();
+      }
+    } on MissingPluginException catch (error) {
+      debugPrint('Photo permission plugin is unavailable: $error');
+    } on PlatformException catch (error) {
+      debugPrint('Photo permission request failed: $error');
+    }
+  }
+
   Future<void> _restoreLatchedAlarm() async {
     if (_activeAlarmPayload != null) {
       return;
@@ -234,57 +259,57 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: VaultServiceScope(
           vaultService: widget.vaultService,
           child: MaterialApp(
-          navigatorKey: _navigatorKey,
-          builder: (context, child) {
-            return Stack(
-              children: [
-                child ?? const SizedBox.shrink(),
-                if (_activeAlarmPayload != null)
-                  Positioned.fill(
-                    child: TaskAlarmScreen(
-                      payload: _activeAlarmPayload!,
-                      reminderService: widget.reminderService,
-                      taskRepository: widget.taskRepository,
-                      displayNameStore: widget.displayNameStore,
-                      onDismissed: () {
-                        if (!mounted) {
-                          return;
-                        }
-                        unawaited(_clearLatchedAlarm());
-                        setState(() {
-                          _activeAlarmPayload = null;
-                          _activeAlarmTaskId = null;
-                          _isAlarmScreenVisible = false;
-                        });
-                      },
+            navigatorKey: _navigatorKey,
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  if (_activeAlarmPayload != null)
+                    Positioned.fill(
+                      child: TaskAlarmScreen(
+                        payload: _activeAlarmPayload!,
+                        reminderService: widget.reminderService,
+                        taskRepository: widget.taskRepository,
+                        displayNameStore: widget.displayNameStore,
+                        onDismissed: () {
+                          if (!mounted) {
+                            return;
+                          }
+                          unawaited(_clearLatchedAlarm());
+                          setState(() {
+                            _activeAlarmPayload = null;
+                            _activeAlarmTaskId = null;
+                            _isAlarmScreenVisible = false;
+                          });
+                        },
+                      ),
                     ),
-                  ),
-              ],
-            );
-          },
-          title: 'Remindly',
-          debugShowCheckedModeBanner: false,
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            FlutterQuillLocalizations.delegate,
-          ],
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: primaryBlue,
-              brightness: Brightness.light,
+                ],
+              );
+            },
+            title: 'Remindly',
+            debugShowCheckedModeBanner: false,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              FlutterQuillLocalizations.delegate,
+            ],
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: primaryBlue,
+                brightness: Brightness.light,
+              ),
+              scaffoldBackgroundColor: Colors.white,
+              textTheme: GoogleFonts.poppinsTextTheme(),
+              primaryTextTheme: GoogleFonts.poppinsTextTheme(),
             ),
-            scaffoldBackgroundColor: Colors.white,
-            textTheme: GoogleFonts.poppinsTextTheme(),
-            primaryTextTheme: GoogleFonts.poppinsTextTheme(),
+            home: _InitialLaunchGate(
+              onboardingStatusStore: widget.onboardingStatusStore,
+              displayNameStore: widget.displayNameStore,
+            ),
           ),
-          home: _InitialLaunchGate(
-            onboardingStatusStore: widget.onboardingStatusStore,
-            displayNameStore: widget.displayNameStore,
-          ),
-        ),
         ),
       ),
     );

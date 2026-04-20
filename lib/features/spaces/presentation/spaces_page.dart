@@ -5,6 +5,7 @@ import 'package:tabler_icons/tabler_icons.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_access.dart';
+import '../../../core/vault/vault_models.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/domain/task_repository.dart';
 import '../../task_management/presentation/task_management_ui.dart';
@@ -105,21 +106,27 @@ class _SpacesPageState extends State<SpacesPage> {
     }
 
     try {
-      final vaultService = VaultServiceScope.of(context);
-      final vaultResolution = await vaultService.resolveConfig(
-        entityKey: initialSpace == null
-            ? 'space:create:${DateTime.now().microsecondsSinceEpoch}'
-            : spaceVaultEntityKey(initialSpace.id),
-        draft: result.vaultDraft,
-        existingConfig: initialSpace?.vaultConfig,
-      );
+      VaultConfig? nextVaultConfig = initialSpace?.vaultConfig;
+      List<String> recoveryKeys = const [];
+      if (!result.vaultDraft.preserveExistingConfig) {
+        final vaultService = VaultServiceScope.of(context);
+        final vaultResolution = await vaultService.resolveConfig(
+          entityKey: initialSpace == null
+              ? 'space:create:${DateTime.now().microsecondsSinceEpoch}'
+              : spaceVaultEntityKey(initialSpace.id),
+          draft: result.vaultDraft,
+          existingConfig: initialSpace?.vaultConfig,
+        );
+        nextVaultConfig = vaultResolution.config;
+        recoveryKeys = vaultResolution.recoveryKeys;
+      }
       await _controller.saveSpace(
         id: result.id,
         name: result.name,
         description: result.description,
         categoryId: result.categoryId,
         colorValue: result.colorValue,
-        vaultConfig: vaultResolution.config,
+        vaultConfig: nextVaultConfig,
       );
       if (!mounted) {
         return;
@@ -130,10 +137,10 @@ class _SpacesPageState extends State<SpacesPage> {
             ? 'Space created successfully.'
             : 'Space updated successfully.',
       );
-      if (vaultResolution.recoveryKeys.isNotEmpty) {
+      if (recoveryKeys.isNotEmpty) {
         await showVaultRecoveryKeysDialog(
           context: context,
-          recoveryKeys: vaultResolution.recoveryKeys,
+          recoveryKeys: recoveryKeys,
         );
       }
     } catch (_) {

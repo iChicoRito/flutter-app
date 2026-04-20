@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/app/app.dart';
 import 'package:flutter_app/core/services/display_name_store.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
+import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
+import 'package:flutter_app/features/spaces/domain/task_space.dart';
 import 'package:flutter_app/shared/widgets/first_run_handoff_dialogs.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
@@ -244,6 +248,208 @@ void main() {
     expect(find.text('Overdue'), findsOneWidget);
     expect(find.byKey(DashboardScreen.addTaskButtonKey), findsOneWidget);
     expect(find.text('Submit project brief'), findsOneWidget);
+  });
+
+  testWidgets('dashboard home header shows saved profile picture', (
+    WidgetTester tester,
+  ) async {
+    displayNameStore.profileImageData = base64Encode(_transparentPngBytes);
+
+    await openDashboard(tester);
+
+    expect(find.text('Hi, Mark'), findsOneWidget);
+    expect(find.byKey(DashboardScreen.homeAvatarImageKey), findsOneWidget);
+  });
+
+  testWidgets('profile tab shows dynamic stats and static account sections', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime(2026, 4, 13, 9);
+    const vaultConfig = VaultConfig(
+      isEnabled: true,
+      method: VaultMethod.password,
+      secretKeyRef: 'secret',
+    );
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'completed-task',
+          title: 'Completed profile task',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+          isCompleted: true,
+        ),
+        buildTask(
+          id: 'pending-task',
+          title: 'Pending profile task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+        buildTask(
+          id: 'vault-task',
+          title: 'Vault profile task',
+          priority: TaskPriority.low,
+          categoryId: 'work',
+          vaultConfig: vaultConfig,
+        ),
+        buildTask(
+          id: 'overdue-task',
+          title: 'Overdue profile task',
+          priority: TaskPriority.urgent,
+          categoryId: 'work',
+          endDate: DateTime(2026, 4, 12),
+          endMinutes: 8 * 60,
+        ),
+      ],
+      spaces: [
+        TaskSpace(
+          id: 'vault-space',
+          name: 'Secure Space',
+          description: 'Protected profile space',
+          categoryId: 'work',
+          colorValue: Colors.blue.toARGB32(),
+          createdAt: now,
+          updatedAt: now,
+          vaultConfig: vaultConfig,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.profileTabKey), findsOneWidget);
+    expect(find.text('My Profile'), findsOneWidget);
+    expect(find.text('Manage and update your profile'), findsOneWidget);
+    expect(find.text('Mark'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.profileCompletedStatKey),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.profilePendingStatKey),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.profileOverdueStatKey),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.profileVaultStatKey),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(DashboardScreen.profileUserRowKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.profileVaultRowKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.profileRecoveryRowKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.profileArchivesRowKey), findsOneWidget);
+  });
+
+  testWidgets('profile tab shows a saved profile picture', (
+    WidgetTester tester,
+  ) async {
+    displayNameStore.profileImageData = base64Encode(_transparentPngBytes);
+
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.profileAvatarImageKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.profileImageButtonKey), findsOneWidget);
+  });
+
+  testWidgets('profile picture upload asks before opening photo picker', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileImageButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(DashboardScreen.profileImagePermissionDialogKey),
+      findsOneWidget,
+    );
+    expect(find.text('Choose Profile Picture'), findsOneWidget);
+    expect(
+      find.textContaining('only uses the photo you select'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(DashboardScreen.profileImagePermissionDialogKey),
+      findsNothing,
+    );
+  });
+
+  testWidgets('profile name can be changed from the bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileUserRowKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Profile Name'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(DashboardScreen.profileNameFieldKey),
+      'Jamie Rivera',
+    );
+    await tester.tap(find.byKey(DashboardScreen.profileNameSaveButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(displayNameStore.displayName, 'Jamie Rivera');
+    expect(find.text('Jamie Rivera'), findsOneWidget);
+    expect(find.text('Edit Profile Name'), findsNothing);
+  });
+
+  testWidgets('static profile rows do not open the name editor', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(DashboardScreen.profileIdentityKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Profile Name'), findsNothing);
+
+    await tester.tap(find.byKey(DashboardScreen.profileVaultRowKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileRecoveryRowKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileArchivesRowKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Profile Name'), findsNothing);
+
+    await tester.tap(find.byKey(DashboardScreen.profileUserRowKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Profile Name'), findsOneWidget);
   });
 
   testWidgets('creating a task redirects straight into the rich editor', (
@@ -565,6 +771,10 @@ TaskItem buildTask({
   required TaskPriority priority,
   required String categoryId,
   String? noteText,
+  bool isCompleted = false,
+  VaultConfig? vaultConfig,
+  DateTime? endDate,
+  int? endMinutes,
 }) {
   final now = DateTime(2026, 4, 13, 9);
   return TaskItem(
@@ -574,6 +784,10 @@ TaskItem buildTask({
     categoryId: categoryId,
     createdAt: now,
     updatedAt: now,
+    isCompleted: isCompleted,
+    vaultConfig: vaultConfig,
+    endDate: endDate,
+    endMinutes: endMinutes,
     noteDocumentJson: buildPlainTextNoteDocumentJson(noteText),
     notePlainText: noteText,
   );
@@ -593,6 +807,7 @@ class FakeOnboardingStatusStore implements OnboardingStatusStore {
 
 class FakeDisplayNameStore implements DisplayNameStore {
   String? displayName;
+  String? profileImageData;
 
   @override
   Future<String?> readDisplayName() async => displayName;
@@ -601,4 +816,82 @@ class FakeDisplayNameStore implements DisplayNameStore {
   Future<void> saveDisplayName(String value) async {
     displayName = value;
   }
+
+  @override
+  Future<String?> readProfileImageData() async => profileImageData;
+
+  @override
+  Future<void> saveProfileImageData(String? value) async {
+    profileImageData = value;
+  }
 }
+
+const _transparentPngBytes = <int>[
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
+];

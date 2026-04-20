@@ -47,10 +47,18 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   late Color _selectedColor;
   bool _vaultEnabled = false;
   VaultMethod _vaultMethod = VaultMethod.password;
+  bool _changeVault = false;
   bool? _isDeviceSecurityAvailable;
   bool _didLoadDeviceSecurityAvailability = false;
 
   bool get _isEditing => widget.initialSpace != null;
+
+  bool get _hasExistingSecretVault =>
+      widget.initialSpace?.vaultConfig?.secretKeyRef != null &&
+      (widget.initialSpace?.vaultConfig?.usesSecret ?? false);
+
+  bool get _shouldPreserveExistingVault =>
+      _hasExistingSecretVault && !_changeVault;
 
   @override
   void initState() {
@@ -115,7 +123,8 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
       return;
     }
 
-    if (_vaultEnabled &&
+    if (!_shouldPreserveExistingVault &&
+        _vaultEnabled &&
         _vaultMethod == VaultMethod.deviceSecurity &&
         _isDeviceSecurityAvailable == false) {
       showTaskToast(
@@ -137,7 +146,9 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
           isEnabled: _vaultEnabled,
           method: _vaultEnabled ? _vaultMethod : null,
           secret: _vaultSecretController.text.trim(),
+          preserveExistingConfig: _shouldPreserveExistingVault,
           keepExistingSecret:
+              !_shouldPreserveExistingVault &&
               widget.initialSpace?.vaultConfig?.secretKeyRef != null &&
               _vaultSecretController.text.trim().isEmpty &&
               _vaultMethod == widget.initialSpace?.vaultConfig?.method,
@@ -207,7 +218,8 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
               const SizedBox(height: 16),
               TaskSectionCard(
                 title: 'Space Settings',
-                subtitle: 'Choose the category and visual color for this space.',
+                subtitle:
+                    'Choose the category and visual color for this space.',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -215,10 +227,12 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                     const SizedBox(height: 8),
                     TaskCompactDropdown<String>(
                       buttonKey: const Key('space-form-category'),
-                      menuKeyBuilder: (value) => Key('space-form-category-$value'),
+                      menuKeyBuilder: (value) =>
+                          Key('space-form-category-$value'),
                       currentValue: _selectedCategoryId,
                       currentLabel:
-                          _categoryById(_selectedCategoryId)?.name ?? 'Category',
+                          _categoryById(_selectedCategoryId)?.name ??
+                          'Category',
                       currentLeading: _categoryById(_selectedCategoryId) == null
                           ? null
                           : Icon(
@@ -258,7 +272,8 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                         for (final color in taskCategoryColorOptions)
                           _ColorOptionChip(
                             color: color,
-                            isSelected: color.toARGB32() == _selectedColor.toARGB32(),
+                            isSelected:
+                                color.toARGB32() == _selectedColor.toARGB32(),
                             onTap: () {
                               setState(() {
                                 _selectedColor = color;
@@ -277,6 +292,8 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                 secretController: _vaultSecretController,
                 hasExistingSecret:
                     widget.initialSpace?.vaultConfig?.secretKeyRef != null,
+                isEditing: _isEditing,
+                changeVault: _changeVault,
                 isDeviceSecurityAvailable: _isDeviceSecurityAvailable,
                 onEnabledChanged: (value) {
                   setState(() {
@@ -286,9 +303,18 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                     }
                   });
                 },
+                onChangeVaultChanged: (value) {
+                  setState(() {
+                    _changeVault = value;
+                    if (!value) {
+                      _vaultSecretController.clear();
+                    }
+                  });
+                },
                 onMethodChanged: (value) async {
                   bool? available = _isDeviceSecurityAvailable;
-                  if (value == VaultMethod.deviceSecurity && available == null) {
+                  if (value == VaultMethod.deviceSecurity &&
+                      available == null) {
                     available = await VaultServiceScope.of(
                       context,
                     ).isDeviceSecurityAvailable();

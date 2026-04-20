@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/display_name_store.dart';
@@ -28,6 +32,39 @@ class DashboardScreen extends StatefulWidget {
   static const Key overdueHeaderKey = Key('dashboard-overdue-header');
   static const Key completedHeaderKey = Key('dashboard-completed-header');
   static const Key progressLabelKey = Key('dashboard-progress-label');
+  static const Key profileTabKey = Key('dashboard-profile-tab');
+  static const Key profileIdentityKey = Key('dashboard-profile-identity');
+  static const Key profileAvatarImageKey = Key('dashboard-profile-avatar');
+  static const Key homeAvatarImageKey = Key('dashboard-home-avatar');
+  static const Key profileImageButtonKey = Key('dashboard-profile-image-edit');
+  static const Key profileImagePermissionDialogKey = Key(
+    'dashboard-profile-image-permission',
+  );
+  static const Key profileImagePermissionContinueKey = Key(
+    'dashboard-profile-image-permission-continue',
+  );
+  static const Key profileUserRowKey = Key('dashboard-profile-user-row');
+  static const Key profileNameFieldKey = Key('dashboard-profile-name-field');
+  static const Key profileNameSaveButtonKey = Key(
+    'dashboard-profile-name-save',
+  );
+  static const Key profileCompletedStatKey = Key(
+    'dashboard-profile-completed-stat',
+  );
+  static const Key profilePendingStatKey = Key(
+    'dashboard-profile-pending-stat',
+  );
+  static const Key profileOverdueStatKey = Key(
+    'dashboard-profile-overdue-stat',
+  );
+  static const Key profileVaultStatKey = Key('dashboard-profile-vault-stat');
+  static const Key profileVaultRowKey = Key('dashboard-profile-vault-row');
+  static const Key profileRecoveryRowKey = Key(
+    'dashboard-profile-recovery-row',
+  );
+  static const Key profileArchivesRowKey = Key(
+    'dashboard-profile-archives-row',
+  );
   static const Key namePromptKey = FirstRunHandoffKeys.namePrompt;
   static const Key nameFieldKey = FirstRunHandoffKeys.nameField;
   static const Key nameSaveButtonKey = FirstRunHandoffKeys.nameSaveButton;
@@ -51,7 +88,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isOverdueExpanded = true;
   bool _isCompletedExpanded = false;
   String? _displayName;
+  String? _profileImageData;
   bool _isPromptOpen = false;
+  final ImagePicker _imagePicker = ImagePicker();
 
   static const List<_DashboardTab> _tabs = [
     _DashboardTab(
@@ -103,12 +142,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadDisplayName() async {
     final value = await widget.displayNameStore.readDisplayName();
+    final imageData = await widget.displayNameStore.readProfileImageData();
     if (!mounted) {
       return;
     }
 
     setState(() {
       _displayName = value;
+      _profileImageData = imageData;
     });
 
     if ((value == null || value.isEmpty) && !_isPromptOpen) {
@@ -152,6 +193,96 @@ class _DashboardScreenState extends State<DashboardScreen> {
       barrierDismissible: false,
       builder: (context) => WelcomeHandoffDialog(displayName: trimmed),
     );
+  }
+
+  Future<void> _openProfileNameEditor() async {
+    final savedName = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return _ProfileNameSheet(
+          initialName: _displayName ?? '',
+          onSave: (value) async {
+            final trimmed = value.trim();
+            await widget.displayNameStore.saveDisplayName(trimmed);
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _displayName = trimmed;
+            });
+          },
+        );
+      },
+    );
+    if (!mounted || savedName == null) {
+      return;
+    }
+    showTaskToast(context, message: 'Profile name updated.');
+  }
+
+  Future<void> _pickProfileImage() async {
+    final allowed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _ProfileImagePermissionDialog(),
+    );
+    if (allowed != true || !mounted) {
+      return;
+    }
+
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+      if (image == null) {
+        return;
+      }
+
+      final imageData = base64Encode(await image.readAsBytes());
+      await widget.displayNameStore.saveProfileImageData(imageData);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _profileImageData = imageData;
+      });
+      showTaskToast(context, message: 'Profile picture updated.');
+    } on MissingPluginException catch (error) {
+      debugPrint('Profile image picker plugin is unavailable: $error');
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Restart the app to enable profile picture uploads.',
+        isError: true,
+      );
+    } on PlatformException catch (error) {
+      debugPrint('Profile image picker platform error: $error');
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to access your photo library.',
+        isError: true,
+      );
+    } catch (error) {
+      debugPrint('Profile image update failed: $error');
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to update profile picture.',
+        isError: true,
+      );
+    }
   }
 
   Future<void> _openCreateFlow() async {
@@ -342,6 +473,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           return _DashboardHomeTab(
                             theme: theme,
                             displayName: _displayName,
+                            profileImageData: _profileImageData,
                             controller: taskController,
                             isTodayExpanded: _isTodayExpanded,
                             isUpcomingExpanded: _isUpcomingExpanded,
@@ -387,7 +519,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 reminderService: TaskReminderScope.of(context),
               )
             : _currentIndex == 3
-            ? _AlarmReliabilityTab(theme: theme)
+            ? KeyedSubtree(
+                key: DashboardScreen.profileTabKey,
+                child: taskController == null
+                    ? _ProfileTab(
+                        theme: theme,
+                        displayName: _displayName,
+                        profileImageData: _profileImageData,
+                        stats: const _ProfileStats.empty(),
+                        onPickProfileImage: _pickProfileImage,
+                        onEditProfile: _openProfileNameEditor,
+                      )
+                    : AnimatedBuilder(
+                        animation: taskController,
+                        builder: (context, _) {
+                          return _ProfileTab(
+                            theme: theme,
+                            displayName: _displayName,
+                            profileImageData: _profileImageData,
+                            stats: _ProfileStats.fromController(taskController),
+                            onPickProfileImage: _pickProfileImage,
+                            onEditProfile: _openProfileNameEditor,
+                          );
+                        },
+                      ),
+              )
             : _PlaceholderTab(tab: tab, theme: theme),
       ),
       floatingActionButton: _currentIndex == 0
@@ -432,6 +588,7 @@ class _DashboardHomeTab extends StatelessWidget {
   const _DashboardHomeTab({
     required this.theme,
     required this.displayName,
+    required this.profileImageData,
     required this.controller,
     required this.isTodayExpanded,
     required this.isUpcomingExpanded,
@@ -447,6 +604,7 @@ class _DashboardHomeTab extends StatelessWidget {
 
   final ThemeData theme;
   final String? displayName;
+  final String? profileImageData;
   final TaskManagementController controller;
   final bool isTodayExpanded;
   final bool isUpcomingExpanded;
@@ -492,6 +650,7 @@ class _DashboardHomeTab extends StatelessWidget {
           _HeaderRow(
             theme: theme,
             displayName: displayName,
+            profileImageData: profileImageData,
             dateLabel: _formatDate(DateTime.now()),
           ),
           const SizedBox(height: 14),
@@ -653,18 +812,20 @@ class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
     required this.theme,
     required this.displayName,
+    required this.profileImageData,
     required this.dateLabel,
   });
 
   final ThemeData theme;
   final String? displayName;
+  final String? profileImageData;
   final String dateLabel;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const _UserAvatar(),
+        _UserAvatar(imageData: profileImageData),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -699,14 +860,25 @@ class _HeaderRow extends StatelessWidget {
 }
 
 class _UserAvatar extends StatelessWidget {
-  const _UserAvatar();
+  const _UserAvatar({required this.imageData});
+
+  final String? imageData;
 
   @override
   Widget build(BuildContext context) {
-    return const CircleAvatar(
-      radius: 24,
-      backgroundColor: taskAccentBlue,
-      child: Icon(TablerIcons.user, color: taskPrimaryBlue, size: 24),
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+        color: taskAccentBlue,
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: _ProfileAvatarImage(
+        imageData: imageData,
+        imageKey: DashboardScreen.homeAvatarImageKey,
+        fallbackIconSize: 24,
+      ),
     );
   }
 }
@@ -1239,118 +1411,261 @@ class _PlaceholderTab extends StatelessWidget {
   }
 }
 
-class _AlarmReliabilityTab extends StatelessWidget {
-  const _AlarmReliabilityTab({required this.theme});
+class _ProfileStats {
+  const _ProfileStats({
+    required this.completedCount,
+    required this.pendingCount,
+    required this.overdueCount,
+    required this.vaultItemsCount,
+  });
+
+  const _ProfileStats.empty()
+    : completedCount = 0,
+      pendingCount = 0,
+      overdueCount = 0,
+      vaultItemsCount = 0;
+
+  factory _ProfileStats.fromController(TaskManagementController controller) {
+    final tasks = controller.tasks;
+    final spaces = controller.spaces;
+    final now = DateTime.now();
+    final completedCount = tasks.where((task) => task.isCompleted).length;
+    final pendingCount = tasks
+        .where((task) => task.statusAt(now) == TaskStatus.pending)
+        .length;
+    final overdueCount = tasks
+        .where((task) => task.statusAt(now) == TaskStatus.overdue)
+        .length;
+    final vaultTaskCount = tasks
+        .where((task) => task.vaultConfig?.isEnabled == true)
+        .length;
+    final vaultSpaceCount = spaces
+        .where((space) => space.vaultConfig?.isEnabled == true)
+        .length;
+
+    return _ProfileStats(
+      completedCount: completedCount,
+      pendingCount: pendingCount,
+      overdueCount: overdueCount,
+      vaultItemsCount: vaultTaskCount + vaultSpaceCount,
+    );
+  }
+
+  final int completedCount;
+  final int pendingCount;
+  final int overdueCount;
+  final int vaultItemsCount;
+}
+
+class _ProfileTab extends StatelessWidget {
+  const _ProfileTab({
+    required this.theme,
+    required this.displayName,
+    required this.profileImageData,
+    required this.stats,
+    required this.onPickProfileImage,
+    required this.onEditProfile,
+  });
 
   final ThemeData theme;
+  final String? displayName;
+  final String? profileImageData;
+  final _ProfileStats stats;
+  final VoidCallback onPickProfileImage;
+  final VoidCallback onEditProfile;
 
   @override
   Widget build(BuildContext context) {
+    final name = displayName?.trim().isNotEmpty == true
+        ? displayName!.trim()
+        : 'Your Name';
+
     return ColoredBox(
       color: taskSurface,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        padding: const EdgeInsets.fromLTRB(18, 58, 18, 112),
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: taskBorderColor),
+          Text(
+            'My Profile',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: taskDarkText,
+              fontWeight: FontWeight.w700,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: taskAccentBlue,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    TablerIcons.alarm,
-                    color: taskPrimaryBlue,
-                    size: 30,
-                  ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Manage and update your profile',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF777777),
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 28),
+          _ProfileSummaryCard(
+            name: name,
+            profileImageData: profileImageData,
+            stats: stats,
+            onPickProfileImage: onPickProfileImage,
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Account Details',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: taskMutedText,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _ProfileAccountList(onEditProfile: onEditProfile),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileSummaryCard extends StatelessWidget {
+  const _ProfileSummaryCard({
+    required this.name,
+    required this.profileImageData,
+    required this.stats,
+    required this.onPickProfileImage,
+  });
+
+  final String name;
+  final String? profileImageData;
+  final _ProfileStats stats;
+  final VoidCallback onPickProfileImage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      key: DashboardScreen.profileIdentityKey,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      decoration: BoxDecoration(
+        color: taskSurface,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: taskBorderColor),
+      ),
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: taskAccentBlue,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 18),
-                Text(
-                  'Alarm Reliability',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: taskDarkText,
-                    fontWeight: FontWeight.w700,
-                  ),
+                clipBehavior: Clip.antiAlias,
+                child: _ProfileAvatarImage(
+                  imageData: profileImageData,
+                  imageKey: DashboardScreen.profileAvatarImageKey,
+                  fallbackIconSize: 33,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Keep reminders more dependable by letting the app stay available in the background.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: taskSecondaryText,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Divider(height: 1, thickness: 1, color: taskBorderColor),
-                const SizedBox(height: 18),
-                const _ReliabilityStep(
-                  icon: TablerIcons.battery_charging,
-                  title: 'Turn Off Battery Restrictions',
-                  body:
-                      'Set the app to unrestricted or no battery optimization so Android does not delay alarms in the background.',
-                ),
-                const SizedBox(height: 14),
-                const _ReliabilityStep(
-                  icon: TablerIcons.apps,
-                  title: 'Keep It In Recent Apps',
-                  body:
-                      'Avoid clearing flutter_app from recent apps if you want the strongest reminder reliability on many phones.',
-                ),
-                const SizedBox(height: 14),
-                const _ReliabilityStep(
-                  icon: TablerIcons.lock,
-                  title: 'Allow Lock Screen Alerts',
-                  body:
-                      'Lock-screen notifications and full-screen notification access help the alarm show more prominently when the phone is locked.',
-                ),
-                const SizedBox(height: 14),
-                const _ReliabilityStep(
-                  icon: TablerIcons.volume,
-                  title: 'Check Alarm Volume',
-                  body:
-                      'The due screen now plays an alarm sound, so make sure media and alarm volume are not muted on your phone.',
-                ),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: taskAccentBlue,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        TablerIcons.info_circle,
+              ),
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: DashboardScreen.profileImageButtonKey,
+                    onTap: onPickProfileImage,
+                    customBorder: const CircleBorder(),
+                    child: Ink(
+                      width: 20,
+                      height: 20,
+                      decoration: const BoxDecoration(
                         color: taskPrimaryBlue,
-                        size: 20,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Android may still show only a notification while you are actively using another app. Lock-screen and foreground cases are the most reliable for automatic alarm takeovers.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: taskPrimaryBlue,
-                            height: 1.45,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      child: const Icon(
+                        TablerIcons.camera,
+                        color: Colors.white,
+                        size: 12,
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE6F6F1),
+              borderRadius: BorderRadius.circular(100),
             ),
+            child: Text(
+              'Active',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: taskSuccessText,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: taskDarkText,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 25),
+          Row(
+            children: [
+              Expanded(
+                child: _ProfileStatTile(
+                  key: DashboardScreen.profileCompletedStatKey,
+                  value: stats.completedCount,
+                  label: 'Completed Tasks',
+                  backgroundColor: const Color(0xFFE6F6F1),
+                  foregroundColor: taskSuccessText,
+                ),
+              ),
+              const _ProfileStatDivider(),
+              Expanded(
+                child: _ProfileStatTile(
+                  key: DashboardScreen.profilePendingStatKey,
+                  value: stats.pendingCount,
+                  label: 'Pending Tasks',
+                  backgroundColor: const Color(0xFFFEF5E5),
+                  foregroundColor: taskWarningText,
+                ),
+              ),
+              const _ProfileStatDivider(),
+              Expanded(
+                child: _ProfileStatTile(
+                  key: DashboardScreen.profileOverdueStatKey,
+                  value: stats.overdueCount,
+                  label: 'Overdue Tasks',
+                  backgroundColor: const Color(0xFFFBEBEB),
+                  foregroundColor: taskDangerText,
+                ),
+              ),
+              const _ProfileStatDivider(),
+              Expanded(
+                child: _ProfileStatTile(
+                  key: DashboardScreen.profileVaultStatKey,
+                  value: stats.vaultItemsCount,
+                  label: 'Vaults\nItems',
+                  backgroundColor: taskAccentBlue,
+                  foregroundColor: taskPrimaryBlue,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1358,53 +1673,408 @@ class _AlarmReliabilityTab extends StatelessWidget {
   }
 }
 
-class _ReliabilityStep extends StatelessWidget {
-  const _ReliabilityStep({
-    required this.icon,
-    required this.title,
-    required this.body,
+class _ProfileStatTile extends StatelessWidget {
+  const _ProfileStatTile({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
   });
 
-  final IconData icon;
-  final String title;
-  final String body;
+  final int value;
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final theme = Theme.of(context);
+
+    return Column(
       children: [
         Container(
-          width: 42,
-          height: 42,
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: taskAccentBlue,
-            borderRadius: BorderRadius.circular(14),
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(9),
           ),
-          child: Icon(icon, size: 20, color: taskPrimaryBlue),
+          child: Text(
+            '$value',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: foregroundColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+            ),
+          ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
+        const SizedBox(height: 7),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: const Color(0xFF777777),
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileAvatarImage extends StatelessWidget {
+  const _ProfileAvatarImage({
+    required this.imageData,
+    required this.imageKey,
+    required this.fallbackIconSize,
+  });
+
+  final String? imageData;
+  final Key imageKey;
+  final double fallbackIconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = imageData;
+    if (data != null && data.isNotEmpty) {
+      try {
+        return Image.memory(
+          key: imageKey,
+          base64Decode(data),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) =>
+              _ProfileAvatarFallback(size: fallbackIconSize),
+        );
+      } catch (_) {
+        return _ProfileAvatarFallback(size: fallbackIconSize);
+      }
+    }
+
+    return _ProfileAvatarFallback(size: fallbackIconSize);
+  }
+}
+
+class _ProfileAvatarFallback extends StatelessWidget {
+  const _ProfileAvatarFallback({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(TablerIcons.user, color: taskPrimaryBlue, size: size);
+  }
+}
+
+class _ProfileStatDivider extends StatelessWidget {
+  const _ProfileStatDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 37,
+      margin: const EdgeInsets.symmetric(horizontal: 7),
+      color: taskMutedBorderColor,
+    );
+  }
+}
+
+class _ProfileAccountList extends StatelessWidget {
+  const _ProfileAccountList({required this.onEditProfile});
+
+  final VoidCallback onEditProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: taskBorderColor),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          _ProfileAccountRow(
+            key: DashboardScreen.profileUserRowKey,
+            icon: TablerIcons.user_circle,
+            label: 'User Profile',
+            onTap: onEditProfile,
+          ),
+          const _ProfileAccountDivider(),
+          const _ProfileAccountRow(
+            key: DashboardScreen.profileVaultRowKey,
+            icon: TablerIcons.shield_lock,
+            label: 'Vault Management',
+          ),
+          const _ProfileAccountDivider(),
+          const _ProfileAccountRow(
+            key: DashboardScreen.profileRecoveryRowKey,
+            icon: TablerIcons.key,
+            label: 'Recovery Keys',
+          ),
+          const _ProfileAccountDivider(),
+          const _ProfileAccountRow(
+            key: DashboardScreen.profileArchivesRowKey,
+            icon: TablerIcons.archive,
+            label: 'Archives',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileAccountRow extends StatelessWidget {
+  const _ProfileAccountRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: taskDarkText),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: taskDarkText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: taskMutedText,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileAccountDivider extends StatelessWidget {
+  const _ProfileAccountDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16),
+      child: Divider(height: 1, thickness: 1, color: taskMutedBorderColor),
+    );
+  }
+}
+
+class _ProfileNameSheet extends StatefulWidget {
+  const _ProfileNameSheet({required this.initialName, required this.onSave});
+
+  final String initialName;
+  final Future<void> Function(String value) onSave;
+
+  @override
+  State<_ProfileNameSheet> createState() => _ProfileNameSheetState();
+}
+
+class _ProfileNameSheetState extends State<_ProfileNameSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName,
+  );
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    final navigator = Navigator.of(context);
+    final trimmed = _controller.text.trim();
+    try {
+      await widget.onSave(trimmed);
+      if (mounted) {
+        navigator.pop(trimmed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Form(
+          key: _formKey,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: taskMutedBorderColor,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
               Text(
-                title,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                'Edit Profile Name',
+                style: theme.textTheme.titleMedium?.copyWith(
                   color: taskDarkText,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
-                body,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                'This name appears on your profile and reminders.',
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: taskSecondaryText,
-                  height: 1.45,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                key: DashboardScreen.profileNameFieldKey,
+                controller: _controller,
+                enabled: !_isSaving,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _isSaving ? null : _save(),
+                decoration: const InputDecoration(
+                  labelText: 'Display name',
+                  hintText: 'Enter your name',
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Display name is required.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  key: DashboardScreen.profileNameSaveButtonKey,
+                  onPressed: _isSaving ? null : _save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: taskPrimaryBlue,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFFA9CBEF),
+                    disabledForegroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Save Name'),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileImagePermissionDialog extends StatelessWidget {
+  const _ProfileImagePermissionDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      key: DashboardScreen.profileImagePermissionDialogKey,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Text(
+        'Choose Profile Picture',
+        style: theme.textTheme.titleMedium?.copyWith(
+          color: taskDarkText,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: Text(
+        'Remindly will open your photo picker so you can choose one image. '
+        'The app only uses the photo you select for your profile picture.',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: taskSecondaryText,
+          height: 1.45,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: DashboardScreen.profileImagePermissionContinueKey,
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: taskPrimaryBlue,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Continue'),
         ),
       ],
     );

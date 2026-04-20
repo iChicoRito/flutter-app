@@ -43,16 +43,19 @@ class VaultDraft {
     this.method,
     this.secret,
     this.keepExistingSecret = false,
+    this.preserveExistingConfig = false,
   });
 
   const VaultDraft.disabled()
     : isEnabled = false,
       method = null,
       secret = null,
-      keepExistingSecret = false;
+      keepExistingSecret = false,
+      preserveExistingConfig = false;
 
   final bool isEnabled;
   final VaultMethod? method;
   final String? secret;
   final bool keepExistingSecret;
+  final bool preserveExistingConfig;
 }

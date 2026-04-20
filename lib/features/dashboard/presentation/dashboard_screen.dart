@@ -13,7 +13,6 @@ import '../../../core/services/task_repository_scope.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_access.dart';
 import '../../task_management/domain/task_item.dart';
-import '../../task_management/presentation/task_creation_sheet.dart';
 import '../../task_management/presentation/task_editor_screen.dart';
 import '../../task_management/presentation/task_management_controller.dart';
 import '../../task_management/presentation/task_management_screen.dart';
@@ -26,7 +25,6 @@ class DashboardScreen extends StatefulWidget {
   static const Key markerKey = Key('dashboard-screen');
   static const Key homeTabKey = Key('dashboard-home-tab');
   static const Key tasksTabKey = Key('dashboard-tasks-tab');
-  static const Key addTaskButtonKey = Key('dashboard-add-task');
   static const Key todayHeaderKey = Key('dashboard-today-header');
   static const Key upcomingHeaderKey = Key('dashboard-upcoming-header');
   static const Key overdueHeaderKey = Key('dashboard-overdue-header');
@@ -285,61 +283,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _openCreateFlow() async {
-    final taskController = _taskController;
-    if (taskController == null) {
-      return;
-    }
-    if (taskController.categories.isEmpty) {
-      await taskController.load();
-      if (!mounted) {
-        return;
-      }
-    }
-
-    final request = await Navigator.of(context).push<TaskCreationRequest>(
-      MaterialPageRoute<TaskCreationRequest>(
-        builder: (context) => TaskCreationScreen(
-          repository: TaskRepositoryScope.of(context),
-          categories: taskController.categories,
-        ),
-      ),
-    );
-    if (request == null || !mounted) {
-      return;
-    }
-
-    final vaultService = VaultServiceScope.of(context);
-    final vaultResolution = await vaultService.resolveConfig(
-      entityKey: 'task:create:${DateTime.now().microsecondsSinceEpoch}',
-      draft: request.vaultDraft,
-    );
-    final task = await taskController.createTask(
-      title: request.title,
-      description: request.description,
-      categoryId: request.categoryId,
-      priority: request.priority,
-      spaceId: request.spaceId,
-      endDate: request.endDate,
-      endMinutes: request.endMinutes,
-      vaultConfig: vaultResolution.config,
-    );
-
-    if (!mounted) {
-      return;
-    }
-    if (vaultResolution.recoveryKeys.isNotEmpty) {
-      await showVaultRecoveryKeysDialog(
-        context: context,
-        recoveryKeys: vaultResolution.recoveryKeys,
-      );
-      if (!mounted) {
-        return;
-      }
-    }
-    await _openEditor(task.id);
-  }
-
   Future<void> _openEditor(String taskId) async {
     final repository = TaskRepositoryScope.of(context);
     final task = await repository.getTaskById(taskId);
@@ -546,15 +489,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )
             : _PlaceholderTab(tab: tab, theme: theme),
       ),
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(
-              key: DashboardScreen.addTaskButtonKey,
-              onPressed: _openCreateFlow,
-              backgroundColor: taskPrimaryBlue,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add_rounded),
-            )
-          : null,
       bottomNavigationBar: _BottomNavBar(
         currentIndex: _currentIndex,
         tabs: _tabs,

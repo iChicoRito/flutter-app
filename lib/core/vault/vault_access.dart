@@ -664,7 +664,7 @@ class _VaultRecoveryKeyDialogState extends State<_VaultRecoveryKeyDialog> {
                 enabled: !_isSubmitting,
                 textCapitalization: TextCapitalization.characters,
                 decoration: _vaultInputDecoration(
-                  'A7F2-K9L3',
+                  'XXXX-XXXX',
                 ).copyWith(errorText: _inlineError, errorMaxLines: 3),
                 validator: (value) {
                   final trimmed = value?.trim() ?? '';
@@ -745,6 +745,15 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
     super.initState();
     _primaryFocusNode = FocusNode();
     _confirmFocusNode = FocusNode();
+    if (_isPin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) {
+          return;
+        }
+        _primaryFocusNode.requestFocus();
+        await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      });
+    }
   }
 
   @override
@@ -766,6 +775,7 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
   @override
   Widget build(BuildContext context) {
     final methodLabel = _isPin ? 'PIN' : 'password';
+    final actionLabel = _isPin ? 'Reset Vault PIN' : 'Reset Vault Password';
     return PopScope(
       canPop: false,
       child: Dialog(
@@ -774,42 +784,65 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _VaultDialogIcon(icon: Icons.lock_reset_rounded),
-                const SizedBox(height: 14),
+                Align(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE6F0FA),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.lock_reset_rounded,
+                      color: Color(0xFF066FD1),
+                      size: 30,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
                 Text(
                   'Create New Vault $methodLabel',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF066FD1),
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 22),
+                Text(
+                  actionLabel,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF333333),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Text(
                   'Recovery succeeded. Set a new $methodLabel before opening "${widget.title}".',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF6B7280),
-                    height: 1.45,
+                    color: const Color(0xFF8A94A6),
+                    height: 1.35,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 if (_isPin)
-                  _VaultPinField(
+                  _VaultCompactPinField(
                     controller: _controller,
                     focusNode: _primaryFocusNode,
-                    title: 'New PIN',
-                    helperText: 'Create a new 4-digit PIN for this vault.',
                     autofocus: true,
+                    errorText: null,
                     validator: _validateSecret,
-                    onSubmitted: () => _confirmFocusNode.requestFocus(),
+                    onSubmitted: _submit,
                   )
                 else
                   TextFormField(
@@ -820,26 +853,8 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
                     decoration: _vaultInputDecoration('Enter new password'),
                     validator: _validateSecret,
                   ),
-                const SizedBox(height: 12),
-                if (_isPin)
-                  _VaultPinField(
-                    controller: _confirmController,
-                    focusNode: _confirmFocusNode,
-                    title: 'Confirm PIN',
-                    helperText: 'Re-enter the same 4 digits to confirm.',
-                    validator: (value) {
-                      final error = _validateSecret(value);
-                      if (error != null) {
-                        return error;
-                      }
-                      if (value?.trim() != _controller.text.trim()) {
-                        return 'PINs do not match.';
-                      }
-                      return null;
-                    },
-                    onSubmitted: _submit,
-                  )
-                else
+                if (!_isPin) ...[
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _confirmController,
                     keyboardType: TextInputType.text,
@@ -857,11 +872,27 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
                     },
                     onFieldSubmitted: (_) => _submit(),
                   ),
+                ],
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _submit,
-                  style: _primaryButtonStyle(context),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(54),
+                    backgroundColor: const Color(0xFF2F8AE5),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    textStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   child: const Text('Reset Vault'),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
                 ),
               ],
             ),
@@ -1064,7 +1095,6 @@ class _VaultPinField extends StatefulWidget {
     required this.helperText,
     required this.validator,
     required this.onSubmitted,
-    this.autofocus = false,
   });
 
   final TextEditingController controller;
@@ -1073,7 +1103,6 @@ class _VaultPinField extends StatefulWidget {
   final String helperText;
   final String? Function(String?) validator;
   final VoidCallback onSubmitted;
-  final bool autofocus;
 
   @override
   State<_VaultPinField> createState() => _VaultPinFieldState();
@@ -1162,7 +1191,6 @@ class _VaultPinFieldState extends State<_VaultPinField> {
           child: TextFormField(
             controller: widget.controller,
             focusNode: widget.focusNode,
-            autofocus: widget.autofocus,
             keyboardType: TextInputType.number,
             obscureText: true,
             obscuringCharacter: '•',
@@ -1343,8 +1371,8 @@ class _VaultPinPreview extends StatelessWidget {
               color: hasError
                   ? const Color(0xFFD63939)
                   : isFilled
-                  ? const Color(0xFF066FD1)
-                  : const Color(0xFFD7DDE6),
+                        ? const Color(0xFF066FD1)
+                        : const Color(0xFFD7DDE6),
               width: isFilled || hasError ? 1.2 : 1,
             ),
             boxShadow: compact
@@ -1364,7 +1392,7 @@ class _VaultPinPreview extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               child: isFilled
                   ? Text(
-                      '•',
+                      '\u2022',
                       key: ValueKey('filled-$index'),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: const Color(0xFF6B7280),
@@ -1426,3 +1454,4 @@ ButtonStyle _primaryButtonStyle(BuildContext context) {
     ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
   );
 }
+

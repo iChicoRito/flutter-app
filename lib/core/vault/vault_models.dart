@@ -5,11 +5,13 @@ class VaultConfig {
     required this.isEnabled,
     required this.method,
     this.secretKeyRef,
+    this.recoveryKeyRef,
   });
 
   final bool isEnabled;
   final VaultMethod method;
   final String? secretKeyRef;
+  final String? recoveryKeyRef;
 
   bool get usesSecret =>
       method == VaultMethod.password || method == VaultMethod.pin;
@@ -18,7 +20,9 @@ class VaultConfig {
     bool? isEnabled,
     VaultMethod? method,
     String? secretKeyRef,
+    String? recoveryKeyRef,
     bool clearSecretKeyRef = false,
+    bool clearRecoveryKeyRef = false,
   }) {
     return VaultConfig(
       isEnabled: isEnabled ?? this.isEnabled,
@@ -26,6 +30,9 @@ class VaultConfig {
       secretKeyRef: clearSecretKeyRef
           ? null
           : secretKeyRef ?? this.secretKeyRef,
+      recoveryKeyRef: clearRecoveryKeyRef
+          ? null
+          : recoveryKeyRef ?? this.recoveryKeyRef,
     );
   }
 }

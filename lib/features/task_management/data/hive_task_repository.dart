@@ -529,6 +529,9 @@ class VaultConfigAdapter extends TypeAdapter<VaultConfig> {
       isEnabled: reader.readBool(),
       method: reader.read() as VaultMethod,
       secretKeyRef: reader.read() as String?,
+      recoveryKeyRef: reader.availableBytes > 0
+          ? reader.read() as String?
+          : null,
     );
   }
 
@@ -537,6 +540,7 @@ class VaultConfigAdapter extends TypeAdapter<VaultConfig> {
     writer
       ..writeBool(obj.isEnabled)
       ..write(obj.method)
-      ..write(obj.secretKeyRef);
+      ..write(obj.secretKeyRef)
+      ..write(obj.recoveryKeyRef);
   }
 }

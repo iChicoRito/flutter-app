@@ -106,7 +106,7 @@ class _SpacesPageState extends State<SpacesPage> {
 
     try {
       final vaultService = VaultServiceScope.of(context);
-      final resolvedVaultConfig = await vaultService.resolveConfig(
+      final vaultResolution = await vaultService.resolveConfig(
         entityKey: initialSpace == null
             ? 'space:create:${DateTime.now().microsecondsSinceEpoch}'
             : spaceVaultEntityKey(initialSpace.id),
@@ -119,7 +119,7 @@ class _SpacesPageState extends State<SpacesPage> {
         description: result.description,
         categoryId: result.categoryId,
         colorValue: result.colorValue,
-        vaultConfig: resolvedVaultConfig,
+        vaultConfig: vaultResolution.config,
       );
       if (!mounted) {
         return;
@@ -130,6 +130,12 @@ class _SpacesPageState extends State<SpacesPage> {
             ? 'Space created successfully.'
             : 'Space updated successfully.',
       );
+      if (vaultResolution.recoveryKeys.isNotEmpty) {
+        await showVaultRecoveryKeysDialog(
+          context: context,
+          recoveryKeys: vaultResolution.recoveryKeys,
+        );
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -178,6 +184,7 @@ class _SpacesPageState extends State<SpacesPage> {
 
   Future<void> _openSpace(TaskSpace space) async {
     final vaultService = VaultServiceScope.of(context);
+    var targetSpace = space;
     final unlockResult = await ensureUnlocked(
       context: context,
       vaultService: vaultService,
@@ -185,6 +192,18 @@ class _SpacesPageState extends State<SpacesPage> {
       title: space.name,
       entityKind: VaultEntityKind.space,
       config: space.vaultConfig,
+      onRecoveryReset: (resolution) async {
+        final config = resolution.config;
+        if (config == null) {
+          return;
+        }
+        targetSpace = space.copyWith(
+          vaultConfig: config,
+          updatedAt: DateTime.now(),
+        );
+        await widget.repository.upsertSpace(targetSpace);
+        await _controller.load();
+      },
     );
     if (!mounted) {
       return;
@@ -209,7 +228,7 @@ class _SpacesPageState extends State<SpacesPage> {
         builder: (context) => SpaceDetailScreen(
           repository: widget.repository,
           reminderService: widget.reminderService,
-          space: space,
+          space: targetSpace,
         ),
       ),
     );
@@ -308,6 +327,16 @@ class _SpacesPageState extends State<SpacesPage> {
       entityKind: VaultEntityKind.space,
       config: space.vaultConfig,
       forcePrompt: true,
+      onRecoveryReset: (resolution) async {
+        final config = resolution.config;
+        if (config == null) {
+          return;
+        }
+        await widget.repository.upsertSpace(
+          space.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+        );
+        await _controller.load();
+      },
     );
     if (!mounted) {
       return false;
@@ -457,7 +486,7 @@ class _SpacesPageState extends State<SpacesPage> {
                               mainAxisSpacing: 12,
                               crossAxisSpacing: 12,
                               childAspectRatio: 0.56,
-                        ),
+                            ),
                         itemBuilder: (context, index) {
                           final space = filteredSpaces[index];
                           return _SpaceGridCard(
@@ -510,10 +539,7 @@ class _SpacesPageState extends State<SpacesPage> {
 }
 
 class _SpacesViewToggle extends StatelessWidget {
-  const _SpacesViewToggle({
-    required this.viewMode,
-    required this.onChanged,
-  });
+  const _SpacesViewToggle({required this.viewMode, required this.onChanged});
 
   final SpacesViewMode viewMode;
   final ValueChanged<SpacesViewMode> onChanged;
@@ -558,10 +584,7 @@ class _SpacesViewToggle extends StatelessWidget {
 }
 
 class _SpacesSearchField extends StatelessWidget {
-  const _SpacesSearchField({
-    required this.controller,
-    required this.onChanged,
-  });
+  const _SpacesSearchField({required this.controller, required this.onChanged});
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
@@ -900,9 +923,9 @@ class _SpaceListCard extends StatelessWidget {
                           : space.description,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: taskMutedText,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: taskMutedText),
                     ),
                   ],
                 ),
@@ -1124,11 +1147,7 @@ class _FolderAccent extends StatelessWidget {
               color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(
-              TablerIcons.folder,
-              size: iconSize,
-              color: color,
-            ),
+            child: Icon(TablerIcons.folder, size: iconSize, color: color),
           ),
           if (count > 0)
             Positioned(
@@ -1137,10 +1156,7 @@ class _FolderAccent extends StatelessWidget {
               child: Container(
                 width: badgeSize,
                 height: badgeSize,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: Text(
                   '$count',
@@ -1173,11 +1189,7 @@ class _SpaceLockBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              TablerIcons.lock,
-              size: 12,
-              color: taskSecondaryText,
-            ),
+            const Icon(TablerIcons.lock, size: 12, color: taskSecondaryText),
             const SizedBox(width: 6),
             Text(
               'Locked',
@@ -1259,10 +1271,9 @@ class _SpacesEmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Create one to organize your tasks and keep related work together.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: taskMutedText,
-              height: 1.5,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: taskMutedText, height: 1.5),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1309,10 +1320,9 @@ class _SpacesFilteredEmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Try changing your search or category filters to see more spaces.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: taskMutedText,
-              height: 1.5,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: taskMutedText, height: 1.5),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1483,9 +1493,9 @@ class _SpacesErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               message,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: taskDarkText,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: taskDarkText),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),

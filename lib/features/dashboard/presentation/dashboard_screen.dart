@@ -179,7 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final vaultService = VaultServiceScope.of(context);
-    final resolvedVaultConfig = await vaultService.resolveConfig(
+    final vaultResolution = await vaultService.resolveConfig(
       entityKey: 'task:create:${DateTime.now().microsecondsSinceEpoch}',
       draft: request.vaultDraft,
     );
@@ -191,11 +191,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       spaceId: request.spaceId,
       endDate: request.endDate,
       endMinutes: request.endMinutes,
-      vaultConfig: resolvedVaultConfig,
+      vaultConfig: vaultResolution.config,
     );
 
     if (!mounted) {
       return;
+    }
+    if (vaultResolution.recoveryKeys.isNotEmpty) {
+      await showVaultRecoveryKeysDialog(
+        context: context,
+        recoveryKeys: vaultResolution.recoveryKeys,
+      );
+      if (!mounted) {
+        return;
+      }
     }
     await _openEditor(task.id);
   }
@@ -216,6 +225,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       title: task.title,
       entityKind: VaultEntityKind.task,
       config: task.vaultConfig,
+      onRecoveryReset: (resolution) async {
+        final config = resolution.config;
+        if (config == null) {
+          return;
+        }
+        await repository.upsertTask(
+          task.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+        );
+        await _taskController?.load();
+      },
     );
     if (!mounted) {
       return;
@@ -237,12 +256,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     if (task.vaultConfig == null && parentSpace != null) {
       final spaceUnlockResult = await ensureUnlocked(
-          context: context,
-          vaultService: vaultService,
-          entityKey: spaceVaultEntityKey(parentSpace.id),
-          title: parentSpace.name,
-          entityKind: VaultEntityKind.space,
-          config: parentSpace.vaultConfig,
+        context: context,
+        vaultService: vaultService,
+        entityKey: spaceVaultEntityKey(parentSpace.id),
+        title: parentSpace.name,
+        entityKind: VaultEntityKind.space,
+        config: parentSpace.vaultConfig,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await repository.upsertSpace(
+            parentSpace.copyWith(
+              vaultConfig: config,
+              updatedAt: DateTime.now(),
+            ),
+          );
+          await _taskController?.load();
+        },
       );
       if (!mounted) {
         return;
@@ -1028,39 +1060,37 @@ class _HomeTaskTile extends StatelessWidget {
               visualDensity: VisualDensity.compact,
             ),
             const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            task.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(
-                                  color: taskDarkText,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: task.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                                ),
-                          ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: taskDarkText,
+                                fontWeight: FontWeight.w700,
+                                decoration: task.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
                         ),
-                      ],
-                    ),
-                    if (task.vaultConfig?.isEnabled == true) ...[
-                      const SizedBox(height: 6),
-                      const _LockedBadge(),
+                      ),
                     ],
+                  ),
+                  if (task.vaultConfig?.isEnabled == true) ...[
                     const SizedBox(height: 6),
-                    Text(
-                      preview,
+                    const _LockedBadge(),
+                  ],
+                  const SizedBox(height: 6),
+                  Text(
+                    preview,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1130,11 +1160,7 @@ class _LockedBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            TablerIcons.lock,
-            size: 12,
-            color: taskSecondaryText,
-          ),
+          const Icon(TablerIcons.lock, size: 12, color: taskSecondaryText),
           const SizedBox(width: 6),
           Text(
             'Locked',

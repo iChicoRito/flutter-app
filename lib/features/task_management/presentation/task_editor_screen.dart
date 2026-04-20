@@ -289,14 +289,14 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
     try {
       final vaultService = VaultServiceScope.of(context);
-      final resolvedVaultConfig = await vaultService.resolveConfig(
+      final vaultResolution = await vaultService.resolveConfig(
         entityKey: 'task:${result.task.id}',
         draft: result.vaultDraft,
         existingConfig: task.vaultConfig,
       );
       final updatedTask = result.task.copyWith(
-        vaultConfig: resolvedVaultConfig,
-        clearVaultConfig: resolvedVaultConfig == null,
+        vaultConfig: vaultResolution.config,
+        clearVaultConfig: vaultResolution.config == null,
       );
       await widget.repository.upsertTask(updatedTask);
       await widget.reminderService.syncTask(updatedTask);
@@ -310,6 +310,12 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         _categories = result.categories;
       });
       showTaskToast(context, message: 'Task updated successfully.');
+      if (vaultResolution.recoveryKeys.isNotEmpty) {
+        await showVaultRecoveryKeysDialog(
+          context: context,
+          recoveryKeys: vaultResolution.recoveryKeys,
+        );
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -426,7 +432,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     }
 
     final vaultService = VaultServiceScope.of(context);
-    final taskUnlocked = task.vaultConfig?.isEnabled == true &&
+    final taskUnlocked =
+        task.vaultConfig?.isEnabled == true &&
         vaultService.isUnlocked(taskVaultEntityKey(task.id));
     if (taskUnlocked) {
       return true;
@@ -458,6 +465,22 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         entityKind: VaultEntityKind.task,
         config: task.vaultConfig,
         forcePrompt: true,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          final updatedTask = task.copyWith(
+            vaultConfig: config,
+            updatedAt: DateTime.now(),
+          );
+          await widget.repository.upsertTask(updatedTask);
+          if (mounted) {
+            setState(() {
+              _task = updatedTask;
+            });
+          }
+        },
       );
       if (!mounted) {
         return false;
@@ -496,6 +519,15 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       entityKind: VaultEntityKind.space,
       config: parentSpace.vaultConfig,
       forcePrompt: true,
+      onRecoveryReset: (resolution) async {
+        final config = resolution.config;
+        if (config == null) {
+          return;
+        }
+        await widget.repository.upsertSpace(
+          parentSpace.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+        );
+      },
     );
     if (!mounted) {
       return false;
@@ -1548,7 +1580,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                   enabled: _vaultEnabled,
                   method: _vaultMethod,
                   secretController: _vaultSecretController,
-                  hasExistingSecret: widget.task.vaultConfig?.secretKeyRef != null,
+                  hasExistingSecret:
+                      widget.task.vaultConfig?.secretKeyRef != null,
                   isDeviceSecurityAvailable: _isDeviceSecurityAvailable,
                   onEnabledChanged: (value) {
                     setState(() {
@@ -1560,7 +1593,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                   },
                   onMethodChanged: (value) async {
                     bool? available = _isDeviceSecurityAvailable;
-                    if (value == VaultMethod.deviceSecurity && available == null) {
+                    if (value == VaultMethod.deviceSecurity &&
+                        available == null) {
                       available = await VaultServiceScope.of(
                         context,
                       ).isDeviceSecurityAvailable();

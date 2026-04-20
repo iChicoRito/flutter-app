@@ -111,17 +111,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   bool get _isCurrentSpaceUnlocked {
-    final currentSpace = widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
+    final currentSpace =
+        widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
     if (currentSpace?.vaultConfig?.isEnabled != true) {
       return false;
     }
-    return VaultServiceScope.of(context).isUnlocked(
-      spaceVaultEntityKey(currentSpace!.id),
-    );
+    return VaultServiceScope.of(
+      context,
+    ).isUnlocked(spaceVaultEntityKey(currentSpace!.id));
   }
 
   Future<void> _toggleCurrentSpaceVault() async {
-    final currentSpace = widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
+    final currentSpace =
+        widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
     if (currentSpace?.vaultConfig?.isEnabled != true) {
       return;
     }
@@ -146,6 +148,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       title: currentSpace.name,
       entityKind: VaultEntityKind.space,
       config: currentSpace.vaultConfig,
+      onRecoveryReset: (resolution) async {
+        final config = resolution.config;
+        if (config == null) {
+          return;
+        }
+        await widget.repository.upsertSpace(
+          currentSpace.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+        );
+        await _controller.load();
+      },
     );
     if (!mounted) {
       return;
@@ -185,7 +197,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           categories: _controller.categories,
           lockedCategoryId: widget.lockedCategoryId,
           spaceId: widget.fixedSpaceId,
-          appBarTitle: widget.fixedSpaceId == null ? 'Add Task' : 'Add Space Task',
+          appBarTitle: widget.fixedSpaceId == null
+              ? 'Add Task'
+              : 'Add Space Task',
         ),
       ),
     );
@@ -198,7 +212,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
     try {
       final vaultService = VaultServiceScope.of(context);
-      final resolvedVaultConfig = await vaultService.resolveConfig(
+      final vaultResolution = await vaultService.resolveConfig(
         entityKey: 'task:create:${DateTime.now().microsecondsSinceEpoch}',
         draft: request.vaultDraft,
       );
@@ -210,13 +224,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         spaceId: request.spaceId,
         endDate: request.endDate,
         endMinutes: request.endMinutes,
-        vaultConfig: resolvedVaultConfig,
+        vaultConfig: vaultResolution.config,
       );
       if (!mounted) {
         return;
       }
 
       showTaskToast(context, message: 'Task created successfully.');
+      if (vaultResolution.recoveryKeys.isNotEmpty) {
+        await showVaultRecoveryKeysDialog(
+          context: context,
+          recoveryKeys: vaultResolution.recoveryKeys,
+        );
+        if (!mounted) {
+          return;
+        }
+      }
       await _openEditor(task.id);
     } catch (_) {
       if (!mounted) {
@@ -245,6 +268,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       title: task.title,
       entityKind: VaultEntityKind.task,
       config: task.vaultConfig,
+      onRecoveryReset: (resolution) async {
+        final config = resolution.config;
+        if (config == null) {
+          return;
+        }
+        await widget.repository.upsertTask(
+          task.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+        );
+        await _controller.load();
+      },
     );
     if (!mounted) {
       return;
@@ -266,12 +299,25 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
     if (task.vaultConfig == null && parentSpace != null) {
       final spaceUnlockResult = await ensureUnlocked(
-          context: context,
-          vaultService: vaultService,
-          entityKey: spaceVaultEntityKey(parentSpace.id),
-          title: parentSpace.name,
-          entityKind: VaultEntityKind.space,
-          config: parentSpace.vaultConfig,
+        context: context,
+        vaultService: vaultService,
+        entityKey: spaceVaultEntityKey(parentSpace.id),
+        title: parentSpace.name,
+        entityKind: VaultEntityKind.space,
+        config: parentSpace.vaultConfig,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await widget.repository.upsertSpace(
+            parentSpace.copyWith(
+              vaultConfig: config,
+              updatedAt: DateTime.now(),
+            ),
+          );
+          await _controller.load();
+        },
       );
       if (!mounted) {
         return;
@@ -303,7 +349,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           taskId: taskId,
           lockedCategoryId: widget.lockedCategoryId,
           fixedSpaceId: widget.fixedSpaceId,
-          appBarTitle: widget.fixedSpaceId == null ? 'Task Notes' : 'Space Task',
+          appBarTitle: widget.fixedSpaceId == null
+              ? 'Task Notes'
+              : 'Space Task',
           reminderService: reminderService,
         ),
       ),
@@ -323,7 +371,10 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
   Future<void> _confirmDelete(TaskItem task) async {
     final parentSpace = _controller.spaceFor(task.spaceId);
-    if (!await _confirmVaultProtectedTaskAction(task, parentSpace: parentSpace)) {
+    if (!await _confirmVaultProtectedTaskAction(
+      task,
+      parentSpace: parentSpace,
+    )) {
       return;
     }
     if (!mounted) {
@@ -371,6 +422,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         entityKind: VaultEntityKind.task,
         config: task.vaultConfig,
         forcePrompt: true,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await widget.repository.upsertTask(
+            task.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+          );
+          await _controller.load();
+        },
       );
       if (!mounted) {
         return false;
@@ -402,6 +463,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         entityKind: VaultEntityKind.space,
         config: parentSpace.vaultConfig,
         forcePrompt: true,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await widget.repository.upsertSpace(
+            parentSpace.copyWith(
+              vaultConfig: config,
+              updatedAt: DateTime.now(),
+            ),
+          );
+          await _controller.load();
+        },
       );
       if (!mounted) {
         return false;
@@ -466,9 +540,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 const SizedBox(height: 6),
                 Text(
                   'Choose where this task should live.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: taskSecondaryText,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: taskSecondaryText),
                 ),
                 const SizedBox(height: 16),
                 _SpaceDestinationTile(
@@ -557,7 +631,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 backgroundColor: Colors.white,
                 surfaceTintColor: Colors.white,
                 actions: [
-                  if ((widget.space ?? _controller.spaceFor(widget.fixedSpaceId))
+                  if ((widget.space ??
+                              _controller.spaceFor(widget.fixedSpaceId))
                           ?.vaultConfig
                           ?.isEnabled ==
                       true)
@@ -614,6 +689,31 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
                     children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'My Tasks',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  color: taskDarkText,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 19,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Organize & manage your tasks',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: taskMutedText,
+                                  fontSize: 14,
+                                  height: 1.35,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
                       _SearchField(
                         controller: _searchController,
                         onChanged: _controller.updateSearchQuery,
@@ -639,8 +739,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                               children: [
                                 Expanded(
                                   child: TaskCompactDropdown<TaskStatusFilter>(
-                                    buttonKey: TaskManagementScreen
-                                        .statusDropdownKey,
+                                    buttonKey:
+                                        TaskManagementScreen.statusDropdownKey,
                                     menuKeyBuilder: (value) =>
                                         TaskManagementScreen.statusFilterKey(
                                           value.name,
@@ -679,7 +779,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                               const SizedBox(height: 12),
                               _CategoryFilterRow(
                                 categories: _controller.categories,
-                                selectedCategoryId: _controller.categoryFilterId,
+                                selectedCategoryId:
+                                    _controller.categoryFilterId,
                                 onSelected: _controller.updateCategoryFilter,
                               ),
                             ],
@@ -1024,7 +1125,9 @@ class _TaskCard extends StatelessWidget {
     final descriptionText = previewProtected
         ? 'Protected content'
         : taskDescriptionPreview(task);
-    final actualNotePreview = previewProtected ? '' : taskActualNotePreview(task);
+    final actualNotePreview = previewProtected
+        ? ''
+        : taskActualNotePreview(task);
     final noteText = actualNotePreview.isEmpty
         ? (previewProtected
               ? 'Protected content'
@@ -1106,16 +1209,17 @@ class _TaskCard extends StatelessWidget {
                                       task.title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.headlineSmall?.copyWith(
-                                        color: taskDarkText,
-                                        fontWeight: FontWeight.w700,
-                                        height: 0.98,
-                                        decoration: task.isCompleted
-                                            ? TextDecoration.lineThrough
-                                            : null,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall
+                                          ?.copyWith(
+                                            color: taskDarkText,
+                                            fontWeight: FontWeight.w700,
+                                            height: 0.98,
+                                            decoration: task.isCompleted
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -1192,7 +1296,8 @@ class _TaskCard extends StatelessWidget {
                           if (task.vaultConfig?.isEnabled == true ||
                               space?.vaultConfig?.isEnabled == true)
                             const _LockedBadge(),
-                          if (category != null) _CategoryBadge(category: category!),
+                          if (category != null)
+                            _CategoryBadge(category: category!),
                           if (space != null) _SpaceBadge(space: space!),
                         ],
                       ),
@@ -1253,11 +1358,7 @@ class _SpaceBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            TablerIcons.folder,
-            size: 12,
-            color: space.color,
-          ),
+          Icon(TablerIcons.folder, size: 12, color: space.color),
           const SizedBox(width: 6),
           Text(
             space.name,
@@ -1286,11 +1387,7 @@ class _LockedBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            TablerIcons.lock,
-            size: 12,
-            color: taskSecondaryText,
-          ),
+          const Icon(TablerIcons.lock, size: 12, color: taskSecondaryText),
           const SizedBox(width: 6),
           Text(
             'Locked',
@@ -1332,9 +1429,7 @@ class _SpaceDestinationTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? tone.withValues(alpha: 0.10) : Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected ? tone : taskBorderColor,
-          ),
+          border: Border.all(color: isSelected ? tone : taskBorderColor),
         ),
         child: Row(
           children: [
@@ -1345,11 +1440,7 @@ class _SpaceDestinationTile extends StatelessWidget {
                 color: tone.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                TablerIcons.folder,
-                color: tone,
-                size: 18,
-              ),
+              child: Icon(TablerIcons.folder, color: tone, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1368,19 +1459,14 @@ class _SpaceDestinationTile extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: taskMutedText,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: taskMutedText),
                   ),
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(
-                TablerIcons.check,
-                color: tone,
-                size: 18,
-              ),
+            if (isSelected) Icon(TablerIcons.check, color: tone, size: 18),
           ],
         ),
       ),

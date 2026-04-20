@@ -339,6 +339,8 @@ class _VaultSecretDialog extends StatefulWidget {
 class _VaultSecretDialogState extends State<_VaultSecretDialog> {
   final _controller = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final FocusNode _pinFocusNode = FocusNode();
+  String? _pinError;
 
   bool get _isPin => widget.config.method == VaultMethod.pin;
   bool get _isSpace => widget.entityKind == VaultEntityKind.space;
@@ -346,18 +348,58 @@ class _VaultSecretDialogState extends State<_VaultSecretDialog> {
   String get _primaryLabel => 'Unlock $_entityLabel';
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handlePinChanged);
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_handlePinChanged);
     _controller.dispose();
+    _pinFocusNode.dispose();
     super.dispose();
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) {
+    if (_isPin) {
+      final error = _validatePin(_controller.text);
+      if (error != null) {
+        setState(() {
+          _pinError = error;
+        });
+        _pinFocusNode.requestFocus();
+        return;
+      }
+    } else if (!_formKey.currentState!.validate()) {
       return;
     }
     Navigator.of(
       context,
     ).pop(_VaultSecretDialogResult.secret(_controller.text.trim()));
+  }
+
+  void _handlePinChanged() {
+    if (_pinError == null) {
+      return;
+    }
+    final error = _validatePin(_controller.text);
+    if (error != _pinError) {
+      setState(() {
+        _pinError = error;
+      });
+    }
+  }
+
+  String? _validatePin(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return 'PIN is required.';
+    }
+    if (!RegExp(r'^\d{4}$').hasMatch(trimmed)) {
+      return 'PIN must be exactly 4 digits.';
+    }
+    return null;
   }
 
   @override
@@ -368,7 +410,7 @@ class _VaultSecretDialogState extends State<_VaultSecretDialog> {
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
         child: Form(
           key: _formKey,
           child: Column(
@@ -377,30 +419,30 @@ class _VaultSecretDialogState extends State<_VaultSecretDialog> {
             children: [
               Align(
                 child: Container(
-                  width: 62,
-                  height: 62,
+                  width: 72,
+                  height: 72,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEAF3FE),
-                    borderRadius: BorderRadius.circular(16),
+                    color: const Color(0xFFE6F0FA),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Icon(
                     Icons.lock_rounded,
                     color: Color(0xFF066FD1),
-                    size: 28,
+                    size: 30,
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               Text(
                 'Locked $_entityLabel',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF066FD1),
-                  height: 1,
+                  height: 1.1,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
               Text(
                 'Unlock the "${widget.title}"',
                 textAlign: TextAlign.center,
@@ -409,78 +451,80 @@ class _VaultSecretDialogState extends State<_VaultSecretDialog> {
                   color: const Color(0xFF333333),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 _isPin
-                    ? 'Enter the 4-digit PIN to unlock $_entityLabel.'
+                    ? 'Enter the 4 - digit PIN to unlock ${_entityLabel.toLowerCase()}'
                     : 'Enter the password to unlock $_entityLabel.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF8A94A6),
-                  height: 1.45,
+                  height: 1.35,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _controller,
-                autofocus: true,
-                keyboardType: _isPin
-                    ? TextInputType.number
-                    : TextInputType.text,
-                obscureText: true,
-                maxLength: _isPin ? 4 : null,
-                decoration: InputDecoration(
-                  hintText: _isPin ? 'Enter PIN' : 'Enter password',
-                  counterText: '',
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+              const SizedBox(height: 18),
+              if (_isPin)
+                _VaultCompactPinField(
+                  controller: _controller,
+                  focusNode: _pinFocusNode,
+                  errorText: _pinError,
+                  autofocus: true,
+                  validator: _validatePin,
+                  onSubmitted: _submit,
+                )
+              else
+                TextFormField(
+                  controller: _controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.text,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    hintText: 'Enter password',
+                    counterText: '',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE5E8EC)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF066FD1)),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFD63939)),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFD63939)),
+                    ),
                   ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE5E8EC)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF066FD1)),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFD63939)),
-                  ),
-                  focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFD63939)),
-                  ),
+                  validator: (value) {
+                    final trimmed = value?.trim() ?? '';
+                    if (trimmed.isEmpty) {
+                      return 'Password is required.';
+                    }
+                    return null;
+                  },
+                  onFieldSubmitted: (_) => _submit(),
                 ),
-                validator: (value) {
-                  final trimmed = value?.trim() ?? '';
-                  if (trimmed.isEmpty) {
-                    return _isPin
-                        ? 'PIN is required.'
-                        : 'Password is required.';
-                  }
-                  if (_isPin && !RegExp(r'^\d{4}$').hasMatch(trimmed)) {
-                    return 'PIN must be exactly 4 digits.';
-                  }
-                  return null;
-                },
-                onFieldSubmitted: (_) => _submit(),
-              ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: _submit,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
+                  minimumSize: const Size.fromHeight(54),
                   backgroundColor: const Color(0xFF2F8AE5),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   textStyle: Theme.of(
                     context,
@@ -1149,10 +1193,138 @@ class _VaultPinFieldState extends State<_VaultPinField> {
   }
 }
 
+class _VaultCompactPinField extends StatefulWidget {
+  const _VaultCompactPinField({
+    required this.controller,
+    required this.focusNode,
+    required this.validator,
+    required this.onSubmitted,
+    this.errorText,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String? Function(String?) validator;
+  final VoidCallback onSubmitted;
+  final String? errorText;
+  final bool autofocus;
+
+  @override
+  State<_VaultCompactPinField> createState() => _VaultCompactPinFieldState();
+}
+
+class _VaultCompactPinFieldState extends State<_VaultCompactPinField> {
+  Future<void> _focusAndShowKeyboard() async {
+    widget.focusNode.requestFocus();
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_refresh);
+    widget.focusNode.addListener(_refresh);
+  }
+
+  @override
+  void didUpdateWidget(covariant _VaultCompactPinField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_refresh);
+      widget.controller.addListener(_refresh);
+    }
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_refresh);
+      widget.focusNode.addListener(_refresh);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_refresh);
+    widget.focusNode.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final digits = widget.controller.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _focusAndShowKeyboard,
+          child: _VaultPinPreview(
+            value: digits,
+            compact: true,
+            hasError: widget.errorText != null,
+          ),
+        ),
+        if (widget.errorText != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            widget.errorText!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: const Color(0xFFD63939),
+              height: 1.35,
+            ),
+          ),
+        ],
+        SizedBox(
+          height: 0,
+          child: TextFormField(
+            controller: widget.controller,
+            focusNode: widget.focusNode,
+            autofocus: widget.autofocus,
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            obscuringCharacter: '*',
+            maxLength: 4,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+            enableInteractiveSelection: false,
+            style: const TextStyle(
+              color: Colors.transparent,
+              fontSize: 1,
+              height: 0.01,
+            ),
+            cursorColor: Colors.transparent,
+            decoration: const InputDecoration(
+              counterText: '',
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              isCollapsed: true,
+            ),
+            validator: widget.validator,
+            onFieldSubmitted: (_) => widget.onSubmitted(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _VaultPinPreview extends StatelessWidget {
-  const _VaultPinPreview({required this.value});
+  const _VaultPinPreview({
+    required this.value,
+    this.compact = false,
+    this.hasError = false,
+  });
 
   final String value;
+  final bool compact;
+  final bool hasError;
 
   @override
   Widget build(BuildContext context) {
@@ -1161,39 +1333,54 @@ class _VaultPinPreview extends StatelessWidget {
       children: List.generate(4, (index) {
         final isFilled = index < value.length;
         return Container(
-          width: 56,
-          height: 64,
-          margin: EdgeInsets.only(right: index == 3 ? 0 : 10),
+          width: compact ? 58 : 56,
+          height: compact ? 50 : 64,
+          margin: EdgeInsets.only(right: index == 3 ? 0 : (compact ? 12 : 10)),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(compact ? 12 : 20),
             border: Border.all(
-              color: isFilled
+              color: hasError
+                  ? const Color(0xFFD63939)
+                  : isFilled
                   ? const Color(0xFF066FD1)
-                  : const Color(0xFFE5E8EC),
-              width: isFilled ? 1.6 : 1,
+                  : const Color(0xFFD7DDE6),
+              width: isFilled || hasError ? 1.2 : 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(
-                  0xFF066FD1,
-                ).withValues(alpha: isFilled ? 0.08 : 0),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
+            boxShadow: compact
+                ? null
+                : [
+                    BoxShadow(
+                      color: const Color(
+                        0xFF066FD1,
+                      ).withValues(alpha: isFilled ? 0.08 : 0),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
           ),
           child: Center(
-            child: AnimatedContainer(
+            child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 160),
-              width: isFilled ? 14 : 8,
-              height: isFilled ? 14 : 8,
-              decoration: BoxDecoration(
-                color: isFilled
-                    ? const Color(0xFF066FD1)
-                    : const Color(0xFFD6EAFB),
-                shape: BoxShape.circle,
-              ),
+              child: isFilled
+                  ? Text(
+                      '•',
+                      key: ValueKey('filled-$index'),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFF6B7280),
+                        fontWeight: FontWeight.w600,
+                        height: 1,
+                      ),
+                    )
+                  : Text(
+                      '-',
+                      key: ValueKey('empty-$index'),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: const Color(0xFF9AA3AF),
+                        fontWeight: FontWeight.w400,
+                        height: 1,
+                      ),
+                    ),
             ),
           ),
         );

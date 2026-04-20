@@ -247,7 +247,6 @@ void main() {
     expect(find.text('Pending'), findsOneWidget);
     expect(find.text('Completed'), findsOneWidget);
     expect(find.text('Overdue'), findsOneWidget);
-    expect(find.byKey(DashboardScreen.addTaskButtonKey), findsOneWidget);
     expect(find.text('Submit project brief'), findsOneWidget);
   });
 
@@ -324,11 +323,27 @@ void main() {
     expect(find.byKey(DashboardScreen.profileTabKey), findsOneWidget);
     expect(find.text('My Profile'), findsOneWidget);
     expect(find.text('Manage and update your profile'), findsOneWidget);
-    expect(find.text('Mark'), findsOneWidget);
+    final nameFinder = find.descendant(
+      of: find.byKey(DashboardScreen.profileIdentityKey),
+      matching: find.text('Mark'),
+    );
+    final nameText = tester.widget<Text>(nameFinder);
+    final statusText = tester.widget<Text>(find.text('Active'));
+
+    expect(nameFinder, findsOneWidget);
+    expect(nameText.style?.fontSize, 17);
+    expect(statusText.style?.fontSize, 11);
     expect(
       find.descendant(
         of: find.byKey(DashboardScreen.profileCompletedStatKey),
         matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.profileCompletedStatKey),
+        matching: find.text('Completed'),
       ),
       findsOneWidget,
     );
@@ -341,6 +356,13 @@ void main() {
     );
     expect(
       find.descendant(
+        of: find.byKey(DashboardScreen.profilePendingStatKey),
+        matching: find.text('Pending'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
         of: find.byKey(DashboardScreen.profileOverdueStatKey),
         matching: find.text('1'),
       ),
@@ -348,8 +370,22 @@ void main() {
     );
     expect(
       find.descendant(
+        of: find.byKey(DashboardScreen.profileOverdueStatKey),
+        matching: find.text('Overdue'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
         of: find.byKey(DashboardScreen.profileVaultStatKey),
         matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.profileVaultStatKey),
+        matching: find.text('Vaults'),
       ),
       findsOneWidget,
     );

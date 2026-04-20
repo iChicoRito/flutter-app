@@ -322,6 +322,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       return;
     }
+    if (taskUnlockResult == VaultUnlockResult.lockedOut) {
+      return;
+    }
     if (taskUnlockResult == VaultUnlockResult.cancelled) {
       return;
     }
@@ -360,6 +363,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           backgroundColor: const Color(0xFFFFEBEE),
           foregroundColor: taskDangerText,
         );
+        return;
+      }
+      if (spaceUnlockResult == VaultUnlockResult.lockedOut) {
         return;
       }
       if (spaceUnlockResult == VaultUnlockResult.cancelled) {
@@ -1543,7 +1549,7 @@ class _ProfileSummaryCard extends StatelessWidget {
               'Active',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: taskSuccessText,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1554,7 +1560,7 @@ class _ProfileSummaryCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
               color: taskDarkText,
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1565,7 +1571,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                 child: _ProfileStatTile(
                   key: DashboardScreen.profileCompletedStatKey,
                   value: stats.completedCount,
-                  label: 'Completed Tasks',
+                  label: 'Completed',
                   backgroundColor: const Color(0xFFE6F6F1),
                   foregroundColor: taskSuccessText,
                 ),
@@ -1575,7 +1581,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                 child: _ProfileStatTile(
                   key: DashboardScreen.profilePendingStatKey,
                   value: stats.pendingCount,
-                  label: 'Pending Tasks',
+                  label: 'Pending',
                   backgroundColor: const Color(0xFFFEF5E5),
                   foregroundColor: taskWarningText,
                 ),
@@ -1585,7 +1591,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                 child: _ProfileStatTile(
                   key: DashboardScreen.profileOverdueStatKey,
                   value: stats.overdueCount,
-                  label: 'Overdue Tasks',
+                  label: 'Overdue',
                   backgroundColor: const Color(0xFFFBEBEB),
                   foregroundColor: taskDangerText,
                 ),
@@ -1595,7 +1601,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                 child: _ProfileStatTile(
                   key: DashboardScreen.profileVaultStatKey,
                   value: stats.vaultItemsCount,
-                  label: 'Vaults\nItems',
+                  label: 'Vaults',
                   backgroundColor: taskAccentBlue,
                   foregroundColor: taskPrimaryBlue,
                 ),

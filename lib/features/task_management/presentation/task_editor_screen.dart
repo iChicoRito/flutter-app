@@ -502,6 +502,9 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         );
         return false;
       }
+      if (result == VaultUnlockResult.lockedOut) {
+        return false;
+      }
       if (result == VaultUnlockResult.cancelled) {
         return false;
       }
@@ -547,6 +550,9 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         backgroundColor: const Color(0xFFFFEBEE),
         foregroundColor: taskDangerText,
       );
+      return false;
+    }
+    if (result == VaultUnlockResult.lockedOut) {
       return false;
     }
     if (result == VaultUnlockResult.cancelled) {

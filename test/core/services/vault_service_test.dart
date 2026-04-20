@@ -187,4 +187,98 @@ void main() {
       expect(rawMetadata, isNot(contains(resolution.recoveryKeys.first)));
     });
   });
+
+  group('LocalVaultService secret attempts', () {
+    late InMemoryVaultSecureStore store;
+    late LocalVaultService service;
+
+    setUp(() {
+      store = InMemoryVaultSecureStore();
+      service = LocalVaultService.withStore(secureStore: store);
+    });
+
+    test(
+      'five invalid password attempts lock the vault for five minutes',
+      () async {
+        final resolution = await service.resolveConfig(
+          entityKey: 'task:lockout',
+          draft: const VaultDraft(
+            isEnabled: true,
+            method: VaultMethod.password,
+            secret: 'opensesame',
+          ),
+        );
+        final config = resolution.config!;
+        final now = DateTime(2026, 4, 20, 10);
+
+        for (var index = 0; index < 4; index++) {
+          final attempt = await service.unlockWithSecret(
+            entityKey: 'task:lockout',
+            config: config,
+            candidate: 'wrong-password',
+            now: now,
+          );
+
+          expect(attempt.status, VaultSecretAttemptStatus.invalid);
+        }
+
+        final locked = await service.unlockWithSecret(
+          entityKey: 'task:lockout',
+          config: config,
+          candidate: 'wrong-password',
+          now: now,
+        );
+        final stillLocked = await service.unlockWithSecret(
+          entityKey: 'task:lockout',
+          config: config,
+          candidate: 'opensesame',
+          now: now.add(const Duration(minutes: 1)),
+        );
+
+        expect(locked.status, VaultSecretAttemptStatus.lockedOut);
+        expect(locked.remainingLockout, const Duration(minutes: 5));
+        expect(stillLocked.status, VaultSecretAttemptStatus.lockedOut);
+      },
+    );
+
+    test('successful unlock after lockout clears the attempt state', () async {
+      final resolution = await service.resolveConfig(
+        entityKey: 'space:secure',
+        draft: const VaultDraft(
+          isEnabled: true,
+          method: VaultMethod.pin,
+          secret: '1234',
+        ),
+      );
+      final config = resolution.config!;
+      final now = DateTime(2026, 4, 20, 10);
+
+      for (var index = 0; index < 5; index++) {
+        await service.unlockWithSecret(
+          entityKey: 'space:secure',
+          config: config,
+          candidate: '0000',
+          now: now,
+        );
+      }
+
+      final lockoutAttempt = await service.unlockWithSecret(
+        entityKey: 'space:secure',
+        config: config,
+        candidate: '0000',
+        now: now,
+      );
+      expect(lockoutAttempt.status, VaultSecretAttemptStatus.lockedOut);
+
+      final success = await service.unlockWithSecret(
+        entityKey: 'space:secure',
+        config: config,
+        candidate: '1234',
+        now: now.add(const Duration(minutes: 5)),
+      );
+      expect(success.status, VaultSecretAttemptStatus.success);
+      expect(service.isUnlocked('space:secure'), isTrue);
+      expect(store.values.length, 2);
+    });
+  });
 }

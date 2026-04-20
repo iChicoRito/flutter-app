@@ -174,6 +174,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       );
       return;
     }
+    if (result == VaultUnlockResult.lockedOut) {
+      return;
+    }
     if (result == VaultUnlockResult.cancelled) {
       return;
     }
@@ -294,6 +297,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       );
       return;
     }
+    if (taskUnlockResult == VaultUnlockResult.lockedOut) {
+      return;
+    }
     if (taskUnlockResult == VaultUnlockResult.cancelled) {
       return;
     }
@@ -332,6 +338,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           backgroundColor: const Color(0xFFFFEBEE),
           foregroundColor: taskDangerText,
         );
+        return;
+      }
+      if (spaceUnlockResult == VaultUnlockResult.lockedOut) {
         return;
       }
       if (spaceUnlockResult == VaultUnlockResult.cancelled) {
@@ -448,6 +457,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         );
         return false;
       }
+      if (result == VaultUnlockResult.lockedOut) {
+        return false;
+      }
       if (result == VaultUnlockResult.cancelled) {
         return false;
       }
@@ -490,6 +502,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           backgroundColor: const Color(0xFFFFEBEE),
           foregroundColor: taskDangerText,
         );
+        return false;
+      }
+      if (result == VaultUnlockResult.lockedOut) {
         return false;
       }
       if (result == VaultUnlockResult.cancelled) {

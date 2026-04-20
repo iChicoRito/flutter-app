@@ -234,6 +234,50 @@ void main() {
       expect(service.recoveryResetApplied, isFalse);
     });
   });
+
+  testWidgets('secret unlock lockout shows a vault locked dialog', (
+    tester,
+  ) async {
+    final service = _FakeVaultService(
+      secretAttempt: const VaultSecretAttempt(
+        status: VaultSecretAttemptStatus.lockedOut,
+        remainingLockout: Duration(minutes: 5),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: _EnsureUnlockedHarness(
+            service: service,
+            config: const VaultConfig(
+              isEnabled: true,
+              method: VaultMethod.password,
+              secretKeyRef: 'secret-ref',
+              recoveryKeyRef: 'recovery-ref',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open vault'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).first, 'wrong');
+    await tester.tap(find.text('Unlock Task'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vault Locked'), findsOneWidget);
+    expect(
+      find.textContaining('Try again in about 5 minutes'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('I Understand'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('result: VaultUnlockResult.lockedOut'), findsOneWidget);
+  });
 }
 
 class _EnsureUnlockedHarness extends StatefulWidget {
@@ -287,6 +331,13 @@ class _EnsureUnlockedHarnessState extends State<_EnsureUnlockedHarness> {
 class _FakeVaultService extends NoopVaultService {
   String? resolvedSecret;
   bool recoveryResetApplied = false;
+  final VaultSecretAttempt secretAttempt;
+
+  _FakeVaultService({
+    this.secretAttempt = const VaultSecretAttempt(
+      status: VaultSecretAttemptStatus.success,
+    ),
+  });
 
   @override
   Future<VaultRecoveryAttempt> unlockWithRecoveryKey({
@@ -312,5 +363,15 @@ class _FakeVaultService extends NoopVaultService {
         recoveryKeyRef: 'updated-recovery-ref',
       ),
     );
+  }
+
+  @override
+  Future<VaultSecretAttempt> unlockWithSecret({
+    required String entityKey,
+    required VaultConfig config,
+    required String candidate,
+    DateTime? now,
+  }) async {
+    return secretAttempt;
   }
 }

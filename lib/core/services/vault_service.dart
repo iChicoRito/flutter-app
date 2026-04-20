@@ -17,7 +17,10 @@ abstract class VaultService {
     VaultConfig? existingConfig,
   });
 
-  Future<void> clearVault(VaultConfig? config);
+  Future<void> clearVault({
+    required String entityKey,
+    VaultConfig? config,
+  });
 
   Future<VaultRecoveryAttempt> unlockWithRecoveryKey({
     required VaultConfig config,
@@ -25,10 +28,11 @@ abstract class VaultService {
     DateTime? now,
   });
 
-  Future<bool> unlockWithSecret({
+  Future<VaultSecretAttempt> unlockWithSecret({
     required String entityKey,
     required VaultConfig config,
     required String candidate,
+    DateTime? now,
   });
 
   Future<bool> unlockWithDeviceSecurity({
@@ -61,6 +65,17 @@ class VaultRecoveryAttempt {
   final Duration? remainingLockout;
 
   bool get isSuccess => status == VaultRecoveryAttemptStatus.success;
+}
+
+enum VaultSecretAttemptStatus { success, invalid, lockedOut }
+
+class VaultSecretAttempt {
+  const VaultSecretAttempt({required this.status, this.remainingLockout});
+
+  final VaultSecretAttemptStatus status;
+  final Duration? remainingLockout;
+
+  bool get isSuccess => status == VaultSecretAttemptStatus.success;
 }
 
 abstract class VaultSecureStore {
@@ -133,7 +148,10 @@ class NoopVaultService implements VaultService {
   const NoopVaultService();
 
   @override
-  Future<void> clearVault(VaultConfig? config) async {}
+  Future<void> clearVault({
+    required String entityKey,
+    VaultConfig? config,
+  }) async {}
 
   @override
   void clearAllUnlocked() {}
@@ -196,11 +214,13 @@ class NoopVaultService implements VaultService {
   }) async => true;
 
   @override
-  Future<bool> unlockWithSecret({
+  Future<VaultSecretAttempt> unlockWithSecret({
     required String entityKey,
     required VaultConfig config,
     required String candidate,
-  }) async => true;
+    DateTime? now,
+  }) async =>
+      const VaultSecretAttempt(status: VaultSecretAttemptStatus.success);
 }
 
 class LocalVaultService implements VaultService {
@@ -224,7 +244,9 @@ class LocalVaultService implements VaultService {
        _localAuthentication = localAuthentication ?? LocalAuthentication(),
        _recoveryKeyGenerator = recoveryKeyGenerator;
 
+  static const int _maxSecretFailures = 5;
   static const int _maxRecoveryFailures = 5;
+  static const Duration _secretLockoutDuration = Duration(minutes: 5);
   static const Duration _recoveryLockoutDuration = Duration(minutes: 15);
 
   final VaultSecureStore _secureStore;
@@ -250,7 +272,7 @@ class LocalVaultService implements VaultService {
     VaultConfig? existingConfig,
   }) async {
     if (!draft.isEnabled || draft.method == null) {
-      await clearVault(existingConfig);
+      await clearVault(entityKey: entityKey, config: existingConfig);
       clearUnlocked(entityKey);
       return const VaultResolution(config: null);
     }
@@ -266,6 +288,7 @@ class LocalVaultService implements VaultService {
       if (existingConfig?.recoveryKeyRef case final previousRecoveryRef?) {
         await _secureStore.delete(key: previousRecoveryRef);
       }
+      await _clearSecretAttemptMetadata(entityKey);
       clearUnlocked(entityKey);
       return VaultResolution(
         config: VaultConfig(isEnabled: true, method: method),
@@ -302,6 +325,7 @@ class LocalVaultService implements VaultService {
     final recoveryKeys = _recoveryKeyGenerator.generate();
     await _secureStore.write(key: secretKeyRef, value: _hashSecret(nextSecret));
     await _writeRecoveryMetadata(recoveryKeyRef, recoveryKeys);
+    await _clearSecretAttemptMetadata(entityKey);
     clearUnlocked(entityKey);
     return VaultResolution(
       config: VaultConfig(
@@ -315,13 +339,17 @@ class LocalVaultService implements VaultService {
   }
 
   @override
-  Future<void> clearVault(VaultConfig? config) async {
+  Future<void> clearVault({
+    required String entityKey,
+    VaultConfig? config,
+  }) async {
     if (config?.secretKeyRef case final secretKeyRef?) {
       await _secureStore.delete(key: secretKeyRef);
     }
     if (config?.recoveryKeyRef case final recoveryKeyRef?) {
       await _secureStore.delete(key: recoveryKeyRef);
     }
+    await _clearSecretAttemptMetadata(entityKey);
   }
 
   @override
@@ -395,24 +423,66 @@ class LocalVaultService implements VaultService {
   }
 
   @override
-  Future<bool> unlockWithSecret({
+  Future<VaultSecretAttempt> unlockWithSecret({
     required String entityKey,
     required VaultConfig config,
     required String candidate,
+    DateTime? now,
   }) async {
     final secretKeyRef = config.secretKeyRef;
     if (secretKeyRef == null) {
-      return false;
+      return const VaultSecretAttempt(
+        status: VaultSecretAttemptStatus.invalid,
+      );
     }
+
+    final currentTime = now ?? DateTime.now();
+    final metadata = await _readSecretAttemptMetadata(entityKey);
+    final lockedUntil = metadata?.lockedUntil;
+    if (lockedUntil != null && lockedUntil.isAfter(currentTime)) {
+      return VaultSecretAttempt(
+        status: VaultSecretAttemptStatus.lockedOut,
+        remainingLockout: lockedUntil.difference(currentTime),
+      );
+    }
+
     final savedHash = await _secureStore.read(key: secretKeyRef);
     if (savedHash == null) {
-      return false;
+      return const VaultSecretAttempt(
+        status: VaultSecretAttemptStatus.invalid,
+      );
     }
     final matches = savedHash == _hashSecret(candidate.trim());
     if (matches) {
+      await _clearSecretAttemptMetadata(entityKey);
       markUnlocked(entityKey);
+      return const VaultSecretAttempt(status: VaultSecretAttemptStatus.success);
     }
-    return matches;
+
+    final failedAttempts = (metadata?.failedAttempts ?? 0) + 1;
+    if (failedAttempts >= _maxSecretFailures) {
+      final nextLockedUntil = currentTime.add(_secretLockoutDuration);
+      await _writeSecretAttemptMetadata(
+        entityKey,
+        _VaultAttemptMetadata(
+          failedAttempts: failedAttempts,
+          lockedUntil: nextLockedUntil,
+        ),
+      );
+      return VaultSecretAttempt(
+        status: VaultSecretAttemptStatus.lockedOut,
+        remainingLockout: _secretLockoutDuration,
+      );
+    }
+
+    await _writeSecretAttemptMetadata(
+      entityKey,
+      _VaultAttemptMetadata(
+        failedAttempts: failedAttempts,
+        lockedUntil: null,
+      ),
+    );
+    return const VaultSecretAttempt(status: VaultSecretAttemptStatus.invalid);
   }
 
   @override
@@ -492,6 +562,36 @@ class LocalVaultService implements VaultService {
   ) {
     return _secureStore.write(key: key, value: jsonEncode(metadata.toJson()));
   }
+
+  String _secretAttemptRef(String entityKey) => 'vault_secret_attempt_$entityKey';
+
+  Future<_VaultAttemptMetadata?> _readSecretAttemptMetadata(
+    String entityKey,
+  ) async {
+    final raw = await _secureStore.read(key: _secretAttemptRef(entityKey));
+    if (raw == null) {
+      return null;
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, Object?>) {
+      return null;
+    }
+    return _VaultAttemptMetadata.fromJson(decoded);
+  }
+
+  Future<void> _writeSecretAttemptMetadata(
+    String entityKey,
+    _VaultAttemptMetadata metadata,
+  ) {
+    return _secureStore.write(
+      key: _secretAttemptRef(entityKey),
+      value: jsonEncode(metadata.toJson()),
+    );
+  }
+
+  Future<void> _clearSecretAttemptMetadata(String entityKey) {
+    return _secureStore.delete(key: _secretAttemptRef(entityKey));
+  }
 }
 
 class _VaultRecoveryMetadata {
@@ -543,6 +643,34 @@ class _VaultRecoveryMetadata {
     return {
       'keyHashes': keyHashes.toList(growable: false),
       'usedKeyHashes': usedKeyHashes.toList(growable: false),
+      'failedAttempts': failedAttempts,
+      'lockedUntil': lockedUntil?.millisecondsSinceEpoch,
+    };
+  }
+}
+
+class _VaultAttemptMetadata {
+  const _VaultAttemptMetadata({
+    required this.failedAttempts,
+    this.lockedUntil,
+  });
+
+  final int failedAttempts;
+  final DateTime? lockedUntil;
+
+  factory _VaultAttemptMetadata.fromJson(Map<String, Object?> json) {
+    return _VaultAttemptMetadata(
+      failedAttempts: json['failedAttempts'] is int
+          ? json['failedAttempts']! as int
+          : 0,
+      lockedUntil: json['lockedUntil'] is int
+          ? DateTime.fromMillisecondsSinceEpoch(json['lockedUntil']! as int)
+          : null,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return {
       'failedAttempts': failedAttempts,
       'lockedUntil': lockedUntil?.millisecondsSinceEpoch,
     };

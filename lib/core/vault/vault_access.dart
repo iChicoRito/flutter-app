@@ -36,7 +36,7 @@ bool isPreviewProtected({
   return false;
 }
 
-enum VaultUnlockResult { notRequired, unlocked, failed, cancelled }
+enum VaultUnlockResult { notRequired, unlocked, failed, lockedOut, cancelled }
 
 enum VaultEntityKind { task, space }
 
@@ -109,12 +109,28 @@ Future<VaultUnlockResult> ensureUnlocked({
       if (secret.isEmpty) {
         return VaultUnlockResult.cancelled;
       }
-      final unlocked = await vaultService.unlockWithSecret(
+      final attempt = await vaultService.unlockWithSecret(
         entityKey: entityKey,
         config: config,
         candidate: secret,
       );
-      return unlocked ? VaultUnlockResult.unlocked : VaultUnlockResult.failed;
+      switch (attempt.status) {
+        case VaultSecretAttemptStatus.success:
+          return VaultUnlockResult.unlocked;
+        case VaultSecretAttemptStatus.invalid:
+          return VaultUnlockResult.failed;
+        case VaultSecretAttemptStatus.lockedOut:
+          final remainingSeconds =
+              attempt.remainingLockout?.inSeconds ?? 5 * 60;
+          final minutes = ((remainingSeconds + 59) ~/ 60).clamp(1, 5);
+          await _showVaultDangerDialog(
+            context: context,
+            title: 'Vault Locked',
+            message:
+                'Too many invalid attempts. Try again in about $minutes minutes.',
+          );
+          return VaultUnlockResult.lockedOut;
+      }
   }
 }
 

@@ -228,6 +228,9 @@ class _SpacesPageState extends State<SpacesPage> {
       );
       return;
     }
+    if (unlockResult == VaultUnlockResult.lockedOut) {
+      return;
+    }
     if (unlockResult == VaultUnlockResult.cancelled) {
       return;
     }
@@ -359,6 +362,9 @@ class _SpacesPageState extends State<SpacesPage> {
         backgroundColor: const Color(0xFFFFEBEE),
         foregroundColor: taskDangerText,
       );
+      return false;
+    }
+    if (result == VaultUnlockResult.lockedOut) {
       return false;
     }
     if (result == VaultUnlockResult.cancelled) {

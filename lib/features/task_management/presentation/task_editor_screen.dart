@@ -29,6 +29,7 @@ class TaskEditorScreen extends StatefulWidget {
   }) : reminderService = reminderService ?? const NoopTaskReminderService();
 
   static const String deletedResult = 'deleted';
+  static const String archivedResult = 'archived';
   static const Key markerKey = Key('task-editor-screen');
   static const Key titleFieldKey = Key('task-editor-title-field');
   static const Key descriptionFieldKey = Key('task-editor-body');
@@ -44,6 +45,7 @@ class TaskEditorScreen extends StatefulWidget {
   static const Key viewDetailsButtonKey = Key('task-editor-view-details');
   static const Key editDetailsButtonKey = Key('task-editor-edit-details');
   static const Key deleteButtonKey = Key('task-editor-delete');
+  static const Key archiveButtonKey = Key('task-editor-archive');
 
   final TaskRepository repository;
   final String taskId;
@@ -56,7 +58,7 @@ class TaskEditorScreen extends StatefulWidget {
   State<TaskEditorScreen> createState() => _TaskEditorScreenState();
 }
 
-enum _EditorMenuAction { viewDetails, edit, delete }
+enum _EditorMenuAction { viewDetails, edit, archive, delete }
 
 class _TaskEditorScreenState extends State<TaskEditorScreen> {
   final _titleController = TextEditingController();
@@ -390,6 +392,38 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     }
   }
 
+  Future<void> _archiveTask() async {
+    final task = _task;
+    if (task == null) {
+      return;
+    }
+    if (!await _confirmVaultProtectedAction(task)) {
+      return;
+    }
+
+    try {
+      final archivedTask = task.copyWith(
+        archivedAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await widget.repository.upsertTask(archivedTask);
+      await widget.reminderService.cancelTask(task.id);
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(TaskEditorScreen.archivedResult);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to archive the task right now.',
+        isError: true,
+      );
+    }
+  }
+
   void _relockTask() {
     final task = _task;
     if (task == null) {
@@ -664,6 +698,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                       _showDetailsDialog();
                     case _EditorMenuAction.edit:
                       _openDetailsSheet();
+                    case _EditorMenuAction.archive:
+                      _archiveTask();
                     case _EditorMenuAction.delete:
                       _deleteTask();
                   }
@@ -672,22 +708,31 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   const PopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.viewDetailsButtonKey,
                     value: _EditorMenuAction.viewDetails,
-                    child: Text('View Details'),
+                    child: TaskMenuEntry(
+                      icon: TablerIcons.eye,
+                      label: 'View Details',
+                    ),
                   ),
-                  PopupMenuItem<_EditorMenuAction>(
+                  const PopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.editDetailsButtonKey,
                     value: _EditorMenuAction.edit,
-                    child: const Text('Edit'),
+                    child: TaskMenuEntry(icon: TablerIcons.edit, label: 'Edit'),
                   ),
-                  PopupMenuItem<_EditorMenuAction>(
+                  const PopupMenuItem<_EditorMenuAction>(
+                    key: TaskEditorScreen.archiveButtonKey,
+                    value: _EditorMenuAction.archive,
+                    child: TaskMenuEntry(
+                      icon: TablerIcons.archive,
+                      label: 'Archive',
+                    ),
+                  ),
+                  const PopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.deleteButtonKey,
                     value: _EditorMenuAction.delete,
-                    child: Text(
-                      'Delete',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: taskDangerText,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: TaskMenuEntry(
+                      icon: TablerIcons.trash,
+                      label: 'Delete',
+                      color: taskDangerText,
                     ),
                   ),
                 ],
@@ -723,74 +768,69 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         onRetry: _loadEditorState,
       );
     }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: taskBorderColor),
-              ),
-              child: Column(
-                children: [
-                  quill.QuillSimpleToolbar(
-                    controller: noteController,
-                    config: const quill.QuillSimpleToolbarConfig(
-                      multiRowsDisplay: false,
-                      toolbarSize: 30,
-                      showDividers: true,
-                      showFontFamily: false,
-                      showFontSize: false,
-                      showBoldButton: true,
-                      showItalicButton: true,
-                      showUnderLineButton: true,
-                      showStrikeThrough: false,
-                      showInlineCode: false,
-                      showColorButton: false,
-                      showBackgroundColorButton: false,
-                      showClearFormat: true,
-                      showAlignmentButtons: false,
-                      showHeaderStyle: true,
-                      showListNumbers: true,
-                      showListBullets: true,
-                      showListCheck: false,
-                      showCodeBlock: false,
-                      showQuote: false,
-                      showIndent: false,
-                      showLink: true,
-                      showUndo: false,
-                      showRedo: false,
-                      showSearchButton: false,
-                      showSubscript: false,
-                      showSuperscript: false,
-                    ),
-                  ),
-                  const Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: taskBorderColor,
-                  ),
-                  Expanded(
-                    child: quill.QuillEditor.basic(
-                      key: TaskEditorScreen.editorBodyKey,
-                      controller: noteController,
-                      focusNode: _editorFocusNode,
-                      scrollController: _editorScrollController,
-                      config: const quill.QuillEditorConfig(
-                        placeholder: 'Start writing your notes...',
-                        padding: EdgeInsets.all(16),
-                      ),
-                    ),
-                  ),
-                ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: ColoredBox(
+            color: Colors.white,
+            child: quill.QuillEditor.basic(
+              key: TaskEditorScreen.editorBodyKey,
+              controller: noteController,
+              focusNode: _editorFocusNode,
+              scrollController: _editorScrollController,
+              config: const quill.QuillEditorConfig(
+                placeholder: 'Start writing your notes...',
+                padding: EdgeInsets.fromLTRB(20, 18, 20, 32),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+        Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: taskBorderColor)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+              child: quill.QuillSimpleToolbar(
+                controller: noteController,
+                config: const quill.QuillSimpleToolbarConfig(
+                  multiRowsDisplay: false,
+                  toolbarSize: 30,
+                  showDividers: true,
+                  showFontFamily: false,
+                  showFontSize: false,
+                  showBoldButton: true,
+                  showItalicButton: true,
+                  showUnderLineButton: true,
+                  showStrikeThrough: false,
+                  showInlineCode: false,
+                  showColorButton: false,
+                  showBackgroundColorButton: false,
+                  showClearFormat: true,
+                  showAlignmentButtons: false,
+                  showHeaderStyle: true,
+                  showListNumbers: true,
+                  showListBullets: true,
+                  showListCheck: false,
+                  showCodeBlock: false,
+                  showQuote: false,
+                  showIndent: false,
+                  showLink: true,
+                  showUndo: false,
+                  showRedo: false,
+                  showSearchButton: false,
+                  showSubscript: false,
+                  showSuperscript: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1554,7 +1594,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                                     color: taskBorderColor,
                                   ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
                               ),

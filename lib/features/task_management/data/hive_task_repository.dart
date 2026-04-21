@@ -372,6 +372,9 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       description: description,
       spaceId: spaceId,
       vaultConfig: vaultConfig,
+      archivedAt: reader.availableBytes > 0
+          ? TaskItemAdapter._readDateValue(reader.read())
+          : null,
       noteDocumentJson: noteDocumentJson,
       notePlainText: notePlainText,
       startDate: startDate,
@@ -408,7 +411,8 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(obj.noteDocumentJson)
       ..write(obj.notePlainText)
       ..write(obj.spaceId)
-      ..write(obj.vaultConfig);
+      ..write(obj.vaultConfig)
+      ..write(_writeDateValue(obj.archivedAt));
   }
 
   static DateTime? _readDateValue(dynamic value, {bool dateOnly = false}) {
@@ -487,6 +491,9 @@ class TaskSpaceAdapter extends TypeAdapter<TaskSpace> {
       vaultConfig: reader.availableBytes > 0
           ? reader.read() as VaultConfig?
           : null,
+      archivedAt: reader.availableBytes > 0
+          ? TaskItemAdapter._readDateValue(reader.read())
+          : null,
     );
   }
 
@@ -500,7 +507,8 @@ class TaskSpaceAdapter extends TypeAdapter<TaskSpace> {
       ..writeInt(obj.colorValue)
       ..write(TaskItemAdapter._writeDateValue(obj.createdAt))
       ..write(TaskItemAdapter._writeDateValue(obj.updatedAt))
-      ..write(obj.vaultConfig);
+      ..write(obj.vaultConfig)
+      ..write(TaskItemAdapter._writeDateValue(obj.archivedAt));
   }
 }
 

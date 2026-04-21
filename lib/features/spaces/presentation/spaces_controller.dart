@@ -32,7 +32,7 @@ class SpacesController extends ChangeNotifier {
   List<TaskCategory> _categories = [];
   List<TaskItem> _tasks = [];
 
-  List<TaskSpace> get spaces => _spaces;
+  List<TaskSpace> get spaces => _visibleSpaces(_spaces);
   List<TaskCategory> get categories => _categories;
   SpacesVaultFilter get vaultFilter => _vaultFilter;
 
@@ -68,7 +68,9 @@ class SpacesController extends ChangeNotifier {
   }
 
   int taskCountFor(String spaceId) {
-    return _tasks.where((task) => task.spaceId == spaceId).length;
+    return _tasks
+        .where((task) => task.spaceId == spaceId && !task.isArchived)
+        .length;
   }
 
   void updateSearchQuery(String value) {
@@ -92,7 +94,7 @@ class SpacesController extends ChangeNotifier {
       for (final category in _categories) category.id: category.name,
     };
 
-    return _spaces.where((space) {
+    return _visibleSpaces(_spaces).where((space) {
       final matchesSearch =
           query.isEmpty ||
           space.name.toLowerCase().contains(query) ||
@@ -109,6 +111,26 @@ class SpacesController extends ChangeNotifier {
       };
       return matchesSearch && matchesCategory && matchesVault;
     }).toList();
+  }
+
+  List<TaskSpace> archivedSpaces() {
+    return _spaces.where((space) => space.isArchived).toList()..sort(
+      (a, b) =>
+          (b.archivedAt ?? b.updatedAt).compareTo(a.archivedAt ?? a.updatedAt),
+    );
+  }
+
+  List<TaskItem> archivedTasksForArchivedSpaces() {
+    final archivedIds = _spaces
+        .where((space) => space.isArchived)
+        .map((space) => space.id)
+        .toSet();
+    return _tasks
+        .where(
+          (task) => task.spaceId != null && archivedIds.contains(task.spaceId),
+        )
+        .toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
   Future<TaskSpace> saveSpace({
@@ -136,6 +158,17 @@ class SpacesController extends ChangeNotifier {
 
     try {
       await _repository.upsertSpace(space);
+      if (existing != null && existing.categoryId != categoryId) {
+        final spaceTasks = await _repository.getTasksBySpace(existing.id);
+        for (final task in spaceTasks) {
+          final updatedTask = task.copyWith(
+            categoryId: categoryId,
+            updatedAt: now,
+          );
+          await _repository.upsertTask(updatedTask);
+          await _reminderService.syncTask(updatedTask);
+        }
+      }
       await load();
       return space;
     } finally {
@@ -158,5 +191,51 @@ class SpacesController extends ChangeNotifier {
       isSaving = false;
       notifyListeners();
     }
+  }
+
+  Future<void> archiveSpace(TaskSpace space) async {
+    isSaving = true;
+    notifyListeners();
+    final now = DateTime.now();
+    try {
+      await _repository.upsertSpace(
+        space.copyWith(archivedAt: now, updatedAt: now),
+      );
+      final tasks = await _repository.getTasksBySpace(space.id);
+      for (final task in tasks) {
+        await _reminderService.cancelTask(task.id);
+      }
+      await load();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> restoreSpace(TaskSpace space) async {
+    isSaving = true;
+    notifyListeners();
+    final now = DateTime.now();
+    try {
+      final restoredSpace = space.copyWith(
+        clearArchivedAt: true,
+        updatedAt: now,
+      );
+      await _repository.upsertSpace(restoredSpace);
+      final tasks = await _repository.getTasksBySpace(space.id);
+      for (final task in tasks) {
+        if (!task.isArchived) {
+          await _reminderService.syncTask(task);
+        }
+      }
+      await load();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
+  }
+
+  List<TaskSpace> _visibleSpaces(List<TaskSpace> spaces) {
+    return spaces.where((space) => !space.isArchived).toList();
   }
 }

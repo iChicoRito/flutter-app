@@ -407,7 +407,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                                   _selectedCategoryId = value;
                                 });
                               },
-                              items: _categories.map((item) => item.id).toList(),
+                              items: _categories
+                                  .map((item) => item.id)
+                                  .toList(),
                               labelBuilder: (value) =>
                                   _categoryLabel(value) ?? 'Category',
                               leadingBuilder: (value) {
@@ -439,7 +441,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                                 ),
                                 side: const BorderSide(color: taskBorderColor),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                             ),
@@ -508,7 +510,8 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                 },
                 onMethodChanged: (value) async {
                   bool? available = _isDeviceSecurityAvailable;
-                  if (value == VaultMethod.deviceSecurity && available == null) {
+                  if (value == VaultMethod.deviceSecurity &&
+                      available == null) {
                     available = await VaultServiceScope.of(
                       context,
                     ).isDeviceSecurityAvailable();

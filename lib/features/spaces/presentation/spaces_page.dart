@@ -110,6 +110,12 @@ class _SpacesPageState extends State<SpacesPage> {
     }
 
     try {
+      for (final category in result.createdCategories) {
+        await widget.repository.upsertCategory(category);
+      }
+      if (!mounted) {
+        return;
+      }
       VaultConfig? nextVaultConfig = initialSpace?.vaultConfig;
       List<String> recoveryKeys = const [];
       if (!result.vaultDraft.preserveExistingConfig) {
@@ -262,8 +268,32 @@ class _SpacesPageState extends State<SpacesPage> {
           return;
         }
         await _openSpaceForm(initialSpace: space);
+      case _SpaceAction.archive:
+        if (!await _confirmVaultProtectedSpaceAction(space)) {
+          return;
+        }
+        await _archiveSpace(space);
       case _SpaceAction.delete:
         await _deleteSpace(space);
+    }
+  }
+
+  Future<void> _archiveSpace(TaskSpace space) async {
+    try {
+      await _controller.archiveSpace(space);
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(context, message: 'Space archived successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to archive the space right now.',
+        isError: true,
+      );
     }
   }
 
@@ -304,6 +334,12 @@ class _SpacesPageState extends State<SpacesPage> {
                 ),
                 const SizedBox(height: 10),
                 _ActionTile(
+                  icon: TablerIcons.archive,
+                  label: 'Archive Space',
+                  onTap: () => Navigator.of(context).pop(_SpaceAction.archive),
+                ),
+                const SizedBox(height: 10),
+                _ActionTile(
                   icon: TablerIcons.trash,
                   label: 'Delete Space',
                   isDestructive: true,
@@ -323,6 +359,8 @@ class _SpacesPageState extends State<SpacesPage> {
     switch (action) {
       case _SpaceAction.edit:
         await _openSpaceForm(initialSpace: space);
+      case _SpaceAction.archive:
+        await _archiveSpace(space);
       case _SpaceAction.delete:
         await _deleteSpace(space);
     }
@@ -483,14 +521,8 @@ class _SpacesPageState extends State<SpacesPage> {
                             ),
                             onTap: () => _openSpace(space),
                             onLongPress: () => _showSpaceActions(space),
-                            onMenuSelected: (action) async {
-                              switch (action) {
-                                case _SpaceAction.edit:
-                                  await _openSpaceForm(initialSpace: space);
-                                case _SpaceAction.delete:
-                                  await _deleteSpace(space);
-                              }
-                            },
+                            onMenuSelected: (action) =>
+                                _handleSpaceMenuAction(space, action),
                           ),
                         ),
                       )
@@ -878,7 +910,7 @@ class _ToggleButton extends StatelessWidget {
   }
 }
 
-enum _SpaceAction { edit, delete }
+enum _SpaceAction { edit, archive, delete }
 
 class _SpaceListCard extends StatelessWidget {
   const _SpaceListCard({
@@ -976,16 +1008,21 @@ class _SpaceListCard extends StatelessWidget {
                 itemBuilder: (context) => [
                   const PopupMenuItem<_SpaceAction>(
                     value: _SpaceAction.edit,
-                    child: Text('Edit'),
+                    child: TaskMenuEntry(icon: TablerIcons.edit, label: 'Edit'),
                   ),
-                  PopupMenuItem<_SpaceAction>(
+                  const PopupMenuItem<_SpaceAction>(
+                    value: _SpaceAction.archive,
+                    child: TaskMenuEntry(
+                      icon: TablerIcons.archive,
+                      label: 'Archive',
+                    ),
+                  ),
+                  const PopupMenuItem<_SpaceAction>(
                     value: _SpaceAction.delete,
-                    child: Text(
-                      'Delete',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: taskDangerText,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: TaskMenuEntry(
+                      icon: TablerIcons.trash,
+                      label: 'Delete',
+                      color: taskDangerText,
                     ),
                   ),
                 ],
@@ -1066,17 +1103,24 @@ class _SpaceGridCard extends StatelessWidget {
                         itemBuilder: (context) => [
                           const PopupMenuItem<_SpaceAction>(
                             value: _SpaceAction.edit,
-                            child: Text('Edit'),
+                            child: TaskMenuEntry(
+                              icon: TablerIcons.edit,
+                              label: 'Edit',
+                            ),
                           ),
-                          PopupMenuItem<_SpaceAction>(
+                          const PopupMenuItem<_SpaceAction>(
+                            value: _SpaceAction.archive,
+                            child: TaskMenuEntry(
+                              icon: TablerIcons.archive,
+                              label: 'Archive',
+                            ),
+                          ),
+                          const PopupMenuItem<_SpaceAction>(
                             value: _SpaceAction.delete,
-                            child: Text(
-                              'Delete',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: taskDangerText,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                            child: TaskMenuEntry(
+                              icon: TablerIcons.trash,
+                              label: 'Delete',
+                              color: taskDangerText,
                             ),
                           ),
                         ],
@@ -1169,7 +1213,6 @@ class _FolderAccent extends StatelessWidget {
   Widget build(BuildContext context) {
     final folderSize = large ? 68.0 : 42.0;
     final iconSize = large ? 36.0 : 24.0;
-    final badgeSize = large ? 26.0 : 18.0;
     final frameSize = large ? 90.0 : 48.0;
 
     return SizedBox(
@@ -1190,24 +1233,44 @@ class _FolderAccent extends StatelessWidget {
           ),
           if (count > 0)
             Positioned(
-              top: large ? 1 : -1,
-              right: large ? 5 : -1,
-              child: Container(
-                width: badgeSize,
-                height: badgeSize,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: Text(
-                  '$count',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: large ? 12 : 9,
-                  ),
-                ),
-              ),
+              top: large ? 0 : -5,
+              right: large ? 4 : -5,
+              child: _SpaceTaskCountBadge(count: count, large: large),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _SpaceTaskCountBadge extends StatelessWidget {
+  const _SpaceTaskCountBadge({required this.count, required this.large});
+
+  final int count;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+
+    return Container(
+      constraints: BoxConstraints(minWidth: large ? 24 : 18),
+      height: large ? 24 : 18,
+      padding: EdgeInsets.symmetric(horizontal: large ? 6 : 5),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: taskDangerText,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: large ? 11 : 9,
+          height: 1,
+        ),
       ),
     );
   }

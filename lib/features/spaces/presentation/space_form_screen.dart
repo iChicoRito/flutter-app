@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:tabler_icons/tabler_icons.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_models.dart';
@@ -14,6 +16,7 @@ class SpaceFormResult {
     required this.categoryId,
     required this.colorValue,
     required this.vaultDraft,
+    this.createdCategories = const [],
   });
 
   final String? id;
@@ -22,6 +25,7 @@ class SpaceFormResult {
   final String categoryId;
   final int colorValue;
   final VaultDraft vaultDraft;
+  final List<TaskCategory> createdCategories;
 }
 
 class SpaceFormScreen extends StatefulWidget {
@@ -40,11 +44,14 @@ class SpaceFormScreen extends StatefulWidget {
 
 class _SpaceFormScreenState extends State<SpaceFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _uuid = const Uuid();
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _vaultSecretController;
+  late List<TaskCategory> _categories;
   late String _selectedCategoryId;
   late Color _selectedColor;
+  final List<TaskCategory> _createdCategories = [];
   bool _vaultEnabled = false;
   VaultMethod _vaultMethod = VaultMethod.password;
   bool _changeVault = false;
@@ -69,10 +76,14 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
       text: initialSpace?.description ?? '',
     );
     _vaultSecretController = TextEditingController();
+    _categories = [...widget.categories];
     _selectedCategoryId =
         initialSpace?.categoryId ??
-        (widget.categories.isNotEmpty ? widget.categories.first.id : '');
-    _selectedColor = initialSpace?.color ?? taskPrimaryBlue;
+        (_categories.isNotEmpty ? _categories.first.id : '');
+    _selectedColor =
+        initialSpace?.color ??
+        _categoryById(_selectedCategoryId)?.color ??
+        taskPrimaryBlue;
     if (initialSpace?.vaultConfig case final vaultConfig?) {
       _vaultEnabled = vaultConfig.isEnabled;
       _vaultMethod = vaultConfig.method;
@@ -110,12 +121,36 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   }
 
   TaskCategory? _categoryById(String id) {
-    for (final category in widget.categories) {
+    for (final category in _categories) {
       if (category.id == id) {
         return category;
       }
     }
     return null;
+  }
+
+  Future<void> _addCategory() async {
+    final category = await showDialog<TaskCategory>(
+      context: context,
+      builder: (context) {
+        return _SpaceCategoryDialog(
+          existingNames: _categories.map((item) => item.name).toSet(),
+          uuid: _uuid,
+        );
+      },
+    );
+
+    if (category == null) {
+      return;
+    }
+
+    setState(() {
+      _createdCategories.add(category);
+      _categories = [..._categories, category]
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      _selectedCategoryId = category.id;
+      _selectedColor = category.color;
+    });
   }
 
   void _submit() {
@@ -142,6 +177,7 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId,
         colorValue: _selectedColor.toARGB32(),
+        createdCategories: List<TaskCategory>.unmodifiable(_createdCategories),
         vaultDraft: VaultDraft(
           isEnabled: _vaultEnabled,
           method: _vaultEnabled ? _vaultMethod : null,
@@ -183,16 +219,28 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _nameController,
+                      maxLength: 16,
                       decoration: taskInputDecoration(
                         context: context,
                         hintText: 'Enter space name',
-                      ),
+                      ).copyWith(counterText: ''),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
+                        final trimmed = value?.trim() ?? '';
+                        if (trimmed.isEmpty) {
                           return 'Space name is required.';
+                        }
+                        if (trimmed.length > 16) {
+                          return 'Space name must be 16 characters or fewer.';
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Maximum of 16 characters',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: taskMutedText),
                     ),
                     const SizedBox(height: 16),
                     const TaskFieldLabel('Short Description'),
@@ -225,42 +273,77 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                   children: [
                     const TaskFieldLabel('Category'),
                     const SizedBox(height: 8),
-                    TaskCompactDropdown<String>(
-                      buttonKey: const Key('space-form-category'),
-                      menuKeyBuilder: (value) =>
-                          Key('space-form-category-$value'),
-                      currentValue: _selectedCategoryId,
-                      currentLabel:
-                          _categoryById(_selectedCategoryId)?.name ??
-                          'Category',
-                      currentLeading: _categoryById(_selectedCategoryId) == null
-                          ? null
-                          : Icon(
-                              resolveTaskCategoryIcon(
-                                _categoryById(_selectedCategoryId)!.iconKey,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TaskCompactDropdown<String>(
+                            buttonKey: const Key('space-form-category'),
+                            menuKeyBuilder: (value) =>
+                                Key('space-form-category-$value'),
+                            currentValue: _selectedCategoryId,
+                            currentLabel:
+                                _categoryById(_selectedCategoryId)?.name ??
+                                'Category',
+                            currentLeading:
+                                _categoryById(_selectedCategoryId) == null
+                                ? null
+                                : Icon(
+                                    resolveTaskCategoryIcon(
+                                      _categoryById(
+                                        _selectedCategoryId,
+                                      )!.iconKey,
+                                    ),
+                                    color: _categoryById(
+                                      _selectedCategoryId,
+                                    )!.color,
+                                    size: 18,
+                                  ),
+                            onSelected: (value) {
+                              setState(() {
+                                _selectedCategoryId = value;
+                                _selectedColor =
+                                    _categoryById(value)?.color ??
+                                    _selectedColor;
+                              });
+                            },
+                            items: _categories.map((item) => item.id).toList(),
+                            labelBuilder: (value) =>
+                                _categoryById(value)?.name ?? 'Category',
+                            leadingBuilder: (value) {
+                              final category = _categoryById(value);
+                              if (category == null) {
+                                return null;
+                              }
+                              return Icon(
+                                resolveTaskCategoryIcon(category.iconKey),
+                                color: category.color,
+                                size: 18,
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 44,
+                          child: OutlinedButton.icon(
+                            onPressed: _addCategory,
+                            icon: const Icon(TablerIcons.plus, size: 18),
+                            label: const Text('New'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: taskPrimaryBlue,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
                               ),
-                              color: _selectedColor,
-                              size: 18,
+                              side: const BorderSide(color: taskBorderColor),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                      onSelected: (value) {
-                        setState(() {
-                          _selectedCategoryId = value;
-                        });
-                      },
-                      items: widget.categories.map((item) => item.id).toList(),
-                      labelBuilder: (value) =>
-                          _categoryById(value)?.name ?? 'Category',
-                      leadingBuilder: (value) {
-                        final category = _categoryById(value);
-                        if (category == null) {
-                          return null;
-                        }
-                        return Icon(
-                          resolveTaskCategoryIcon(category.iconKey),
-                          color: _selectedColor,
-                          size: 18,
-                        );
-                      },
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     const TaskFieldLabel('Space Color'),
@@ -394,6 +477,255 @@ class _ColorOptionChip extends StatelessWidget {
         child: isSelected
             ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
             : null,
+      ),
+    );
+  }
+}
+
+class _SpaceCategoryDialog extends StatefulWidget {
+  const _SpaceCategoryDialog({required this.existingNames, required this.uuid});
+
+  final Set<String> existingNames;
+  final Uuid uuid;
+
+  @override
+  State<_SpaceCategoryDialog> createState() => _SpaceCategoryDialogState();
+}
+
+class _SpaceCategoryDialogState extends State<_SpaceCategoryDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+
+  String _selectedIconKey = taskCategoryIconOptions.first.key;
+  Color _selectedColor = taskCategoryColorOptions.first;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      TaskCategory(
+        id: widget.uuid.v4(),
+        name: _nameController.text.trim(),
+        iconKey: _selectedIconKey,
+        colorValue: _selectedColor.toARGB32(),
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Create Category',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: taskDarkText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Create a category with a focused icon and theme-safe color.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: taskSecondaryText, height: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      TablerIcons.x,
+                      size: 18,
+                      color: taskMutedText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: taskBorderColor),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const TaskFieldLabel('Category Name'),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: taskInputDecoration(
+                        context: context,
+                        hintText: 'Enter a category name',
+                      ),
+                      validator: (value) {
+                        final trimmed = value?.trim() ?? '';
+                        if (trimmed.isEmpty) {
+                          return 'Category name is required.';
+                        }
+                        if (widget.existingNames.any(
+                          (name) => name.toLowerCase() == trimmed.toLowerCase(),
+                        )) {
+                          return 'Choose a unique category name.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    const TaskFieldLabel('Icon'),
+                    const SizedBox(height: 8),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: taskCategoryIconOptions.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1,
+                          ),
+                      itemBuilder: (context, index) {
+                        final option = taskCategoryIconOptions[index];
+                        final selected = _selectedIconKey == option.key;
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedIconKey = option.key;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(16),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            decoration: BoxDecoration(
+                              color: selected ? taskPrimaryBlue : taskSurface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: selected
+                                    ? taskPrimaryBlue
+                                    : taskBorderColor,
+                              ),
+                            ),
+                            child: Icon(
+                              option.icon,
+                              size: 22,
+                              color: selected
+                                  ? Colors.white
+                                  : taskSecondaryText,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    const TaskFieldLabel('Color Selection'),
+                    const SizedBox(height: 8),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: taskCategoryColorOptions.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 5,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1,
+                          ),
+                      itemBuilder: (context, index) {
+                        final color = taskCategoryColorOptions[index];
+                        final selected = color == _selectedColor;
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedColor = color;
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(999),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: selected
+                                    ? taskDarkText
+                                    : taskMutedBorderColor,
+                                width: selected ? 3 : 1.5,
+                              ),
+                              boxShadow: selected
+                                  ? [
+                                      BoxShadow(
+                                        color: color.withValues(alpha: 0.28),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: taskBorderColor),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: taskPrimaryBlue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Create'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

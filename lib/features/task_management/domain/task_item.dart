@@ -15,6 +15,7 @@ class TaskItem {
     this.description,
     this.spaceId,
     this.vaultConfig,
+    this.archivedAt,
     this.noteDocumentJson,
     this.notePlainText,
     this.startDate,
@@ -30,6 +31,7 @@ class TaskItem {
   final String? description;
   final String? spaceId;
   final VaultConfig? vaultConfig;
+  final DateTime? archivedAt;
   final String? noteDocumentJson;
   final String? notePlainText;
   final DateTime? startDate;
@@ -42,6 +44,8 @@ class TaskItem {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? completedAt;
+
+  bool get isArchived => archivedAt != null;
 
   DateTime? get startDateTime {
     if (startDate == null) {
@@ -110,6 +114,8 @@ class TaskItem {
     bool clearSpaceId = false,
     VaultConfig? vaultConfig,
     bool clearVaultConfig = false,
+    DateTime? archivedAt,
+    bool clearArchivedAt = false,
     String? noteDocumentJson,
     String? notePlainText,
     DateTime? startDate,
@@ -134,6 +140,7 @@ class TaskItem {
       description: description ?? this.description,
       spaceId: clearSpaceId ? null : spaceId ?? this.spaceId,
       vaultConfig: clearVaultConfig ? null : vaultConfig ?? this.vaultConfig,
+      archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
       noteDocumentJson: noteDocumentJson ?? this.noteDocumentJson,
       notePlainText: notePlainText ?? this.notePlainText,
       startDate: clearStartDate ? null : startDate ?? this.startDate,

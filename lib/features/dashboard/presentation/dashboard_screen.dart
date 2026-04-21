@@ -12,6 +12,7 @@ import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/task_repository_scope.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_access.dart';
+import '../../archive/presentation/archives_screen.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/presentation/task_editor_screen.dart';
 import '../../task_management/presentation/task_management_controller.dart';
@@ -55,7 +56,6 @@ class DashboardScreen extends StatefulWidget {
   static const Key profileOverdueStatKey = Key(
     'dashboard-profile-overdue-stat',
   );
-  static const Key profileVaultStatKey = Key('dashboard-profile-vault-stat');
   static const Key profileVaultRowKey = Key('dashboard-profile-vault-row');
   static const Key profileRecoveryRowKey = Key(
     'dashboard-profile-recovery-row',
@@ -379,12 +379,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
         builder: (context) => TaskEditorScreen(
           repository: repository,
           taskId: taskId,
           reminderService: reminderService,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    await _taskController?.load();
+    if (!mounted) {
+      return;
+    }
+    if (result == TaskEditorScreen.deletedResult) {
+      showTaskToast(context, message: 'Task deleted successfully.');
+    } else if (result == TaskEditorScreen.archivedResult) {
+      showTaskToast(context, message: 'Task archived successfully.');
+    }
+  }
+
+  Future<void> _openArchives() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (context) => ArchivesScreen(
+          repository: TaskRepositoryScope.of(context),
+          reminderService: TaskReminderScope.of(context),
         ),
       ),
     );
@@ -478,6 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         stats: const _ProfileStats.empty(),
                         onPickProfileImage: _pickProfileImage,
                         onEditProfile: _openProfileNameEditor,
+                        onOpenArchives: _openArchives,
                       )
                     : AnimatedBuilder(
                         animation: taskController,
@@ -489,6 +513,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             stats: _ProfileStats.fromController(taskController),
                             onPickProfileImage: _pickProfileImage,
                             onEditProfile: _openProfileNameEditor,
+                            onOpenArchives: _openArchives,
                           );
                         },
                       ),
@@ -1356,18 +1381,15 @@ class _ProfileStats {
     required this.completedCount,
     required this.pendingCount,
     required this.overdueCount,
-    required this.vaultItemsCount,
   });
 
   const _ProfileStats.empty()
     : completedCount = 0,
       pendingCount = 0,
-      overdueCount = 0,
-      vaultItemsCount = 0;
+      overdueCount = 0;
 
   factory _ProfileStats.fromController(TaskManagementController controller) {
     final tasks = controller.tasks;
-    final spaces = controller.spaces;
     final now = DateTime.now();
     final completedCount = tasks.where((task) => task.isCompleted).length;
     final pendingCount = tasks
@@ -1376,25 +1398,17 @@ class _ProfileStats {
     final overdueCount = tasks
         .where((task) => task.statusAt(now) == TaskStatus.overdue)
         .length;
-    final vaultTaskCount = tasks
-        .where((task) => task.vaultConfig?.isEnabled == true)
-        .length;
-    final vaultSpaceCount = spaces
-        .where((space) => space.vaultConfig?.isEnabled == true)
-        .length;
 
     return _ProfileStats(
       completedCount: completedCount,
       pendingCount: pendingCount,
       overdueCount: overdueCount,
-      vaultItemsCount: vaultTaskCount + vaultSpaceCount,
     );
   }
 
   final int completedCount;
   final int pendingCount;
   final int overdueCount;
-  final int vaultItemsCount;
 }
 
 class _ProfileTab extends StatelessWidget {
@@ -1405,6 +1419,7 @@ class _ProfileTab extends StatelessWidget {
     required this.stats,
     required this.onPickProfileImage,
     required this.onEditProfile,
+    required this.onOpenArchives,
   });
 
   final ThemeData theme;
@@ -1413,6 +1428,7 @@ class _ProfileTab extends StatelessWidget {
   final _ProfileStats stats;
   final VoidCallback onPickProfileImage;
   final VoidCallback onEditProfile;
+  final VoidCallback onOpenArchives;
 
   @override
   Widget build(BuildContext context) {
@@ -1427,31 +1443,33 @@ class _ProfileTab extends StatelessWidget {
         children: [
           Text(
             'My Profile',
-            style: theme.textTheme.headlineSmall?.copyWith(
+            style: theme.textTheme.titleMedium?.copyWith(
               color: taskDarkText,
               fontWeight: FontWeight.w700,
-              fontSize: 19,
+              fontSize: 16,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'Manage and update your profile',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: taskMutedText,
-              fontSize: 14,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF777777),
+              fontSize: 13,
               height: 1.35,
             ),
           ),
           const SizedBox(height: 18),
-          _ProfileSummaryCard(
+          _ProfileIdentityCard(
             name: name,
             profileImageData: profileImageData,
-            stats: stats,
             onPickProfileImage: onPickProfileImage,
+            onEditProfile: onEditProfile,
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
+          _ProfileStatsRow(stats: stats),
+          const SizedBox(height: 24),
           Text(
-            'Account Details',
+            'Manage Tasks',
             style: theme.textTheme.bodySmall?.copyWith(
               color: taskMutedText,
               fontSize: 13,
@@ -1459,25 +1477,25 @@ class _ProfileTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _ProfileAccountList(onEditProfile: onEditProfile),
+          _ProfileAccountList(onOpenArchives: onOpenArchives),
         ],
       ),
     );
   }
 }
 
-class _ProfileSummaryCard extends StatelessWidget {
-  const _ProfileSummaryCard({
+class _ProfileIdentityCard extends StatelessWidget {
+  const _ProfileIdentityCard({
     required this.name,
     required this.profileImageData,
-    required this.stats,
     required this.onPickProfileImage,
+    required this.onEditProfile,
   });
 
   final String name;
   final String? profileImageData;
-  final _ProfileStats stats;
   final VoidCallback onPickProfileImage;
+  final VoidCallback onEditProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -1486,127 +1504,169 @@ class _ProfileSummaryCard extends StatelessWidget {
     return Container(
       key: DashboardScreen.profileIdentityKey,
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: taskSurface,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: taskBorderColor),
       ),
       child: Column(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
+          Row(
             children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: taskAccentBlue,
-                  shape: BoxShape.circle,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: _ProfileAvatarImage(
-                  imageData: profileImageData,
-                  imageKey: DashboardScreen.profileAvatarImageKey,
-                  fallbackIconSize: 33,
-                ),
-              ),
-              Positioned(
-                right: 2,
-                bottom: 2,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    key: DashboardScreen.profileImageButtonKey,
-                    onTap: onPickProfileImage,
-                    customBorder: const CircleBorder(),
-                    child: Ink(
-                      width: 20,
-                      height: 20,
-                      decoration: const BoxDecoration(
-                        color: taskPrimaryBlue,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        TablerIcons.camera,
-                        color: Colors.white,
-                        size: 12,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 53,
+                    height: 53,
+                    decoration: const BoxDecoration(
+                      color: taskAccentBlue,
+                      shape: BoxShape.circle,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: _ProfileAvatarImage(
+                      imageData: profileImageData,
+                      imageKey: DashboardScreen.profileAvatarImageKey,
+                      fallbackIconSize: 22,
+                    ),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: -1,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        key: DashboardScreen.profileImageButtonKey,
+                        onTap: onPickProfileImage,
+                        customBorder: const CircleBorder(),
+                        child: Ink(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: taskPrimaryBlue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: taskSurface, width: 1.2),
+                          ),
+                          child: const Icon(
+                            TablerIcons.camera,
+                            color: Colors.white,
+                            size: 9,
+                          ),
+                        ),
                       ),
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE6F6F1),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        'Active',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: taskSuccessText,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: taskDarkText,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                key: DashboardScreen.profileUserRowKey,
+                onPressed: onEditProfile,
+                icon: const Icon(TablerIcons.edit, size: 9),
+                label: const Text('Edit Profile'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: taskPrimaryBlue,
+                  foregroundColor: taskAccentBlue,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                  minimumSize: const Size(80, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  textStyle: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE6F6F1),
-              borderRadius: BorderRadius.circular(100),
-            ),
-            child: Text(
-              'Active',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: taskSuccessText,
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileStatsRow extends StatelessWidget {
+  const _ProfileStatsRow({required this.stats});
+
+  final _ProfileStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: Row(
+        children: [
+          Expanded(
+            child: _ProfileStatTile(
+              key: DashboardScreen.profileCompletedStatKey,
+              value: stats.completedCount,
+              label: 'Completed',
+              backgroundColor: const Color(0xFFE6F6F1),
+              foregroundColor: taskSuccessText,
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            name,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: taskDarkText,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
+          const _ProfileStatDivider(),
+          Expanded(
+            child: _ProfileStatTile(
+              key: DashboardScreen.profilePendingStatKey,
+              value: stats.pendingCount,
+              label: 'Pending',
+              backgroundColor: const Color(0xFFFEF5E5),
+              foregroundColor: taskWarningText,
             ),
           ),
-          const SizedBox(height: 25),
-          Row(
-            children: [
-              Expanded(
-                child: _ProfileStatTile(
-                  key: DashboardScreen.profileCompletedStatKey,
-                  value: stats.completedCount,
-                  label: 'Completed',
-                  backgroundColor: const Color(0xFFE6F6F1),
-                  foregroundColor: taskSuccessText,
-                ),
-              ),
-              const _ProfileStatDivider(),
-              Expanded(
-                child: _ProfileStatTile(
-                  key: DashboardScreen.profilePendingStatKey,
-                  value: stats.pendingCount,
-                  label: 'Pending',
-                  backgroundColor: const Color(0xFFFEF5E5),
-                  foregroundColor: taskWarningText,
-                ),
-              ),
-              const _ProfileStatDivider(),
-              Expanded(
-                child: _ProfileStatTile(
-                  key: DashboardScreen.profileOverdueStatKey,
-                  value: stats.overdueCount,
-                  label: 'Overdue',
-                  backgroundColor: const Color(0xFFFBEBEB),
-                  foregroundColor: taskDangerText,
-                ),
-              ),
-              const _ProfileStatDivider(),
-              Expanded(
-                child: _ProfileStatTile(
-                  key: DashboardScreen.profileVaultStatKey,
-                  value: stats.vaultItemsCount,
-                  label: 'Vaults',
-                  backgroundColor: taskAccentBlue,
-                  foregroundColor: taskPrimaryBlue,
-                ),
-              ),
-            ],
+          const _ProfileStatDivider(),
+          Expanded(
+            child: _ProfileStatTile(
+              key: DashboardScreen.profileOverdueStatKey,
+              value: stats.overdueCount,
+              label: 'Overdue',
+              backgroundColor: const Color(0xFFFBEBEB),
+              foregroundColor: taskDangerText,
+            ),
           ),
         ],
       ),
@@ -1635,29 +1695,32 @@ class _ProfileStatTile extends StatelessWidget {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(8.5),
           ),
           child: Text(
             '$value',
             style: theme.textTheme.titleSmall?.copyWith(
               color: foregroundColor,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
               height: 1.1,
             ),
           ),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 8),
         Text(
           label,
           textAlign: TextAlign.center,
           style: theme.textTheme.labelSmall?.copyWith(
             color: const Color(0xFF777777),
-            fontSize: 10,
+            fontSize: 10.5,
             fontWeight: FontWeight.w500,
+            height: 1.2,
           ),
         ),
       ],
@@ -1716,17 +1779,17 @@ class _ProfileStatDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 1,
-      height: 37,
-      margin: const EdgeInsets.symmetric(horizontal: 7),
+      height: 30.4,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
       color: taskMutedBorderColor,
     );
   }
 }
 
 class _ProfileAccountList extends StatelessWidget {
-  const _ProfileAccountList({required this.onEditProfile});
+  const _ProfileAccountList({required this.onOpenArchives});
 
-  final VoidCallback onEditProfile;
+  final VoidCallback onOpenArchives;
 
   @override
   Widget build(BuildContext context) {
@@ -1737,13 +1800,6 @@ class _ProfileAccountList extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _ProfileAccountRow(
-            key: DashboardScreen.profileUserRowKey,
-            icon: TablerIcons.user_circle,
-            label: 'User Profile',
-            onTap: onEditProfile,
-          ),
-          const _ProfileAccountDivider(),
           const _ProfileAccountRow(
             key: DashboardScreen.profileVaultRowKey,
             icon: TablerIcons.shield_lock,
@@ -1756,10 +1812,11 @@ class _ProfileAccountList extends StatelessWidget {
             label: 'Recovery Keys',
           ),
           const _ProfileAccountDivider(),
-          const _ProfileAccountRow(
+          _ProfileAccountRow(
             key: DashboardScreen.profileArchivesRowKey,
             icon: TablerIcons.archive,
             label: 'Archives',
+            onTap: onOpenArchives,
           ),
         ],
       ),

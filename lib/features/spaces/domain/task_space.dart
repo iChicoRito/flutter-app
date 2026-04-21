@@ -12,6 +12,7 @@ class TaskSpace {
     required this.createdAt,
     required this.updatedAt,
     this.vaultConfig,
+    this.archivedAt,
   });
 
   final String id;
@@ -22,8 +23,10 @@ class TaskSpace {
   final DateTime createdAt;
   final DateTime updatedAt;
   final VaultConfig? vaultConfig;
+  final DateTime? archivedAt;
 
   Color get color => Color(colorValue);
+  bool get isArchived => archivedAt != null;
 
   TaskSpace copyWith({
     String? id,
@@ -35,6 +38,8 @@ class TaskSpace {
     DateTime? updatedAt,
     VaultConfig? vaultConfig,
     bool clearVaultConfig = false,
+    DateTime? archivedAt,
+    bool clearArchivedAt = false,
   }) {
     return TaskSpace(
       id: id ?? this.id,
@@ -45,6 +50,7 @@ class TaskSpace {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       vaultConfig: clearVaultConfig ? null : vaultConfig ?? this.vaultConfig,
+      archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
     );
   }
 }

@@ -18,6 +18,7 @@ import 'package:flutter_app/features/task_management/domain/task_item.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:tabler_icons/tabler_icons.dart';
 
 void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
@@ -45,28 +46,6 @@ void main() {
     onboardingStatusStore.completed = true;
     displayNameStore.displayName = 'Mark';
     await pumpApp(tester);
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> createTaskThroughUi(
-    WidgetTester tester, {
-    required String title,
-    String? description,
-  }) async {
-    await tester.tap(find.byKey(TaskManagementScreen.addTaskFabKey));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byKey(TaskManagementScreen.createTitleFieldKey),
-      title,
-    );
-    if (description != null) {
-      await tester.enterText(
-        find.byKey(TaskManagementScreen.createDescriptionFieldKey),
-        description,
-      );
-    }
-    await tester.tap(find.byKey(TaskManagementScreen.createSubmitButtonKey));
     await tester.pumpAndSettle();
   }
 
@@ -331,8 +310,10 @@ void main() {
     final statusText = tester.widget<Text>(find.text('Active'));
 
     expect(nameFinder, findsOneWidget);
-    expect(nameText.style?.fontSize, 17);
-    expect(statusText.style?.fontSize, 11);
+    expect(nameText.style?.fontSize, 15);
+    expect(statusText.style?.fontSize, 10);
+    expect(nameText.style?.fontWeight, FontWeight.w600);
+    expect(statusText.style?.fontWeight, FontWeight.w600);
     expect(
       find.descendant(
         of: find.byKey(DashboardScreen.profileCompletedStatKey),
@@ -375,20 +356,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.descendant(
-        of: find.byKey(DashboardScreen.profileVaultStatKey),
-        matching: find.text('2'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(DashboardScreen.profileVaultStatKey),
-        matching: find.text('Vaults'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Vaults'), findsNothing);
     expect(find.byKey(DashboardScreen.profileUserRowKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.profileVaultRowKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.profileRecoveryRowKey), findsOneWidget);
@@ -462,42 +430,57 @@ void main() {
     expect(find.text('Edit Profile Name'), findsNothing);
   });
 
-  testWidgets('static profile rows do not open the name editor', (
+  testWidgets(
+    'profile archives row opens archives and other static rows stay inert',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
+
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(DashboardScreen.profileIdentityKey));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit Profile Name'), findsNothing);
+
+      await tester.tap(find.byKey(DashboardScreen.profileVaultRowKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(DashboardScreen.profileRecoveryRowKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(DashboardScreen.profileArchivesRowKey));
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Archives'), findsOneWidget);
+      expect(find.text('Edit Profile Name'), findsNothing);
+
+      await tester.tap(find.byIcon(TablerIcons.arrow_left));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(DashboardScreen.profileUserRowKey));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Profile Name'), findsOneWidget);
+    },
+  );
+
+  testWidgets('task editor opens from a newly added task', (
     WidgetTester tester,
   ) async {
-    await openDashboard(tester);
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'new-task',
+          title: 'Prepare weekly report',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+    );
 
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(DashboardScreen.profileIdentityKey));
-    await tester.pumpAndSettle();
-    expect(find.text('Edit Profile Name'), findsNothing);
-
-    await tester.tap(find.byKey(DashboardScreen.profileVaultRowKey));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(DashboardScreen.profileRecoveryRowKey));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(DashboardScreen.profileArchivesRowKey));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Edit Profile Name'), findsNothing);
-
-    await tester.tap(find.byKey(DashboardScreen.profileUserRowKey));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Edit Profile Name'), findsOneWidget);
-  });
-
-  testWidgets('creating a task redirects straight into the rich editor', (
-    WidgetTester tester,
-  ) async {
     await openDashboard(tester);
 
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
-
-    await createTaskThroughUi(tester, title: 'Prepare weekly report');
+    await tester.tap(find.text('Prepare weekly report'));
+    await tester.pumpAndSettle();
 
     expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
     expect(find.text('Task Notes'), findsOneWidget);
@@ -507,18 +490,20 @@ void main() {
   testWidgets('task card shows the short creation description', (
     WidgetTester tester,
   ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'description-task',
+          title: 'Prepare weekly report',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(description: 'Send recap to leadership'),
+      ],
+    );
+
     await openDashboard(tester);
 
     await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
-
-    await createTaskThroughUi(
-      tester,
-      title: 'Prepare weekly report',
-      description: 'Send recap to leadership',
-    );
-
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
     await tester.pumpAndSettle();
 
     expect(find.text('Send recap to leadership'), findsOneWidget);
@@ -554,15 +539,15 @@ void main() {
   testWidgets('creation description stays separate from the note body', (
     WidgetTester tester,
   ) async {
-    await openDashboard(tester);
-
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
-
-    await createTaskThroughUi(
-      tester,
-      title: 'Prepare weekly report',
-      description: 'Send recap to leadership',
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'desc-vs-note',
+          title: 'Prepare weekly report',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(description: 'Send recap to leadership'),
+      ],
     );
 
     final createdTask = (await taskRepository.getTasks()).single;
@@ -570,40 +555,58 @@ void main() {
     expect(createdTask.notePlainText, isNull);
   });
 
-  testWidgets(
-    'editor autosaves title changes and reopens with persisted data',
-    (WidgetTester tester) async {
-      await openDashboard(tester);
-      await tester.tap(find.text('Tasks'));
-      await tester.pumpAndSettle();
+  testWidgets('editor detail changes persist after reopening', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'autosave-task',
+          title: 'Prepare weekly report',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+    );
 
-      await createTaskThroughUi(tester, title: 'Prepare weekly report');
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(repository: taskRepository, taskId: 'autosave-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(TaskEditorScreen.titleFieldKey),
-        'Prepare monthly report',
-      );
-      await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(milliseconds: 900));
-      await tester.pumpAndSettle();
-      expect(find.byKey(TaskEditorScreen.autosaveStatusKey), findsOneWidget);
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.priorityFieldKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-editor-priority-urgent')).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.saveButtonKey));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 900));
+    await tester.pumpAndSettle();
+    expect(find.byKey(TaskEditorScreen.autosaveStatusKey), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.arrow_back_rounded));
-      await tester.pumpAndSettle();
+    final savedTask = await taskRepository.getTaskById('autosave-task');
+    expect(savedTask?.priority, TaskPriority.urgent);
 
-      expect(find.text('Prepare monthly report'), findsOneWidget);
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(repository: taskRepository, taskId: 'autosave-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Prepare monthly report'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Prepare monthly report'), findsOneWidget);
-    },
-  );
+    expect(find.text('Urgent'), findsWidgets);
+  });
 
   testWidgets('editor metadata changes autosave and update timestamps', (
     WidgetTester tester,

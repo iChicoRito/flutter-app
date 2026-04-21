@@ -43,9 +43,9 @@ class TaskManagementController extends ChangeNotifier {
   List<TaskCategory> _categories = [];
   List<TaskSpace> _spaces = [];
 
-  List<TaskItem> get tasks => _tasks;
+  List<TaskItem> get tasks => _visibleTasks(_tasks);
   List<TaskCategory> get categories => _categories;
-  List<TaskSpace> get spaces => _spaces;
+  List<TaskSpace> get spaces => _visibleSpaces(_spaces);
   TaskPriorityFilter get priorityFilter => _priorityFilter;
   TaskStatusFilter get statusFilter => _statusFilter;
   TaskVaultFilter get vaultFilter => _vaultFilter;
@@ -191,12 +191,35 @@ class TaskManagementController extends ChangeNotifier {
     return null;
   }
 
+  List<TaskItem> archivedTasks() {
+    return _tasks.where((task) => task.isArchived).toList()..sort(
+      (a, b) =>
+          (b.archivedAt ?? b.updatedAt).compareTo(a.archivedAt ?? a.updatedAt),
+    );
+  }
+
+  Future<void> archiveTask(TaskItem task) async {
+    final now = DateTime.now();
+    await saveTask(task.copyWith(archivedAt: now, updatedAt: now));
+    await _reminderService.cancelTask(task.id);
+  }
+
+  Future<void> restoreTask(TaskItem task) async {
+    final now = DateTime.now();
+    final restoredTask = task.copyWith(clearArchivedAt: true, updatedAt: now);
+    await saveTask(restoredTask);
+    final parentSpace = spaceFor(restoredTask.spaceId);
+    if (parentSpace?.isArchived != true) {
+      await _reminderService.syncTask(restoredTask);
+    }
+  }
+
   List<TaskItem> filteredTasks(DateTime now) {
     final categoryLookup = {
       for (final category in _categories) category.id: category.name,
     };
     final query = searchQuery.trim().toLowerCase();
-    final filtered = _tasks.where((task) {
+    final filtered = _visibleTasks(_tasks).where((task) {
       final noteText = taskNotePreview(task).toLowerCase();
       final descriptionText = (task.description ?? '').toLowerCase();
       final matchesSearch =
@@ -291,5 +314,23 @@ class TaskManagementController extends ChangeNotifier {
     final today = DateTime(now.year, now.month, now.day);
     final dueDate = DateTime(dueAt.year, dueAt.month, dueAt.day);
     return dueDate.isAfter(today);
+  }
+
+  List<TaskItem> _visibleTasks(List<TaskItem> tasks) {
+    final archivedSpaceIds = _spaces
+        .where((space) => space.isArchived)
+        .map((space) => space.id)
+        .toSet();
+    return tasks.where((task) {
+      if (task.isArchived) {
+        return false;
+      }
+      final spaceId = task.spaceId;
+      return spaceId == null || !archivedSpaceIds.contains(spaceId);
+    }).toList();
+  }
+
+  List<TaskSpace> _visibleSpaces(List<TaskSpace> spaces) {
+    return spaces.where((space) => !space.isArchived).toList();
   }
 }

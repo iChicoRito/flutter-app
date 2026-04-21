@@ -378,6 +378,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
     if (result == TaskEditorScreen.deletedResult) {
       showTaskToast(context, message: 'Task deleted successfully.');
+    } else if (result == TaskEditorScreen.archivedResult) {
+      showTaskToast(context, message: 'Task archived successfully.');
     }
   }
 
@@ -414,6 +416,33 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       showTaskToast(
         context,
         message: 'Unable to delete the task right now.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _archiveTask(TaskItem task) async {
+    final parentSpace = _controller.spaceFor(task.spaceId);
+    if (!await _confirmVaultProtectedTaskAction(
+      task,
+      parentSpace: parentSpace,
+    )) {
+      return;
+    }
+
+    try {
+      await _controller.archiveTask(task);
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(context, message: 'Task archived successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to archive the task right now.',
         isError: true,
       );
     }
@@ -519,7 +548,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   Future<void> _moveTaskToSpace(TaskItem task) async {
-    final spaces = await widget.repository.getSpaces();
+    final currentSpace = _controller.spaceFor(task.spaceId);
+    if (!await _confirmVaultProtectedTaskAction(
+      task,
+      parentSpace: currentSpace,
+    )) {
+      return;
+    }
+
+    final spaces = (await widget.repository.getSpaces())
+        .where((space) => !space.isArchived)
+        .toList();
     if (!mounted) {
       return;
     }
@@ -605,6 +644,60 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       }
     }
 
+    if (selectedSpace != null &&
+        selectedSpace.categoryId != task.categoryId &&
+        !await _confirmCategoryChangeForMove(task, selectedSpace)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+
+    if (selectedSpace?.vaultConfig != null) {
+      final destinationSpace = selectedSpace!;
+      final result = await ensureUnlocked(
+        context: context,
+        vaultService: VaultServiceScope.of(context),
+        entityKey: spaceVaultEntityKey(destinationSpace.id),
+        title: destinationSpace.name,
+        entityKind: VaultEntityKind.space,
+        config: destinationSpace.vaultConfig,
+        forcePrompt: true,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await widget.repository.upsertSpace(
+            destinationSpace.copyWith(
+              vaultConfig: config,
+              updatedAt: DateTime.now(),
+            ),
+          );
+          await _controller.load();
+        },
+      );
+      if (!mounted) {
+        return;
+      }
+      if (result == VaultUnlockResult.failed) {
+        showTaskToast(
+          context,
+          message: 'Incorrect vault password or PIN.',
+          backgroundColor: const Color(0xFFFFEBEE),
+          foregroundColor: taskDangerText,
+        );
+        return;
+      }
+      if (result == VaultUnlockResult.lockedOut ||
+          result == VaultUnlockResult.cancelled) {
+        return;
+      }
+      if (result == VaultUnlockResult.unlocked) {
+        showTaskToast(context, message: 'Unlocked successfully.');
+      }
+    }
+
     try {
       await _controller.saveTask(
         task.copyWith(
@@ -628,6 +721,27 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         isError: true,
       );
     }
+  }
+
+  Future<bool> _confirmCategoryChangeForMove(
+    TaskItem task,
+    TaskSpace destinationSpace,
+  ) async {
+    final currentCategory =
+        _controller.categoryFor(task.categoryId)?.name ?? 'Current category';
+    final destinationCategory =
+        _controller.categoryFor(destinationSpace.categoryId)?.name ??
+        'Destination category';
+    final shouldMove = await showDialog<bool>(
+      context: context,
+      builder: (context) => _MoveCategoryChangeDialog(
+        taskTitle: task.title,
+        spaceName: destinationSpace.name,
+        currentCategory: currentCategory,
+        destinationCategory: destinationCategory,
+      ),
+    );
+    return shouldMove == true;
   }
 
   @override
@@ -863,6 +977,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                 switch (action) {
                                   case _TaskMenuAction.moveToSpace:
                                     await _moveTaskToSpace(task);
+                                  case _TaskMenuAction.archive:
+                                    await _archiveTask(task);
                                   case _TaskMenuAction.delete:
                                     await _confirmDelete(task);
                                 }
@@ -922,7 +1038,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 }
 
-enum _TaskMenuAction { moveToSpace, delete }
+enum _TaskMenuAction { moveToSpace, archive, delete }
 
 class _SearchField extends StatelessWidget {
   const _SearchField({required this.controller, required this.onChanged});
@@ -1300,19 +1416,24 @@ class _TaskCard extends StatelessWidget {
                               itemBuilder: (context) => [
                                 const PopupMenuItem<_TaskMenuAction>(
                                   value: _TaskMenuAction.moveToSpace,
-                                  child: Text('Move to Space'),
+                                  child: TaskMenuEntry(
+                                    icon: TablerIcons.folder,
+                                    label: 'Move to Space',
+                                  ),
                                 ),
-                                PopupMenuItem<_TaskMenuAction>(
+                                const PopupMenuItem<_TaskMenuAction>(
+                                  value: _TaskMenuAction.archive,
+                                  child: TaskMenuEntry(
+                                    icon: TablerIcons.archive,
+                                    label: 'Archive',
+                                  ),
+                                ),
+                                const PopupMenuItem<_TaskMenuAction>(
                                   value: _TaskMenuAction.delete,
-                                  child: Text(
-                                    'Delete',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                          color: taskDangerText,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                  child: TaskMenuEntry(
+                                    icon: TablerIcons.trash,
+                                    label: 'Delete',
+                                    color: taskDangerText,
                                   ),
                                 ),
                               ],
@@ -1689,6 +1810,108 @@ class _DeleteTaskDialog extends StatelessWidget {
                       ),
                     ),
                     child: const Text('Delete Task'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoveCategoryChangeDialog extends StatelessWidget {
+  const _MoveCategoryChangeDialog({
+    required this.taskTitle,
+    required this.spaceName,
+    required this.currentCategory,
+    required this.destinationCategory,
+  });
+
+  final String taskTitle;
+  final String spaceName;
+  final String currentCategory;
+  final String destinationCategory;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              child: Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  color: taskAccentBlue,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  TablerIcons.category_2,
+                  color: taskPrimaryBlue,
+                  size: 28,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Change Category?',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: taskDarkText,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Moving "$taskTitle" to "$spaceName" will change its category from $currentCategory to $destinationCategory.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: taskSecondaryText,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: const Color(0xFFF1F3F5),
+                      foregroundColor: taskDarkText,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: taskPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Move Task'),
                   ),
                 ),
               ],

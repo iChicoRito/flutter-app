@@ -3,6 +3,7 @@ import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/vault_service_scope.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_access.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../spaces/domain/task_space.dart';
@@ -170,8 +171,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       showTaskToast(
         context,
         message: 'Incorrect vault password or PIN.',
-        backgroundColor: const Color(0xFFFFEBEE),
-        foregroundColor: taskDangerText,
+        backgroundColor: AppColors.rose100,
+        foregroundColor: AppColors.rose500,
       );
       return;
     }
@@ -293,8 +294,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       showTaskToast(
         context,
         message: 'Incorrect vault password or PIN.',
-        backgroundColor: const Color(0xFFFFEBEE),
-        foregroundColor: taskDangerText,
+        backgroundColor: AppColors.rose100,
+        foregroundColor: AppColors.rose500,
       );
       return;
     }
@@ -336,8 +337,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         showTaskToast(
           context,
           message: 'Incorrect vault password or PIN.',
-          backgroundColor: const Color(0xFFFFEBEE),
-          foregroundColor: taskDangerText,
+          backgroundColor: AppColors.rose100,
+          foregroundColor: AppColors.rose500,
         );
         return;
       }
@@ -482,8 +483,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         showTaskToast(
           context,
           message: 'Incorrect vault password or PIN.',
-          backgroundColor: const Color(0xFFFFEBEE),
-          foregroundColor: taskDangerText,
+          backgroundColor: AppColors.rose100,
+          foregroundColor: AppColors.rose500,
         );
         return false;
       }
@@ -529,8 +530,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         showTaskToast(
           context,
           message: 'Incorrect vault password or PIN.',
-          backgroundColor: const Color(0xFFFFEBEE),
-          foregroundColor: taskDangerText,
+          backgroundColor: AppColors.rose100,
+          foregroundColor: AppColors.rose500,
         );
         return false;
       }
@@ -566,15 +567,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
     final selectedSpaceId = await showModalBottomSheet<String?>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cardFill,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadii.threeXl),
+        ),
       ),
       builder: (context) {
         return SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.five,
+              AppSpacing.four,
+              AppSpacing.five,
+              AppSpacing.five,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,25 +592,25 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: taskMutedBorderColor,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(AppRadii.full),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: AppSpacing.five),
                 Text(
                   'Move to Space',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: taskDarkText,
-                    fontWeight: FontWeight.w700,
+                    color: AppColors.titleText,
+                    fontWeight: AppTypography.weightSemibold,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: AppSpacing.oneAndHalf),
                 Text(
                   'Choose where this task should live.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: taskSecondaryText),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.subHeaderText,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.four),
                 _SpaceDestinationTile(
                   title: 'No Space',
                   subtitle: 'Keep this task outside any space.',
@@ -610,7 +618,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   onTap: () => Navigator.of(context).pop(''),
                 ),
                 if (spaces.isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: AppSpacing.twoAndHalf),
                   for (final space in spaces) ...[
                     _SpaceDestinationTile(
                       title: space.name,
@@ -621,7 +629,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                       accentColor: space.color,
                       onTap: () => Navigator.of(context).pop(space.id),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: AppSpacing.twoAndHalf),
                   ],
                 ],
               ],
@@ -685,8 +693,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         showTaskToast(
           context,
           message: 'Incorrect vault password or PIN.',
-          backgroundColor: const Color(0xFFFFEBEE),
-          foregroundColor: taskDangerText,
+          backgroundColor: AppColors.rose100,
+          foregroundColor: AppColors.rose500,
         );
         return;
       }
@@ -756,13 +764,13 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       },
       child: Scaffold(
         key: TaskManagementScreen.markerKey,
-        backgroundColor: taskSurface,
+        backgroundColor: AppColors.background,
         appBar: widget.appBarTitle == null
             ? null
             : AppBar(
                 title: Text(widget.appBarTitle!),
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.white,
+                backgroundColor: AppColors.cardFill,
+                surfaceTintColor: AppColors.cardFill,
                 actions: [
                   if ((widget.space ??
                               _controller.spaceFor(widget.fixedSpaceId))
@@ -773,11 +781,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                       padding: const EdgeInsets.only(right: 12),
                       child: Material(
                         color: _isCurrentSpaceUnlocked
-                            ? const Color(0xFFEAF3FE)
-                            : const Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.circular(14),
+                            ? AppColors.blue100
+                            : AppColors.rose100,
+                        borderRadius: BorderRadius.circular(AppRadii.xl),
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(AppRadii.xl),
                           onTap: _toggleCurrentSpaceVault,
                           child: Padding(
                             padding: const EdgeInsets.all(10),
@@ -787,8 +795,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                   : TablerIcons.lock,
                               size: 18,
                               color: _isCurrentSpaceUnlocked
-                                  ? taskPrimaryBlue
-                                  : taskDangerText,
+                                  ? AppColors.blue500
+                                  : AppColors.rose500,
                             ),
                           ),
                         ),
@@ -817,10 +825,15 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 behavior: HitTestBehavior.deferToChild,
                 onTap: _isSelectionMode ? _clearSelectionMode : null,
                 child: RefreshIndicator(
-                  color: taskPrimaryBlue,
+                  color: AppColors.blue500,
                   onRefresh: _controller.load,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.five,
+                      AppSpacing.six,
+                      AppSpacing.five,
+                      120,
+                    ),
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -829,29 +842,29 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                             'My Tasks',
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(
-                                  color: taskDarkText,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 19,
+                                  color: AppColors.titleText,
+                                  fontWeight: AppTypography.weightSemibold,
+                                  fontSize: AppTypography.sizeXl,
                                 ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: AppSpacing.one),
                           Text(
                             'Organize & manage your tasks',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: taskMutedText,
-                                  fontSize: 14,
-                                  height: 1.35,
+                                  color: AppColors.subHeaderText,
+                                  fontSize: AppTypography.sizeSm,
+                                  fontWeight: AppTypography.weightSemibold,
                                 ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: AppSpacing.five),
                       _SearchField(
                         controller: _searchController,
                         onChanged: _controller.updateSearchQuery,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.four),
                       _FiltersSection(
                         title: 'Filters',
                         subtitle:
@@ -935,7 +948,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.four),
                       if (filteredTasks.isEmpty)
                         _EmptyState(
                           title: widget.emptyTitle,
@@ -957,7 +970,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                 : spaceVaultEntityKey(space.id),
                           );
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.four,
+                            ),
                             child: _TaskCard(
                               task: task,
                               category: category,
@@ -997,8 +1012,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         floatingActionButton: FloatingActionButton.extended(
           key: TaskManagementScreen.addTaskFabKey,
           onPressed: _controller.isSaving ? null : _openCreateFlow,
-          backgroundColor: taskPrimaryBlue,
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.primaryButtonFill,
+          foregroundColor: AppColors.primaryButtonText,
           elevation: 0,
           focusElevation: 0,
           hoverElevation: 0,
@@ -1067,7 +1082,7 @@ class _SearchField extends StatelessWidget {
         prefixIcon: const Icon(
           TablerIcons.search,
           size: 18,
-          color: taskMutedText,
+          color: AppColors.subHeaderText,
         ),
       ),
     );
@@ -1098,8 +1113,8 @@ class _CategoryFilterRow extends StatelessWidget {
               label: 'All Categories',
               icon: null,
               iconColor: selectedCategoryId == null
-                  ? Colors.white
-                  : taskMutedText,
+                  ? AppColors.primaryButtonText
+                  : AppColors.subHeaderText,
               selected: selectedCategoryId == null,
               onTap: () => onSelected(null),
             ),
@@ -1112,8 +1127,8 @@ class _CategoryFilterRow extends StatelessWidget {
                 label: category.name,
                 icon: resolveTaskCategoryIcon(category.iconKey),
                 iconColor: selectedCategoryId == category.id
-                    ? Colors.white
-                    : taskMutedText,
+                    ? AppColors.primaryButtonText
+                    : AppColors.subHeaderText,
                 selected: selectedCategoryId == category.id,
                 onTap: () => onSelected(
                   selectedCategoryId == category.id ? null : category.id,
@@ -1149,18 +1164,20 @@ class _CategoryChip extends StatelessWidget {
     return InkWell(
       key: chipKey,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadii.lg),
       child: Container(
         constraints: const BoxConstraints(
           minHeight: taskFilterControlHeight,
           maxHeight: taskFilterControlHeight,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.three),
         decoration: BoxDecoration(
-          color: selected ? taskPrimaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: selected ? AppColors.primaryButtonFill : AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.lg),
           border: Border.all(
-            color: selected ? taskPrimaryBlue : taskBorderColor,
+            color: selected
+                ? AppColors.primaryButtonFill
+                : AppColors.cardBorder,
           ),
         ),
         child: Row(
@@ -1168,13 +1185,15 @@ class _CategoryChip extends StatelessWidget {
           children: [
             if (icon != null) ...[
               Icon(icon, size: 13, color: iconColor),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppSpacing.oneAndHalf),
             ],
             Text(
               label,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected ? Colors.white : taskSecondaryText,
-                fontWeight: FontWeight.w700,
+                color: selected
+                    ? AppColors.primaryButtonText
+                    : AppColors.titleText,
+                fontWeight: AppTypography.weightSemibold,
               ),
             ),
           ],
@@ -1202,18 +1221,18 @@ class _FiltersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(AppSpacing.five),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: taskBorderColor),
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
             onTap: onHeaderTap,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadii.twoXl),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1225,36 +1244,35 @@ class _FiltersSection extends StatelessWidget {
                         title,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              color: taskDarkText,
-                              fontWeight: FontWeight.w700,
+                              color: AppColors.titleText,
+                              fontWeight: AppTypography.weightSemibold,
                             ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.one),
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: taskSecondaryText,
-                          height: 1.4,
+                          color: AppColors.subHeaderText,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.three),
                 Icon(
                   isExpanded
                       ? TablerIcons.chevron_up
                       : TablerIcons.chevron_down,
                   size: 18,
-                  color: taskMutedText,
+                  color: AppColors.subHeaderText,
                 ),
               ],
             ),
           ),
           if (isExpanded) ...[
-            const SizedBox(height: 16),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.four),
+            const Divider(height: 1, thickness: 1, color: AppColors.cardBorder),
+            const SizedBox(height: AppSpacing.four),
             child,
           ],
         ],
@@ -1289,7 +1307,7 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const trailingSlotWidth = 28.0;
-    const cardStackSpacing = 12.0;
+    const cardStackSpacing = AppSpacing.three;
     final accentColor = category?.color ?? taskPrimaryBlue;
     final descriptionText = previewProtected
         ? 'Protected content'
@@ -1309,19 +1327,20 @@ class _TaskCard extends StatelessWidget {
         key: TaskManagementScreen.taskTileKey(task.id),
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.five,
+            AppSpacing.five,
+            AppSpacing.five,
+            AppSpacing.four,
+          ),
           decoration: BoxDecoration(
-            color: showCheckbox
-                ? taskAccentBlue.withValues(alpha: 0.32)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(34),
+            color: AppColors.checkboxCardFill,
+            borderRadius: BorderRadius.circular(AppRadii.twoXl),
             border: Border.all(
-              color: showCheckbox
-                  ? taskPrimaryBlue.withValues(alpha: 0.42)
-                  : taskBorderColor,
-              width: showCheckbox ? 1.4 : 1,
+              color: AppColors.checkboxCardBorder,
+              width: AppSizes.borderDefault,
             ),
           ),
           child: Row(
@@ -1332,16 +1351,24 @@ class _TaskCard extends StatelessWidget {
                 child: showCheckbox
                     ? Padding(
                         key: ValueKey(task.id),
-                        padding: const EdgeInsets.only(top: 10),
+                        padding: const EdgeInsets.only(top: AppSpacing.two),
                         child: Theme(
                           data: Theme.of(context).copyWith(
                             checkboxTheme: CheckboxThemeData(
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadii.defaultRadius,
+                                ),
                               ),
                               side: const BorderSide(
-                                color: taskMutedText,
-                                width: 1.3,
+                                color: AppColors.blue200,
+                                width: AppSizes.borderDefault,
+                              ),
+                              fillColor: WidgetStatePropertyAll(
+                                AppColors.blue500,
+                              ),
+                              checkColor: WidgetStatePropertyAll(
+                                AppColors.blue50,
                               ),
                             ),
                           ),
@@ -1349,7 +1376,7 @@ class _TaskCard extends StatelessWidget {
                             key: TaskManagementScreen.taskToggleKey(task.id),
                             value: task.isCompleted,
                             onChanged: (_) => onToggle(),
-                            activeColor: accentColor,
+                            activeColor: AppColors.blue500,
                             materialTapTargetSize:
                                 MaterialTapTargetSize.shrinkWrap,
                             visualDensity: VisualDensity.compact,
@@ -1358,7 +1385,7 @@ class _TaskCard extends StatelessWidget {
                       )
                     : const SizedBox.shrink(key: ValueKey('hidden-checkbox')),
               ),
-              if (showCheckbox) const SizedBox(width: 12),
+              if (showCheckbox) const SizedBox(width: AppSpacing.three),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1380,11 +1407,11 @@ class _TaskCard extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .headlineSmall
+                                          .titleMedium
                                           ?.copyWith(
-                                            color: taskDarkText,
-                                            fontWeight: FontWeight.w700,
-                                            height: 0.98,
+                                            color: AppColors.titleText,
+                                            fontWeight:
+                                                AppTypography.weightSemibold,
                                             decoration: task.isCompleted
                                                 ? TextDecoration.lineThrough
                                                 : null,
@@ -1401,16 +1428,15 @@ class _TaskCard extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
-                                        color: taskMutedText,
-                                        fontWeight: FontWeight.w500,
-                                        height: 1.1,
+                                        color: AppColors.subHeaderText,
+                                        fontWeight: AppTypography.weightMedium,
                                       ),
                                 ),
                               ],
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.three),
                         SizedBox(
                           width: trailingSlotWidth,
                           child: Align(
@@ -1419,8 +1445,8 @@ class _TaskCard extends StatelessWidget {
                               key: TaskManagementScreen.taskMenuButtonKey(
                                 task.id,
                               ),
-                              color: Colors.white,
-                              surfaceTintColor: Colors.white,
+                              color: AppColors.cardFill,
+                              surfaceTintColor: AppColors.cardFill,
                               onSelected: (value) => onMenuSelected(value),
                               itemBuilder: (context) => [
                                 const PopupMenuItem<_TaskMenuAction>(
@@ -1442,7 +1468,7 @@ class _TaskCard extends StatelessWidget {
                                   child: TaskMenuEntry(
                                     icon: TablerIcons.trash,
                                     label: 'Delete',
-                                    color: taskDangerText,
+                                    color: AppColors.rose500,
                                   ),
                                 ),
                               ],
@@ -1454,7 +1480,7 @@ class _TaskCard extends StatelessWidget {
                               icon: const Icon(
                                 TablerIcons.dots_vertical,
                                 size: 18,
-                                color: taskMutedText,
+                                color: AppColors.subHeaderText,
                               ),
                             ),
                           ),
@@ -1464,8 +1490,8 @@ class _TaskCard extends StatelessWidget {
                     const SizedBox(height: cardStackSpacing),
                     if (category != null || space != null) ...[
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: AppSpacing.two,
+                        runSpacing: AppSpacing.two,
                         children: [
                           if (task.vaultConfig?.isEnabled == true ||
                               space?.vaultConfig?.isEnabled == true)
@@ -1485,10 +1511,12 @@ class _TaskCard extends StatelessWidget {
                             width: 3,
                             decoration: BoxDecoration(
                               color: accentColor,
-                              borderRadius: BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(
+                                AppRadii.full,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: AppSpacing.three),
                           Expanded(
                             child: Text(
                               noteText,
@@ -1496,9 +1524,8 @@ class _TaskCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(
-                                    color: taskMutedText,
-                                    height: 1.42,
-                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.subHeaderText,
+                                    fontWeight: AppTypography.weightMedium,
                                   ),
                             ),
                           ),
@@ -1524,21 +1551,24 @@ class _SpaceBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.twoAndHalf,
+        vertical: AppSpacing.oneAndHalf,
+      ),
       decoration: BoxDecoration(
         color: space.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.full),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(TablerIcons.folder, size: 12, color: space.color),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
             space.name,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: space.color,
-              fontWeight: FontWeight.w700,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
         ],
@@ -1553,21 +1583,29 @@ class _LockedBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.twoAndHalf,
+        vertical: AppSpacing.oneAndHalf,
+      ),
       decoration: BoxDecoration(
-        color: taskSurface,
-        borderRadius: BorderRadius.circular(999),
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.full),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(TablerIcons.lock, size: 12, color: taskSecondaryText),
-          const SizedBox(width: 6),
+          const Icon(
+            TablerIcons.lock,
+            size: 12,
+            color: AppColors.subHeaderText,
+          ),
+          const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
             'Locked',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: taskSecondaryText,
-              fontWeight: FontWeight.w700,
+              color: AppColors.subHeaderText,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
         ],
@@ -1596,14 +1634,21 @@ class _SpaceDestinationTile extends StatelessWidget {
     final tone = accentColor ?? taskPrimaryBlue;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.three,
+        ),
         decoration: BoxDecoration(
-          color: isSelected ? tone.withValues(alpha: 0.10) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: isSelected ? tone : taskBorderColor),
+          color: isSelected ? AppColors.blue100 : AppColors.checkboxCardFill,
+          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.blue500
+                : AppColors.checkboxCardBorder,
+          ),
         ),
         child: Row(
           children: [
@@ -1612,11 +1657,11 @@ class _SpaceDestinationTile extends StatelessWidget {
               height: 38,
               decoration: BoxDecoration(
                 color: tone.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadii.xl),
               ),
               child: Icon(TablerIcons.folder, color: tone, size: 18),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.three),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1624,8 +1669,8 @@ class _SpaceDestinationTile extends StatelessWidget {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w700,
+                      color: AppColors.titleText,
+                      fontWeight: AppTypography.weightSemibold,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -1633,9 +1678,9 @@ class _SpaceDestinationTile extends StatelessWidget {
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: taskMutedText),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.subHeaderText,
+                    ),
                   ),
                 ],
               ),
@@ -1656,10 +1701,13 @@ class _CategoryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.twoAndHalf,
+        vertical: AppSpacing.oneAndHalf,
+      ),
       decoration: BoxDecoration(
         color: category.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.full),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1669,12 +1717,12 @@ class _CategoryBadge extends StatelessWidget {
             size: 12,
             color: category.color,
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
             category.name,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: category.color,
-              fontWeight: FontWeight.w700,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
         ],
@@ -1693,11 +1741,14 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: TaskManagementScreen.emptyStateKey,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.six,
+        vertical: AppSpacing.eight,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: taskBorderColor),
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
         children: [
@@ -1706,7 +1757,7 @@ class _EmptyState extends StatelessWidget {
             height: 72,
             decoration: BoxDecoration(
               color: taskAccentBlue,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppRadii.threeXl),
             ),
             child: const Icon(
               TablerIcons.notes,
@@ -1714,20 +1765,20 @@ class _EmptyState extends StatelessWidget {
               color: taskPrimaryBlue,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: AppSpacing.five),
           Text(
             title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: taskDarkText,
-              fontWeight: FontWeight.w700,
+              color: AppColors.titleText,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.two),
           Text(
             message,
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: taskMutedText, height: 1.5),
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
             textAlign: TextAlign.center,
           ),
         ],

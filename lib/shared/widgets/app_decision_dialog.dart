@@ -75,6 +75,7 @@ class AppDecisionDialog extends StatelessWidget {
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        side: const BorderSide(color: AppColors.cardBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(

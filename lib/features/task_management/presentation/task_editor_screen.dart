@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/services/task_reminder_service.dart';
 import '../../../core/services/vault_service_scope.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_access.dart';
 import '../../../core/vault/vault_models.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
@@ -532,8 +533,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         showTaskToast(
           context,
           message: 'Incorrect vault password or PIN.',
-          backgroundColor: const Color(0xFFFFEBEE),
-          foregroundColor: taskDangerText,
+          backgroundColor: AppColors.rose100,
+          foregroundColor: AppColors.rose500,
         );
         return false;
       }
@@ -582,8 +583,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       showTaskToast(
         context,
         message: 'Incorrect vault password or PIN.',
-        backgroundColor: const Color(0xFFFFEBEE),
-        foregroundColor: taskDangerText,
+        backgroundColor: AppColors.rose100,
+        foregroundColor: AppColors.rose500,
       );
       return false;
     }
@@ -616,11 +617,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       },
       child: Scaffold(
         key: TaskEditorScreen.markerKey,
-        backgroundColor: taskSurface,
+        backgroundColor: AppColors.background,
         appBar: AppBar(
           toolbarHeight: 86,
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
+          backgroundColor: AppColors.cardFill,
+          surfaceTintColor: AppColors.cardFill,
           leading: IconButton(
             onPressed: () async {
               if (await _flushBeforeExit() && context.mounted) {
@@ -638,7 +639,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 widget.appBarTitle,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: taskMutedText,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
               const SizedBox(height: 4),
@@ -648,8 +649,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: taskDarkText,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
             ],
@@ -660,11 +660,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 padding: const EdgeInsets.only(right: 4),
                 child: Material(
                   color: _isVaultCurrentlyUnlocked
-                      ? const Color(0xFFEAF3FE)
-                      : const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(14),
+                      ? AppColors.blue100
+                      : AppColors.rose100,
+                  borderRadius: BorderRadius.circular(AppRadii.xl),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadii.xl),
                     onTap: _relockTask,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
@@ -674,8 +674,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                             : TablerIcons.lock,
                         size: 18,
                         color: _isVaultCurrentlyUnlocked
-                            ? taskPrimaryBlue
-                            : taskDangerText,
+                            ? AppColors.blue500
+                            : AppColors.rose500,
                       ),
                     ),
                   ),
@@ -686,8 +686,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               child: PopupMenuButton<_EditorMenuAction>(
                 key: TaskEditorScreen.autosaveStatusKey,
                 enabled: task != null,
-                color: Colors.white,
-                surfaceTintColor: Colors.white,
+                color: AppColors.cardFill,
+                surfaceTintColor: AppColors.cardFill,
                 icon: const Icon(
                   TablerIcons.dots_vertical,
                   size: 20,
@@ -774,7 +774,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       children: [
         Expanded(
           child: ColoredBox(
-            color: Colors.white,
+            color: AppColors.cardFill,
             child: quill.QuillEditor.basic(
               key: TaskEditorScreen.editorBodyKey,
               controller: noteController,
@@ -789,8 +789,8 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         ),
         Container(
           decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: taskBorderColor)),
+            color: AppColors.cardFill,
+            border: Border(top: BorderSide(color: AppColors.cardBorder)),
           ),
           child: SafeArea(
             top: false,
@@ -862,10 +862,13 @@ class _TaskDetailsDialog extends StatelessWidget {
 
     return Dialog(
       key: TaskEditorScreen.metadataCardKey,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        side: const BorderSide(color: AppColors.cardBorder),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         child: Column(
@@ -912,7 +915,6 @@ class _TaskDetailsDialog extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: taskDarkText,
                       fontWeight: FontWeight.w700,
-                      height: 1.1,
                     ),
                   ),
                 ),
@@ -929,7 +931,6 @@ class _TaskDetailsDialog extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: taskMutedText,
-                height: 1.35,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1074,7 +1075,7 @@ class _InfoPill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F9FC),
+          color: AppColors.checkboxCardFill,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(
@@ -1440,11 +1441,11 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     final scheduleValidationMessage = _scheduleValidationMessage();
 
     return Scaffold(
-      backgroundColor: taskSurface,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Edit Task Details'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: AppColors.cardFill,
+        surfaceTintColor: AppColors.cardFill,
       ),
       body: SafeArea(
         child: Form(
@@ -1868,10 +1869,13 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        side: const BorderSide(color: AppColors.cardBorder),
+      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -1897,7 +1901,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                         Text(
                           'Create a category with a focused icon and theme-safe color.',
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: taskSecondaryText, height: 1.4),
+                              ?.copyWith(color: taskSecondaryText),
                         ),
                       ],
                     ),
@@ -1980,7 +1984,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                               option.icon,
                               size: 22,
                               color: selected
-                                  ? Colors.white
+                                  ? AppColors.primaryButtonText
                                   : taskSecondaryText,
                             ),
                           ),

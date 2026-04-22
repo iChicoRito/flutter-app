@@ -6,25 +6,25 @@ import 'dart:async';
 import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_models.dart';
 
-const taskPrimaryBlue = Color(0xFF066FD1);
-const taskPrimaryPressed = Color(0xFF055CB0);
-const taskPrimaryDisabled = Color(0xFFA9CBEF);
-const taskSecondaryBlue = Color(0xFF90CAF9);
-const taskAccentBlue = Color(0xFFE6F0FA);
-const taskSurface = Color(0xFFF9FAFB);
-const taskSurfaceAlt = Color(0xFFF3F6F9);
-const taskBorderColor = Color(0xFFE5E8EC);
-const taskMutedBorderColor = Color(0xFFEEF1F4);
-const taskDarkText = Color(0xFF333333);
-const taskSecondaryText = Color(0xFF6B7280);
-const taskMutedText = Color(0xFF999999);
-const taskDisabledText = Color(0xFFC7CDD6);
-const taskDangerText = Color(0xFFD63939);
-const taskDangerPressed = Color(0xFFB82D2D);
-const taskDangerDisabled = Color(0xFFF2B9B9);
+const taskPrimaryBlue = AppColors.blue500;
+const taskPrimaryPressed = AppColors.blue600;
+const taskPrimaryDisabled = AppColors.blue200;
+const taskSecondaryBlue = AppColors.blue200;
+const taskAccentBlue = AppColors.blue100;
+const taskSurface = AppColors.background;
+const taskSurfaceAlt = AppColors.checkboxCardFill;
+const taskBorderColor = AppColors.cardBorder;
+const taskMutedBorderColor = AppColors.checkboxCardBorder;
+const taskDarkText = AppColors.titleText;
+const taskSecondaryText = AppColors.subHeaderText;
+const taskMutedText = AppColors.subHeaderText;
+const taskDisabledText = AppColors.neutral200;
+const taskDangerText = AppColors.rose500;
+const taskDangerPressed = AppColors.rose500;
+const taskDangerDisabled = AppColors.rose100;
 const taskFilterControlHeight = 44.0;
-const taskSuccessText = Color(0xFF0CA678);
-const taskWarningText = Color(0xFFF59F00);
+const taskSuccessText = AppColors.teal500;
+const taskWarningText = AppColors.amber500;
 
 enum TaskButtonRole { primary, secondary, destructive, ghost }
 
@@ -95,9 +95,9 @@ double taskButtonHeight(TaskButtonSize size) {
 
 double taskButtonRadius(TaskButtonSize size) {
   return switch (size) {
-    TaskButtonSize.large => 18,
-    TaskButtonSize.medium => 12,
-    TaskButtonSize.small => 12,
+    TaskButtonSize.large => AppRadii.lg,
+    TaskButtonSize.medium => AppRadii.lg,
+    TaskButtonSize.small => AppRadii.lg,
   };
 }
 
@@ -130,12 +130,11 @@ TextStyle? taskButtonTextStyle(BuildContext context, TaskButtonSize size) {
   final base = Theme.of(context).textTheme.labelLarge;
   return base?.copyWith(
     fontSize: switch (size) {
-      TaskButtonSize.large => 15,
-      TaskButtonSize.medium => 14,
-      TaskButtonSize.small => 13,
+      TaskButtonSize.large => AppTypography.sizeBase,
+      TaskButtonSize.medium => AppTypography.sizeSm,
+      TaskButtonSize.small => AppTypography.sizeSm,
     },
-    fontWeight: FontWeight.w600,
-    height: 1.1,
+    fontWeight: AppTypography.weightSemibold,
   );
 }
 
@@ -305,10 +304,10 @@ class _TaskToastOverlayState extends State<_TaskToastOverlay>
   Widget build(BuildContext context) {
     final backgroundColor =
         widget.backgroundColor ??
-        (widget.isError ? taskDangerText : const Color(0xFFE6F6F1));
+        (widget.isError ? AppColors.rose500 : AppColors.teal100);
     final foregroundColor =
         widget.foregroundColor ??
-        (widget.isError ? Colors.white : taskSuccessText);
+        (widget.isError ? AppColors.rose50 : AppColors.teal500);
 
     return Positioned(
       left: 16,
@@ -355,30 +354,30 @@ InputDecoration taskInputDecoration({
     hintText: hintText,
     hintStyle: Theme.of(
       context,
-    ).textTheme.bodyMedium?.copyWith(color: taskMutedText),
+    ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
     prefixIcon: prefixIcon,
     filled: true,
-    fillColor: fillColor ?? Colors.white,
+    fillColor: fillColor ?? AppColors.cardFill,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: taskBorderColor),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderSide: const BorderSide(color: AppColors.neutral200),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: taskBorderColor),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderSide: const BorderSide(color: AppColors.neutral200),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: taskPrimaryBlue),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderSide: const BorderSide(color: AppColors.blue500),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: taskDangerText),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderSide: const BorderSide(color: AppColors.rose500),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: taskDangerText),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderSide: const BorderSide(color: AppColors.rose500),
     ),
   );
 }
@@ -393,8 +392,8 @@ class TaskFieldLabel extends StatelessWidget {
     return Text(
       text,
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        color: taskDarkText,
-        fontWeight: FontWeight.w700,
+        color: AppColors.titleText,
+        fontWeight: AppTypography.weightSemibold,
       ),
     );
   }
@@ -417,9 +416,9 @@ class TaskSectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: taskBorderColor),
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -427,8 +426,8 @@ class TaskSectionCard extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: taskDarkText,
-              fontWeight: FontWeight.w700,
+              color: AppColors.titleText,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
           if (subtitle != null) ...[
@@ -437,11 +436,11 @@ class TaskSectionCard extends StatelessWidget {
               subtitle!,
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
+              ).textTheme.bodySmall?.copyWith(color: AppColors.subHeaderText),
             ),
           ],
           const SizedBox(height: 16),
-          const Divider(height: 1, thickness: 1, color: taskBorderColor),
+          const Divider(height: 1, thickness: 1, color: AppColors.cardBorder),
           const SizedBox(height: 16),
           child,
         ],
@@ -479,8 +478,8 @@ class TaskCompactDropdown<T> extends StatelessWidget {
     return PopupMenuButton<T>(
       key: buttonKey,
       initialValue: currentValue,
-      color: Colors.white,
-      surfaceTintColor: Colors.white,
+      color: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
       onSelected: onSelected,
       itemBuilder: (context) {
         return items.map((item) {
@@ -498,8 +497,8 @@ class TaskCompactDropdown<T> extends StatelessWidget {
                     labelBuilder(item),
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w600,
+                      color: AppColors.titleText,
+                      fontWeight: AppTypography.weightSemibold,
                     ),
                   ),
                 ),
@@ -515,9 +514,9 @@ class TaskCompactDropdown<T> extends StatelessWidget {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: taskBorderColor),
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.lg),
+          border: Border.all(color: AppColors.cardBorder),
         ),
         child: Row(
           children: [
@@ -530,8 +529,8 @@ class TaskCompactDropdown<T> extends StatelessWidget {
                 currentLabel,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: taskDarkText,
-                  fontWeight: FontWeight.w600,
+                  color: AppColors.titleText,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
             ),
@@ -599,13 +598,16 @@ class TaskPickerButton extends StatelessWidget {
     return InkWell(
       key: buttonKey,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: taskBorderColor, width: 1),
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          border: Border.all(
+            color: AppColors.cardBorder,
+            width: AppSizes.borderDefault,
+          ),
         ),
         padding: const EdgeInsets.all(14),
         child: Row(
@@ -650,74 +652,74 @@ class TaskPickerButton extends StatelessWidget {
 }
 
 ThemeData buildTaskPickerTheme(ThemeData baseTheme) {
-  final textTheme = GoogleFonts.poppinsTextTheme(baseTheme.textTheme);
+  final textTheme = GoogleFonts.interTextTheme(baseTheme.textTheme);
   return baseTheme.copyWith(
     colorScheme: baseTheme.colorScheme.copyWith(
-      primary: taskPrimaryBlue,
-      onPrimary: Colors.white,
-      surface: Colors.white,
-      onSurface: taskDarkText,
+      primary: AppColors.blue500,
+      onPrimary: AppColors.blue50,
+      surface: AppColors.cardFill,
+      onSurface: AppColors.titleText,
     ),
     textTheme: textTheme,
-    scaffoldBackgroundColor: Colors.white,
-    canvasColor: Colors.white,
+    scaffoldBackgroundColor: AppColors.cardFill,
+    canvasColor: AppColors.cardFill,
     dialogTheme: const DialogThemeData(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
     ),
     datePickerTheme: DatePickerThemeData(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      rangePickerBackgroundColor: Colors.white,
-      rangePickerSurfaceTintColor: Colors.white,
-      headerBackgroundColor: Colors.white,
-      headerForegroundColor: taskDarkText,
-      dividerColor: taskBorderColor,
-      rangeSelectionBackgroundColor: taskAccentBlue,
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      rangePickerBackgroundColor: AppColors.cardFill,
+      rangePickerSurfaceTintColor: AppColors.cardFill,
+      headerBackgroundColor: AppColors.cardFill,
+      headerForegroundColor: AppColors.titleText,
+      dividerColor: AppColors.cardBorder,
+      rangeSelectionBackgroundColor: AppColors.blue100,
       todayForegroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return Colors.white;
+          return AppColors.blue50;
         }
-        return taskPrimaryBlue;
+        return AppColors.blue500;
       }),
       todayBackgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return taskPrimaryBlue;
+          return AppColors.blue500;
         }
         return null;
       }),
       dayForegroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return Colors.white;
+          return AppColors.blue50;
         }
-        return taskDarkText;
+        return AppColors.titleText;
       }),
       dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return taskPrimaryBlue;
+          return AppColors.blue500;
         }
         return null;
       }),
       yearForegroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return taskPrimaryBlue;
+          return AppColors.blue500;
         }
-        return taskDarkText;
+        return AppColors.titleText;
       }),
       yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return taskAccentBlue;
+          return AppColors.blue100;
         }
         return null;
       }),
       rangeSelectionOverlayColor: WidgetStateProperty.all(
-        taskPrimaryBlue.withValues(alpha: 0.08),
+        AppColors.blue500.withValues(alpha: 0.08),
       ),
       dayOverlayColor: WidgetStateProperty.all(
-        taskPrimaryBlue.withValues(alpha: 0.08),
+        AppColors.blue500.withValues(alpha: 0.08),
       ),
       yearOverlayColor: WidgetStateProperty.all(
-        taskPrimaryBlue.withValues(alpha: 0.08),
+        AppColors.blue500.withValues(alpha: 0.08),
       ),
     ),
   );
@@ -819,16 +821,15 @@ class VaultSettingsFields extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: taskAccentBlue,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: taskBorderColor),
+                color: AppColors.blue100,
+                borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                border: Border.all(color: AppColors.cardBorder),
               ),
               child: Text(
                 'Current security method: ${_vaultMethodLabel(method ?? VaultMethod.password)}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: taskPrimaryBlue,
-                  height: 1.4,
-                  fontWeight: FontWeight.w600,
+                  color: AppColors.blue500,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
             ),
@@ -913,9 +914,9 @@ class VaultSettingsFields extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: taskAccentBlue,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: taskBorderColor),
+                  color: AppColors.blue100,
+                  borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                  border: Border.all(color: AppColors.cardBorder),
                 ),
                 child: Text(
                   isDeviceSecurityAvailable == false
@@ -923,10 +924,9 @@ class VaultSettingsFields extends StatelessWidget {
                       : 'This uses your phone biometric or device passcode prompt.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: isDeviceSecurityAvailable == false
-                        ? taskDangerText
-                        : taskPrimaryBlue,
-                    height: 1.4,
-                    fontWeight: FontWeight.w600,
+                        ? AppColors.rose500
+                        : AppColors.blue500,
+                    fontWeight: AppTypography.weightSemibold,
                   ),
                 ),
               ),

@@ -3,6 +3,7 @@ import 'package:tabler_icons/tabler_icons.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/services/vault_service_scope.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_models.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -296,8 +297,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     final scheduleValidationMessage = _scheduleValidationMessage();
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.appBarTitle)),
-      backgroundColor: taskSurface,
+      appBar: AppBar(
+        title: Text(widget.appBarTitle),
+        backgroundColor: AppColors.cardFill,
+        surfaceTintColor: AppColors.cardFill,
+      ),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -691,10 +696,13 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        side: const BorderSide(color: AppColors.cardBorder),
+      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -720,7 +728,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                         Text(
                           'Create a category with a focused icon and theme-safe color.',
                           style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: taskSecondaryText, height: 1.4),
+                              ?.copyWith(color: taskSecondaryText),
                         ),
                       ],
                     ),
@@ -803,7 +811,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                               option.icon,
                               size: 22,
                               color: selected
-                                  ? Colors.white
+                                  ? AppColors.primaryButtonText
                                   : taskSecondaryText,
                             ),
                           ),

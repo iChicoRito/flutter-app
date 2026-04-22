@@ -1002,6 +1002,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           focusElevation: 0,
           hoverElevation: 0,
           highlightElevation: 0,
+          disabledElevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              taskButtonRadius(TaskButtonSize.large),
+            ),
+          ),
+          extendedPadding: taskButtonPadding(TaskButtonSize.large),
+          extendedTextStyle: taskButtonTextStyle(
+            context,
+            TaskButtonSize.large,
+          ),
           icon: const Icon(TablerIcons.plus, size: 18),
           label: Text(widget.fabLabel),
         ),
@@ -1785,14 +1796,11 @@ class _DeleteTaskDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.secondary,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: const Color(0xFFF1F3F5),
-                      foregroundColor: taskDarkText,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -1801,13 +1809,11 @@ class _DeleteTaskDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.destructive,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: taskDangerText,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Delete Task'),
                   ),
@@ -1887,14 +1893,11 @@ class _MoveCategoryChangeDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.secondary,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: const Color(0xFFF1F3F5),
-                      foregroundColor: taskDarkText,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -1903,13 +1906,11 @@ class _MoveCategoryChangeDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.primary,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: taskPrimaryBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Move Task'),
                   ),
@@ -1953,7 +1954,11 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton(
               key: TaskManagementScreen.retryButtonKey,
-              style: FilledButton.styleFrom(backgroundColor: taskPrimaryBlue),
+              style: taskButtonStyle(
+                context,
+                role: TaskButtonRole.primary,
+                size: TaskButtonSize.medium,
+              ),
               onPressed: onRetry,
               child: const Text('Retry'),
             ),

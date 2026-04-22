@@ -330,16 +330,10 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                             onPressed: _addCategory,
                             icon: const Icon(TablerIcons.plus, size: 18),
                             label: const Text('New'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: taskPrimaryBlue,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              side: const BorderSide(color: taskBorderColor),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                            style: taskButtonStyle(
+                              context,
+                              role: TaskButtonRole.secondary,
+                              size: TaskButtonSize.medium,
                             ),
                           ),
                         ),
@@ -424,13 +418,11 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: FilledButton(
             onPressed: _submit,
-            style: FilledButton.styleFrom(
+            style: taskButtonStyle(
+              context,
+              role: TaskButtonRole.primary,
+              size: TaskButtonSize.large,
               minimumSize: const Size.fromHeight(54),
-              backgroundColor: taskPrimaryBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
             ),
             child: Text(_isEditing ? 'Save Space' : 'Create Space'),
           ),
@@ -704,6 +696,11 @@ class _SpaceCategoryDialogState extends State<_SpaceCategoryDialog> {
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.secondary,
+                        size: TaskButtonSize.small,
+                      ),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -711,12 +708,10 @@ class _SpaceCategoryDialogState extends State<_SpaceCategoryDialog> {
                   Expanded(
                     child: FilledButton(
                       onPressed: _submit,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: taskPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.primary,
+                        size: TaskButtonSize.small,
                       ),
                       child: const Text('Create'),
                     ),

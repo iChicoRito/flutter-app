@@ -568,20 +568,11 @@ class _ArchiveRestoreCard extends StatelessWidget {
                 onPressed: onRestore,
                 icon: const Icon(TablerIcons.refresh, size: 16),
                 label: const Text('Restore'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: taskPrimaryBlue,
-                  foregroundColor: Colors.white,
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  textStyle: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                style: taskButtonStyle(
+                  context,
+                  role: TaskButtonRole.primary,
+                  size: TaskButtonSize.medium,
+                  shrinkTapTarget: true,
                 ),
               ),
             ],

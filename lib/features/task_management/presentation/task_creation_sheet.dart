@@ -433,16 +433,10 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                               onPressed: _addCategory,
                               icon: const Icon(TablerIcons.plus, size: 18),
                               label: const Text('New'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: taskPrimaryBlue,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                side: const BorderSide(color: taskBorderColor),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
+                              style: taskButtonStyle(
+                                context,
+                                role: TaskButtonRole.secondary,
+                                size: TaskButtonSize.medium,
                               ),
                             ),
                           ),
@@ -539,13 +533,11 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           child: FilledButton(
             key: createSubmitButtonKey,
             onPressed: _submit,
-            style: FilledButton.styleFrom(
+            style: taskButtonStyle(
+              context,
+              role: TaskButtonRole.primary,
+              size: TaskButtonSize.large,
               minimumSize: const Size.fromHeight(54),
-              backgroundColor: taskPrimaryBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
             ),
             child: const Text('Create Task'),
           ),
@@ -879,6 +871,11 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.secondary,
+                        size: TaskButtonSize.small,
+                      ),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -886,12 +883,10 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                   Expanded(
                     child: FilledButton(
                       onPressed: _submit,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: taskPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.primary,
+                        size: TaskButtonSize.small,
                       ),
                       child: const Text('Create'),
                     ),

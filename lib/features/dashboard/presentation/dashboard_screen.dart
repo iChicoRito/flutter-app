@@ -1502,7 +1502,6 @@ class _ProfileIdentityCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      key: DashboardScreen.profileIdentityKey,
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -1514,110 +1513,113 @@ class _ProfileIdentityCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 53,
-                    height: 53,
-                    decoration: const BoxDecoration(
-                      color: taskAccentBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _ProfileAvatarImage(
-                      imageData: profileImageData,
-                      imageKey: DashboardScreen.profileAvatarImageKey,
-                      fallbackIconSize: 22,
-                    ),
-                  ),
-                  Positioned(
-                    right: -2,
-                    bottom: -1,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        key: DashboardScreen.profileImageButtonKey,
-                        onTap: onPickProfileImage,
-                        customBorder: const CircleBorder(),
-                        child: Ink(
-                          width: 16,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: taskPrimaryBlue,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: taskSurface, width: 1.2),
-                          ),
-                          child: const Icon(
-                            TablerIcons.camera,
-                            color: Colors.white,
-                            size: 9,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 15),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 2,
+                child: Container(
+                  key: DashboardScreen.profileIdentityKey,
+                  color: Colors.transparent,
+                  child: Row(
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 53,
+                            height: 53,
+                            decoration: const BoxDecoration(
+                              color: taskAccentBlue,
+                              shape: BoxShape.circle,
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: _ProfileAvatarImage(
+                              imageData: profileImageData,
+                              imageKey: DashboardScreen.profileAvatarImageKey,
+                              fallbackIconSize: 22,
+                            ),
+                          ),
+                          Positioned(
+                            right: -2,
+                            bottom: -1,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                key: DashboardScreen.profileImageButtonKey,
+                                onTap: onPickProfileImage,
+                                customBorder: const CircleBorder(),
+                                child: Ink(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: taskPrimaryBlue,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: taskSurface,
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    TablerIcons.camera,
+                                    color: Colors.white,
+                                    size: 9,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE6F6F1),
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        'Active',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: taskSuccessText,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE6F6F1),
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                'Active',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: taskSuccessText,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: taskDarkText,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: taskDarkText,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               FilledButton.icon(
                 key: DashboardScreen.profileUserRowKey,
                 onPressed: onEditProfile,
-                icon: const Icon(TablerIcons.edit, size: 9),
+                icon: const Icon(TablerIcons.edit, size: 16),
                 label: const Text('Edit Profile'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: taskPrimaryBlue,
-                  foregroundColor: taskAccentBlue,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  minimumSize: const Size(80, 34),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  textStyle: theme.textTheme.labelSmall?.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+                style: taskButtonStyle(
+                  context,
+                  role: TaskButtonRole.primary,
+                  size: TaskButtonSize.medium,
+                  minimumSize: const Size(116, 44),
+                  shrinkTapTarget: true,
                 ),
               ),
             ],
@@ -2005,15 +2007,11 @@ class _ProfileNameSheetState extends State<_ProfileNameSheet> {
                 child: FilledButton(
                   key: DashboardScreen.profileNameSaveButtonKey,
                   onPressed: _isSaving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: taskPrimaryBlue,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFFA9CBEF),
-                    disabledForegroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  style: taskButtonStyle(
+                    context,
+                    role: TaskButtonRole.primary,
+                    size: TaskButtonSize.large,
+                    minimumSize: const Size.fromHeight(54),
                   ),
                   child: _isSaving
                       ? const SizedBox(
@@ -2063,14 +2061,20 @@ class _ProfileImagePermissionDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
+          style: taskButtonStyle(
+            context,
+            role: TaskButtonRole.secondary,
+            size: TaskButtonSize.small,
+          ),
           child: const Text('Cancel'),
         ),
         FilledButton(
           key: DashboardScreen.profileImagePermissionContinueKey,
           onPressed: () => Navigator.of(context).pop(true),
-          style: FilledButton.styleFrom(
-            backgroundColor: taskPrimaryBlue,
-            foregroundColor: Colors.white,
+          style: taskButtonStyle(
+            context,
+            role: TaskButtonRole.primary,
+            size: TaskButtonSize.small,
           ),
           child: const Text('Continue'),
         ),

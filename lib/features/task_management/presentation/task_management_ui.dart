@@ -7,6 +7,7 @@ import '../../../core/vault/vault_models.dart';
 
 const taskPrimaryBlue = Color(0xFF066FD1);
 const taskPrimaryPressed = Color(0xFF055CB0);
+const taskPrimaryDisabled = Color(0xFFA9CBEF);
 const taskSecondaryBlue = Color(0xFF90CAF9);
 const taskAccentBlue = Color(0xFFE6F0FA);
 const taskSurface = Color(0xFFF9FAFB);
@@ -16,10 +17,194 @@ const taskMutedBorderColor = Color(0xFFEEF1F4);
 const taskDarkText = Color(0xFF333333);
 const taskSecondaryText = Color(0xFF6B7280);
 const taskMutedText = Color(0xFF999999);
+const taskDisabledText = Color(0xFFC7CDD6);
 const taskDangerText = Color(0xFFD63939);
+const taskDangerPressed = Color(0xFFB82D2D);
+const taskDangerDisabled = Color(0xFFF2B9B9);
 const taskFilterControlHeight = 44.0;
 const taskSuccessText = Color(0xFF0CA678);
 const taskWarningText = Color(0xFFF59F00);
+
+enum TaskButtonRole { primary, secondary, destructive, ghost }
+
+enum TaskButtonSize { large, medium, small }
+
+class _TaskButtonPalette {
+  const _TaskButtonPalette({
+    required this.background,
+    required this.pressedBackground,
+    required this.disabledBackground,
+    required this.foreground,
+    required this.disabledForeground,
+    this.borderColor,
+    this.disabledBorderColor,
+  });
+
+  final Color background;
+  final Color pressedBackground;
+  final Color disabledBackground;
+  final Color foreground;
+  final Color disabledForeground;
+  final Color? borderColor;
+  final Color? disabledBorderColor;
+}
+
+_TaskButtonPalette _taskButtonPalette(TaskButtonRole role) {
+  return switch (role) {
+    TaskButtonRole.primary => const _TaskButtonPalette(
+      background: taskPrimaryBlue,
+      pressedBackground: taskPrimaryPressed,
+      disabledBackground: taskPrimaryDisabled,
+      foreground: Colors.white,
+      disabledForeground: Colors.white,
+    ),
+    TaskButtonRole.secondary => const _TaskButtonPalette(
+      background: Colors.white,
+      pressedBackground: taskSurfaceAlt,
+      disabledBackground: Colors.white,
+      foreground: taskPrimaryBlue,
+      disabledForeground: taskDisabledText,
+      borderColor: taskBorderColor,
+      disabledBorderColor: taskMutedBorderColor,
+    ),
+    TaskButtonRole.destructive => const _TaskButtonPalette(
+      background: taskDangerText,
+      pressedBackground: taskDangerPressed,
+      disabledBackground: taskDangerDisabled,
+      foreground: Colors.white,
+      disabledForeground: Colors.white,
+    ),
+    TaskButtonRole.ghost => const _TaskButtonPalette(
+      background: taskAccentBlue,
+      pressedBackground: Color(0xFFD7E8F8),
+      disabledBackground: Color(0xFFEEF4FA),
+      foreground: taskPrimaryBlue,
+      disabledForeground: Color(0xFF9BB8D4),
+    ),
+  };
+}
+
+double taskButtonHeight(TaskButtonSize size) {
+  return switch (size) {
+    TaskButtonSize.large => 54,
+    TaskButtonSize.medium => 44,
+    TaskButtonSize.small => 40,
+  };
+}
+
+double taskButtonRadius(TaskButtonSize size) {
+  return switch (size) {
+    TaskButtonSize.large => 18,
+    TaskButtonSize.medium => 12,
+    TaskButtonSize.small => 12,
+  };
+}
+
+double taskButtonIconSize(TaskButtonSize size) {
+  return switch (size) {
+    TaskButtonSize.large => 18,
+    TaskButtonSize.medium => 16,
+    TaskButtonSize.small => 16,
+  };
+}
+
+EdgeInsetsGeometry taskButtonPadding(TaskButtonSize size) {
+  return switch (size) {
+    TaskButtonSize.large => const EdgeInsets.symmetric(
+      horizontal: 18,
+      vertical: 14,
+    ),
+    TaskButtonSize.medium => const EdgeInsets.symmetric(
+      horizontal: 14,
+      vertical: 10,
+    ),
+    TaskButtonSize.small => const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 10,
+    ),
+  };
+}
+
+TextStyle? taskButtonTextStyle(BuildContext context, TaskButtonSize size) {
+  final base = Theme.of(context).textTheme.labelLarge;
+  return base?.copyWith(
+    fontSize: switch (size) {
+      TaskButtonSize.large => 15,
+      TaskButtonSize.medium => 14,
+      TaskButtonSize.small => 13,
+    },
+    fontWeight: FontWeight.w600,
+    height: 1.1,
+  );
+}
+
+ButtonStyle taskButtonStyle(
+  BuildContext context, {
+  required TaskButtonRole role,
+  TaskButtonSize size = TaskButtonSize.medium,
+  EdgeInsetsGeometry? padding,
+  Size? minimumSize,
+  bool shrinkTapTarget = false,
+}) {
+  final palette = _taskButtonPalette(role);
+  final resolvedPadding = padding ?? taskButtonPadding(size);
+  final resolvedMinimumSize = minimumSize ?? Size(0, taskButtonHeight(size));
+  final borderRadius = BorderRadius.circular(taskButtonRadius(size));
+
+  return ButtonStyle(
+    minimumSize: WidgetStatePropertyAll(resolvedMinimumSize),
+    padding: WidgetStatePropertyAll(resolvedPadding),
+    elevation: const WidgetStatePropertyAll(0),
+    tapTargetSize: shrinkTapTarget
+        ? MaterialTapTargetSize.shrinkWrap
+        : MaterialTapTargetSize.padded,
+    visualDensity: const VisualDensity(horizontal: 0, vertical: 0),
+    textStyle: WidgetStatePropertyAll(taskButtonTextStyle(context, size)),
+    iconSize: WidgetStatePropertyAll(taskButtonIconSize(size)),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: borderRadius),
+    ),
+    backgroundColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) {
+        return palette.disabledBackground;
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return palette.pressedBackground;
+      }
+      return palette.background;
+    }),
+    foregroundColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) {
+        return palette.disabledForeground;
+      }
+      return palette.foreground;
+    }),
+    side: WidgetStateProperty.resolveWith((states) {
+      final borderColor = states.contains(WidgetState.disabled)
+          ? palette.disabledBorderColor
+          : palette.borderColor;
+      if (borderColor == null) {
+        return BorderSide.none;
+      }
+      return BorderSide(color: borderColor);
+    }),
+    overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+  );
+}
+
+BoxDecoration taskActionTileDecoration({
+  required TaskButtonRole role,
+  TaskButtonSize size = TaskButtonSize.medium,
+}) {
+  final palette = _taskButtonPalette(role);
+  return BoxDecoration(
+    color: palette.background,
+    borderRadius: BorderRadius.circular(taskButtonRadius(size) + 6),
+    border: palette.borderColor == null
+        ? null
+        : Border.all(color: palette.borderColor!),
+  );
+}
 
 OverlayEntry? _currentTaskToastEntry;
 

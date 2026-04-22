@@ -568,13 +568,11 @@ class _SpacesPageState extends State<SpacesPage> {
                   top: false,
                   child: FilledButton.icon(
                     onPressed: _controller.isSaving ? null : _openSpaceForm,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(140, 52),
-                      backgroundColor: taskPrimaryBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.primary,
+                      size: TaskButtonSize.large,
+                      minimumSize: const Size(140, 54),
                     ),
                     icon: const Icon(TablerIcons.plus, size: 18),
                     label: const Text('Add Space'),
@@ -1491,14 +1489,11 @@ class _DeleteSpaceDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.secondary,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: const Color(0xFFF1F3F5),
-                      foregroundColor: taskDarkText,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -1507,13 +1502,11 @@ class _DeleteSpaceDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.destructive,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: taskDangerText,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Delete Space'),
                   ),
@@ -1545,15 +1538,15 @@ class _ActionTile extends StatelessWidget {
     final color = isDestructive ? taskDangerText : taskDarkText;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(taskButtonRadius(TaskButtonSize.medium)),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isDestructive
-              ? taskDangerText.withValues(alpha: 0.06)
-              : taskSurface,
-          borderRadius: BorderRadius.circular(18),
+        padding: taskButtonPadding(TaskButtonSize.medium),
+        decoration: taskActionTileDecoration(
+          role: isDestructive
+              ? TaskButtonRole.destructive
+              : TaskButtonRole.ghost,
+          size: TaskButtonSize.medium,
         ),
         child: Row(
           children: [
@@ -1603,7 +1596,11 @@ class _SpacesErrorState extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: onRetry,
-              style: FilledButton.styleFrom(backgroundColor: taskPrimaryBlue),
+              style: taskButtonStyle(
+                context,
+                role: TaskButtonRole.primary,
+                size: TaskButtonSize.medium,
+              ),
               child: const Text('Retry'),
             ),
           ],

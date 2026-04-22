@@ -944,17 +944,11 @@ class _TaskDetailsDialog extends StatelessWidget {
               width: double.infinity,
               child: FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(
+                style: taskButtonStyle(
+                  context,
+                  role: TaskButtonRole.ghost,
+                  size: TaskButtonSize.small,
                   minimumSize: const Size.fromHeight(40),
-                  backgroundColor: const Color(0xFFDCE7F6),
-                  foregroundColor: taskPrimaryBlue,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
                 child: const Text('Close'),
               ),
@@ -1134,7 +1128,11 @@ class _EditorErrorState extends StatelessWidget {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: onRetry,
-              style: FilledButton.styleFrom(backgroundColor: taskPrimaryBlue),
+              style: taskButtonStyle(
+                context,
+                role: TaskButtonRole.primary,
+                size: TaskButtonSize.medium,
+              ),
               child: const Text('Retry'),
             ),
           ],
@@ -1584,18 +1582,10 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                                 onPressed: _addCategory,
                                 icon: const Icon(TablerIcons.plus, size: 18),
                                 label: const Text('New'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: taskPrimaryBlue,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  side: const BorderSide(
-                                    color: taskBorderColor,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
+                                style: taskButtonStyle(
+                                  context,
+                                  role: TaskButtonRole.secondary,
+                                  size: TaskButtonSize.medium,
                                 ),
                               ),
                             ),
@@ -1698,13 +1688,11 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
           child: FilledButton(
             key: TaskEditorScreen.saveButtonKey,
             onPressed: _submit,
-            style: FilledButton.styleFrom(
+            style: taskButtonStyle(
+              context,
+              role: TaskButtonRole.primary,
+              size: TaskButtonSize.large,
               minimumSize: const Size.fromHeight(54),
-              backgroundColor: taskPrimaryBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
             ),
             child: const Text('Apply Details'),
           ),
@@ -1874,14 +1862,11 @@ class _DeleteTaskDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.secondary,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: const Color(0xFFF1F3F5),
-                      foregroundColor: taskDarkText,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -1890,13 +1875,11 @@ class _DeleteTaskDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(true),
-                    style: FilledButton.styleFrom(
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.destructive,
+                      size: TaskButtonSize.small,
                       minimumSize: const Size.fromHeight(48),
-                      backgroundColor: taskDangerText,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                     ),
                     child: const Text('Delete Task'),
                   ),
@@ -2132,6 +2115,11 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.secondary,
+                        size: TaskButtonSize.small,
+                      ),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -2139,12 +2127,10 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                   Expanded(
                     child: FilledButton(
                       onPressed: _submit,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: taskPrimaryBlue,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.primary,
+                        size: TaskButtonSize.small,
                       ),
                       child: const Text('Create'),
                     ),

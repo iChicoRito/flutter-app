@@ -7,11 +7,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/display_name_store.dart';
-import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/task_repository_scope.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_access.dart';
+import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../archive/presentation/archives_screen.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/presentation/task_editor_screen.dart';
@@ -83,7 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
   bool _isTodayExpanded = true;
   bool _isUpcomingExpanded = true;
-  bool _isOverdueExpanded = true;
+  bool _isOverdueExpanded = false;
   bool _isCompletedExpanded = false;
   String? _displayName;
   String? _profileImageData;
@@ -426,7 +427,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       key: DashboardScreen.markerKey,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: _currentIndex == 0
             ? KeyedSubtree(
@@ -608,9 +609,14 @@ class _DashboardHomeTab extends StatelessWidget {
         : completedTasks.length / tasks.length;
 
     return ColoredBox(
-      color: taskSurface,
+      color: AppColors.background,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.four,
+          AppSpacing.six,
+          AppSpacing.four,
+          120,
+        ),
         children: [
           _HeaderRow(
             theme: theme,
@@ -618,23 +624,23 @@ class _DashboardHomeTab extends StatelessWidget {
             profileImageData: profileImageData,
             dateLabel: _formatDate(DateTime.now()),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.six),
           _ProgressCard(
             completedCount: completedTasks.length,
             totalCount: tasks.length,
             progressValue: progressValue,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.three),
           _SummaryGrid(
             totalCount: tasks.length,
             pendingCount: pendingTasks.length,
             completedCount: completedTasks.length,
             overdueCount: overdueTasks.length,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: AppSpacing.three),
           _DashboardSection(
             title: 'Today\'s Tasks',
-            subtitle: 'Active work and unscheduled tasks for today.',
+            subtitle: 'Active tasks for today',
             headerKey: DashboardScreen.todayHeaderKey,
             isExpanded: isTodayExpanded,
             count: todayTasks.length,
@@ -650,32 +656,34 @@ class _DashboardHomeTab extends StatelessWidget {
               onTaskToggled: onTaskToggled,
             ),
           ),
-          const SizedBox(height: 18),
-          _DashboardSection(
-            title: 'Upcoming',
-            subtitle: 'Tasks scheduled after today.',
-            headerKey: DashboardScreen.upcomingHeaderKey,
-            isExpanded: isUpcomingExpanded,
-            count: upcomingTasks.length,
-            toneColor: taskWarningText,
-            onHeaderTap: onUpcomingExpandedChanged,
-            child: _TaskListBody(
-              tasks: upcomingTasks,
-              controller: controller,
-              emptyTitle: 'Nothing upcoming',
-              emptyMessage: 'Future scheduled tasks will appear here.',
-              onTaskOpened: onTaskOpened,
-              onTaskToggled: onTaskToggled,
+          if (upcomingTasks.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.three),
+            _DashboardSection(
+              title: 'Upcoming Tasks',
+              subtitle: 'Scheduled after today',
+              headerKey: DashboardScreen.upcomingHeaderKey,
+              isExpanded: isUpcomingExpanded,
+              count: upcomingTasks.length,
+              toneColor: AppColors.amber500,
+              onHeaderTap: onUpcomingExpandedChanged,
+              child: _TaskListBody(
+                tasks: upcomingTasks,
+                controller: controller,
+                emptyTitle: 'Nothing upcoming',
+                emptyMessage: 'Future scheduled tasks will appear here.',
+                onTaskOpened: onTaskOpened,
+                onTaskToggled: onTaskToggled,
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
+          ],
+          const SizedBox(height: AppSpacing.three),
           _DashboardSection(
-            title: 'Overdue',
-            subtitle: 'Tasks that need attention first.',
+            title: 'Overdue Tasks',
+            subtitle: 'Tasks that need attention',
             headerKey: DashboardScreen.overdueHeaderKey,
             isExpanded: isOverdueExpanded,
             count: overdueTasks.length,
-            toneColor: taskDangerText,
+            toneColor: AppColors.rose500,
             onHeaderTap: onOverdueExpandedChanged,
             child: _TaskListBody(
               tasks: overdueTasks,
@@ -686,14 +694,14 @@ class _DashboardHomeTab extends StatelessWidget {
               onTaskToggled: onTaskToggled,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: AppSpacing.three),
           _DashboardSection(
-            title: 'Completed',
-            subtitle: 'Finished tasks stay here for quick review.',
+            title: 'Completed Tasks',
+            subtitle: 'Finished tasks',
             headerKey: DashboardScreen.completedHeaderKey,
             isExpanded: isCompletedExpanded,
             count: completedTasks.length,
-            toneColor: taskSuccessText,
+            toneColor: AppColors.teal500,
             onHeaderTap: onCompletedExpandedChanged,
             child: _TaskListBody(
               tasks: completedTasks,
@@ -790,60 +798,52 @@ class _HeaderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _UserAvatar(imageData: profileImageData),
-        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 displayName == null || displayName!.isEmpty
-                    ? 'Hi!'
-                    : 'Hi, $displayName',
+                    ? 'Good Morning'
+                    : 'Good Morning, $displayName',
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: taskDarkText,
-                  fontWeight: FontWeight.w700,
+                  color: AppColors.titleText,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.one),
               Text(
-                dateLabel,
+                'Manage your tasks and stay on track.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: taskMutedText,
+                  color: AppColors.subHeaderText,
                 ),
               ),
             ],
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.all(6),
-          child: Icon(TablerIcons.bell, color: taskMutedText, size: 24),
+        const SizedBox(width: AppSpacing.three),
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.cardFill,
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: profileImageData == null || profileImageData!.isEmpty
+              ? const Icon(
+                  TablerIcons.clipboard_list,
+                  color: AppColors.titleText,
+                  size: 24,
+                )
+              : _ProfileAvatarImage(
+                  imageData: profileImageData,
+                  imageKey: DashboardScreen.homeAvatarImageKey,
+                  fallbackIconSize: 22,
+                ),
         ),
       ],
-    );
-  }
-}
-
-class _UserAvatar extends StatelessWidget {
-  const _UserAvatar({required this.imageData});
-
-  final String? imageData;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: const BoxDecoration(
-        color: taskAccentBlue,
-        shape: BoxShape.circle,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _ProfileAvatarImage(
-        imageData: imageData,
-        imageKey: DashboardScreen.homeAvatarImageKey,
-        fallbackIconSize: 24,
-      ),
     );
   }
 }
@@ -864,8 +864,8 @@ class _ProgressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: taskPrimaryBlue,
-        borderRadius: BorderRadius.circular(28),
+        color: AppColors.primaryButtonFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -873,26 +873,28 @@ class _ProgressCard extends StatelessWidget {
           Text(
             'Today\'s Progress',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+              color: AppColors.primaryButtonText,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.three),
           Text(
-            '$completedCount of $totalCount tasks completed',
+            '$completedCount / $totalCount tasks completed',
             key: DashboardScreen.progressLabelKey,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.92),
+              color: AppColors.primaryButtonText.withValues(alpha: 0.8),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpacing.three),
           ClipRRect(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(AppRadii.full),
             child: LinearProgressIndicator(
               value: progressValue,
               minHeight: 8,
-              backgroundColor: taskSecondaryBlue,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              backgroundColor: AppColors.blue100,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primaryButtonText,
+              ),
             ),
           ),
         ],
@@ -918,35 +920,43 @@ class _SummaryGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return GridView.count(
       crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.18,
+      mainAxisSpacing: AppSpacing.three,
+      crossAxisSpacing: AppSpacing.two,
+      childAspectRatio: 1.45,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
         _SummaryCard(
-          label: 'Total',
-          count: totalCount,
-          icon: TablerIcons.list_details,
-          color: taskPrimaryBlue,
+          label: 'Completed',
+          count: completedCount,
+          icon: TablerIcons.circle_check,
+          color: AppColors.teal500,
+          fillColor: AppColors.teal100,
+          denominator: totalCount,
         ),
         _SummaryCard(
           label: 'Pending',
           count: pendingCount,
           icon: TablerIcons.clock_hour_8,
-          color: taskWarningText,
-        ),
-        _SummaryCard(
-          label: 'Completed',
-          count: completedCount,
-          icon: TablerIcons.circle_check,
-          color: taskSuccessText,
+          color: AppColors.amber500,
+          fillColor: AppColors.amber100,
+          denominator: totalCount,
         ),
         _SummaryCard(
           label: 'Overdue',
           count: overdueCount,
           icon: TablerIcons.alert_circle,
-          color: taskDangerText,
+          color: AppColors.rose500,
+          fillColor: AppColors.rose100,
+          denominator: totalCount,
+        ),
+        _SummaryCard(
+          label: 'Total',
+          count: totalCount,
+          icon: TablerIcons.circle_check,
+          color: AppColors.blue500,
+          fillColor: AppColors.blue100,
+          denominator: totalCount,
         ),
       ],
     );
@@ -959,50 +969,82 @@ class _SummaryCard extends StatelessWidget {
     required this.count,
     required this.icon,
     required this.color,
+    required this.fillColor,
+    required this.denominator,
   });
 
   final String label;
   final int count;
   final IconData icon;
   final Color color;
+  final Color fillColor;
+  final int denominator;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpacing.five),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: taskBorderColor),
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 18, color: color),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: fillColor,
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                ),
+                child: Icon(icon, size: 20, color: color),
+              ),
+              const SizedBox(width: AppSpacing.three),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.subHeaderText,
+                        fontWeight: AppTypography.weightSemibold,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.one),
+                    Text(
+                      '$count',
+                      key: DashboardScreen.summaryCountKey(label),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.titleText,
+                        fontWeight: AppTypography.weightSemibold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const Spacer(),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: taskSecondaryText,
-              fontWeight: FontWeight.w600,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadii.full),
+            child: LinearProgressIndicator(
+              value: denominator == 0 ? 0 : count / denominator,
+              minHeight: 8,
+              backgroundColor: fillColor.withValues(alpha: 0.42),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.one),
           Text(
-            '$count',
-            key: DashboardScreen.summaryCountKey(label),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: taskDarkText,
-              fontWeight: FontWeight.w700,
-            ),
+            denominator == 0 ? '0 of 0' : '$count of $denominator',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.subHeaderText),
           ),
         ],
       ),
@@ -1034,11 +1076,11 @@ class _DashboardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(AppSpacing.five),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: taskBorderColor),
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1046,7 +1088,7 @@ class _DashboardSection extends StatelessWidget {
           InkWell(
             key: headerKey,
             onTap: onHeaderTap,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadii.lg),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1059,35 +1101,33 @@ class _DashboardSection extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
                               color: taskDarkText,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: AppTypography.weightSemibold,
                             ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.one),
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: taskSecondaryText,
-                          height: 1.4,
+                          color: AppColors.subHeaderText,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.three),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: toneColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(999),
+                    color: toneColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
                   ),
                   child: Text(
                     '$count',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: toneColor,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: AppTypography.weightSemibold,
                     ),
                   ),
                 ),
@@ -1095,9 +1135,9 @@ class _DashboardSection extends StatelessWidget {
             ),
           ),
           if (isExpanded) ...[
-            const SizedBox(height: 16),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.six),
+            const Divider(height: 1, thickness: 1, color: AppColors.cardBorder),
+            const SizedBox(height: AppSpacing.six),
             child,
           ],
         ],
@@ -1177,67 +1217,79 @@ class _HomeTaskTile extends StatelessWidget {
 
     return InkWell(
       onTap: onOpen,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
       child: Container(
         decoration: BoxDecoration(
-          color: taskSurface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: taskBorderColor),
+          color: AppColors.checkboxCardFill,
+          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          border: Border.all(color: AppColors.checkboxCardBorder),
         ),
-        padding: const EdgeInsets.fromLTRB(10, 14, 14, 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.five,
+          vertical: AppSpacing.six,
+        ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Checkbox(
-              key: DashboardScreen.taskToggleKey(task.id),
-              value: task.isCompleted,
-              onChanged: (_) => onToggle(),
-              activeColor: taskSuccessText,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: Checkbox(
+                key: DashboardScreen.taskToggleKey(task.id),
+                value: task.isCompleted,
+                onChanged: (_) => onToggle(),
+                activeColor: AppColors.primaryButtonFill,
+                checkColor: AppColors.primaryButtonText,
+                side: const BorderSide(color: AppColors.checkboxCardBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                ),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.five),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          task.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall
-                              ?.copyWith(
-                                color: taskDarkText,
-                                fontWeight: FontWeight.w700,
-                                decoration: task.isCompleted
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: AppTypography.sizeBase,
+                      fontWeight: AppTypography.weightSemibold,
+                      decoration: task.isCompleted
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
                   ),
                   if (task.vaultConfig?.isEnabled == true) ...[
                     const SizedBox(height: 6),
                     const _LockedBadge(),
                   ],
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppSpacing.one),
                   Text(
                     preview,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: taskSecondaryText,
-                      height: 1.4,
+                      color: AppColors.subHeaderText,
                     ),
                   ),
                 ],
               ),
             ),
+            if (previewProtected) ...[
+              const SizedBox(width: AppSpacing.three),
+              const Icon(
+                TablerIcons.lock,
+                color: AppColors.subHeaderText,
+                size: 20,
+              ),
+            ],
           ],
         ),
       ),
@@ -1254,7 +1306,10 @@ class _DashboardEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.two,
+        vertical: AppSpacing.two,
+      ),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1262,18 +1317,17 @@ class _DashboardEmptyState extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
+                color: AppColors.titleText,
+                fontWeight: AppTypography.weightSemibold,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Text(
               message,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: taskSecondaryText,
-                height: 1.4,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.subHeaderText),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1291,19 +1345,19 @@ class _LockedBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: taskSurface,
-        borderRadius: BorderRadius.circular(999),
+        color: AppColors.neutral200,
+        borderRadius: BorderRadius.circular(AppRadii.full),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(TablerIcons.lock, size: 12, color: taskSecondaryText),
-          const SizedBox(width: 6),
+          const Icon(TablerIcons.lock, size: 12, color: AppColors.titleText),
+          const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
             'Locked',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: taskSecondaryText,
-              fontWeight: FontWeight.w700,
+              fontWeight: AppTypography.weightSemibold,
             ),
           ),
         ],
@@ -1363,7 +1417,6 @@ class _PlaceholderTab extends StatelessWidget {
                   tab.description,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: taskSecondaryText,
-                    height: 1.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -1455,7 +1508,6 @@ class _ProfileTab extends StatelessWidget {
             style: theme.textTheme.bodySmall?.copyWith(
               color: const Color(0xFF777777),
               fontSize: 13,
-              height: 1.35,
             ),
           ),
           const SizedBox(height: 18),
@@ -1638,7 +1690,7 @@ class _ProfileStatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 56,
+      height: 60,
       child: Row(
         children: [
           Expanded(
@@ -1710,7 +1762,6 @@ class _ProfileStatTile extends StatelessWidget {
               color: foregroundColor,
               fontSize: 14.5,
               fontWeight: FontWeight.w600,
-              height: 1.1,
             ),
           ),
         ),
@@ -1722,7 +1773,6 @@ class _ProfileStatTile extends StatelessWidget {
             color: const Color(0xFF777777),
             fontSize: 10.5,
             fontWeight: FontWeight.w500,
-            height: 1.2,
           ),
         ),
       ],
@@ -1980,7 +2030,6 @@ class _ProfileNameSheetState extends State<_ProfileNameSheet> {
                 'This name appears on your profile and reminders.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: taskSecondaryText,
-                  height: 1.4,
                 ),
               ),
               const SizedBox(height: 18),
@@ -2053,10 +2102,7 @@ class _ProfileImagePermissionDialog extends StatelessWidget {
       content: Text(
         'Remindly will open your photo picker so you can choose one image. '
         'The app only uses the photo you select for your profile picture.',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: taskSecondaryText,
-          height: 1.45,
-        ),
+        style: theme.textTheme.bodyMedium?.copyWith(color: taskSecondaryText),
       ),
       actions: [
         TextButton(

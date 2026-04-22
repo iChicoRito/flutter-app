@@ -83,7 +83,7 @@ void main() {
 
     expect(find.byKey(OnboardingScreen.markerKey), findsNothing);
     expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
-    expect(find.text('Hi, Mark'), findsOneWidget);
+    expect(find.text('Good Morning, Mark'), findsOneWidget);
   });
 
   testWidgets('onboarding shows the new Remindly copy and matching icons', (
@@ -156,7 +156,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
-      expect(find.text('Hi, Mark'), findsOneWidget);
+      expect(find.text('Good Morning, Mark'), findsOneWidget);
     },
   );
 
@@ -183,7 +183,7 @@ void main() {
     await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
     await tester.pumpAndSettle();
 
-    expect(find.text('Hi, Jamie'), findsOneWidget);
+    expect(find.text('Good Morning, Jamie'), findsOneWidget);
   });
 
   testWidgets('welcome modal CTA uses a full-width rounded rectangle style', (
@@ -210,7 +210,7 @@ void main() {
     expect(shape, isA<RoundedRectangleBorder>());
     expect(
       (shape! as RoundedRectangleBorder).borderRadius,
-      BorderRadius.circular(12),
+      BorderRadius.circular(AppRadii.lg),
     );
   });
 
@@ -245,7 +245,7 @@ void main() {
 
     await openDashboard(tester);
 
-    expect(find.text('Hi, Mark'), findsOneWidget);
+    expect(find.text('Good Morning, Mark'), findsOneWidget);
     expect(find.byKey(DashboardScreen.homeAvatarImageKey), findsOneWidget);
   });
 

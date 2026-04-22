@@ -28,7 +28,7 @@ abstract final class AppColors {
 
   static const background = neutral50;
   static const cardFill = white;
-  static const cardBorder = neutral200;
+  static const cardBorder = neutral100;
   static const titleText = neutral700;
   static const subHeaderText = neutral400;
 
@@ -44,6 +44,8 @@ abstract final class AppColors {
   static const warningButtonText = amber50;
   static const primaryBadgeFill = blue100;
   static const primaryBadgeText = blue500;
+  static const checkboxCardFill = neutral50;
+  static const checkboxCardBorder = neutral200;
 }
 
 abstract final class AppTypography {

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../core/theme/app_design_tokens.dart';
+
 class FirstRunHandoffKeys {
   const FirstRunHandoffKeys._();
 
@@ -36,60 +38,64 @@ class _DisplayNamePromptDialogState extends State<DisplayNamePromptDialog> {
 
   @override
   Widget build(BuildContext context) {
-    const taskPrimaryBlue = Color(0xFF066FD1);
-    const taskSecondaryText = Color(0xFF6B7280);
-    const taskDarkText = Color(0xFF333333);
-
     return Dialog(
       key: FirstRunHandoffKeys.namePrompt,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.six),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.six,
+          AppSpacing.eight,
+          AppSpacing.six,
+          AppSpacing.eight,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'What should we call you?',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
+                color: AppColors.titleText,
+                fontWeight: AppTypography.weightSemibold,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.three),
             Text(
-              'Your name personalizes your Remindly reminders and welcome flow.',
+              'Your name personalized your RemindLy',
               style: Theme.of(
                 context,
-              ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.four),
             TextField(
               key: FirstRunHandoffKeys.nameField,
               controller: _controller,
               decoration: InputDecoration(
                 hintText: 'Enter your name',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppColors.cardFill,
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
+                  horizontal: AppSpacing.three,
+                  vertical: AppSpacing.four,
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE5E8EC)),
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                  borderSide: const BorderSide(color: AppColors.cardBorder),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE5E8EC)),
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                  borderSide: const BorderSide(color: AppColors.cardBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
                   borderSide: const BorderSide(
-                    color: taskPrimaryBlue,
-                    width: 1.4,
+                    color: AppColors.blue500,
+                    width: AppSizes.borderDefault,
                   ),
                 ),
               ),
@@ -97,21 +103,23 @@ class _DisplayNamePromptDialogState extends State<DisplayNamePromptDialog> {
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _submit(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.three),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 key: FirstRunHandoffKeys.nameSaveButton,
                 onPressed: _submit,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  backgroundColor: taskPrimaryBlue,
-                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(
+                    AppSizes.onboardingButtonHeight,
+                  ),
+                  backgroundColor: AppColors.primaryButtonFill,
+                  foregroundColor: AppColors.primaryButtonText,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
                   ),
                 ),
-                child: const Text('Save'),
+                child: const Text('Get Started'),
               ),
             ),
           ],
@@ -147,18 +155,15 @@ class _WelcomeHandoffDialogState extends State<WelcomeHandoffDialog> {
 
   @override
   Widget build(BuildContext context) {
-    const taskPrimaryBlue = Color(0xFF066FD1);
-    const taskAccentBlue = Color(0xFFE6F0FA);
-    const taskSecondaryText = Color(0xFF6B7280);
-    const taskDarkText = Color(0xFF333333);
-
     return Dialog(
       key: FirstRunHandoffKeys.welcomeScreen,
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.six),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -166,34 +171,33 @@ class _WelcomeHandoffDialogState extends State<WelcomeHandoffDialog> {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: taskAccentBlue,
-                borderRadius: BorderRadius.circular(24),
+                color: AppColors.primaryBadgeFill,
+                borderRadius: BorderRadius.circular(AppRadii.threeXl),
               ),
               child: const Icon(
                 TablerIcons.sparkles,
-                color: taskPrimaryBlue,
+                color: AppColors.primaryBadgeText,
                 size: 32,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: AppSpacing.five),
             Text(
               'Welcome, ${widget.displayName}',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
+                color: AppColors.titleText,
+                fontWeight: AppTypography.weightSemibold,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.three),
             Text(
               'Your Remindly dashboard is ready with tasks, notes, and reminders to keep you on track.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: taskSecondaryText,
-                height: 1.5,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: AppSpacing.five),
             if (_showButton)
               SizedBox(
                 width: double.infinity,
@@ -201,11 +205,13 @@ class _WelcomeHandoffDialogState extends State<WelcomeHandoffDialog> {
                   key: FirstRunHandoffKeys.welcomeButton,
                   onPressed: () => Navigator.of(context).pop(),
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    backgroundColor: taskPrimaryBlue,
-                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(
+                      AppSizes.onboardingButtonHeight,
+                    ),
+                    backgroundColor: AppColors.primaryButtonFill,
+                    foregroundColor: AppColors.primaryButtonText,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadii.lg),
                     ),
                   ),
                   child: const Text('Let\'s Go'),

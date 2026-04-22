@@ -4,6 +4,7 @@ import 'package:tabler_icons/tabler_icons.dart';
 import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_access.dart';
+import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../spaces/domain/task_space.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
@@ -1009,10 +1010,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             ),
           ),
           extendedPadding: taskButtonPadding(TaskButtonSize.large),
-          extendedTextStyle: taskButtonTextStyle(
-            context,
-            TaskButtonSize.large,
-          ),
+          extendedTextStyle: taskButtonTextStyle(context, TaskButtonSize.large),
           icon: const Icon(TablerIcons.plus, size: 18),
           label: Text(widget.fabLabel),
         ),
@@ -1745,84 +1743,16 @@ class _DeleteTaskDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              child: Container(
-                width: 62,
-                height: 62,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFECEC),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.warning_amber_rounded,
-                  color: taskDangerText,
-                  size: 28,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Delete Task',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: taskDangerText,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Deleting "$taskTitle" will remove the task and its notes from your device.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: taskSecondaryText,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: taskButtonStyle(
-                      context,
-                      role: TaskButtonRole.secondary,
-                      size: TaskButtonSize.small,
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: taskButtonStyle(
-                      context,
-                      role: TaskButtonRole.destructive,
-                      size: TaskButtonSize.small,
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    child: const Text('Delete Task'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return AppDecisionDialog(
+      tone: AppDecisionTone.danger,
+      icon: TablerIcons.alert_triangle,
+      title: 'Delete Task?',
+      message:
+          'Are you sure you want to delete this task? This action cannot be undone.',
+      secondaryLabel: 'Cancel',
+      primaryLabel: 'Yes, Delete',
+      onSecondaryPressed: () => Navigator.of(context).pop(false),
+      onPrimaryPressed: () => Navigator.of(context).pop(true),
     );
   }
 }
@@ -1842,84 +1772,16 @@ class _MoveCategoryChangeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              child: Container(
-                width: 62,
-                height: 62,
-                decoration: BoxDecoration(
-                  color: taskAccentBlue,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  TablerIcons.category_2,
-                  color: taskPrimaryBlue,
-                  size: 28,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Change Category?',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: taskDarkText,
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Moving "$taskTitle" to "$spaceName" will change its category from $currentCategory to $destinationCategory.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: taskSecondaryText,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: taskButtonStyle(
-                      context,
-                      role: TaskButtonRole.secondary,
-                      size: TaskButtonSize.small,
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: taskButtonStyle(
-                      context,
-                      role: TaskButtonRole.primary,
-                      size: TaskButtonSize.small,
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                    child: const Text('Move Task'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+    return AppDecisionDialog(
+      tone: AppDecisionTone.primary,
+      icon: Icons.drive_file_move_rounded,
+      title: 'Move Task?',
+      message:
+          'This task will be moved to another space. You can still access and edit it there.',
+      secondaryLabel: 'Cancel',
+      primaryLabel: 'Yes, Move',
+      onSecondaryPressed: () => Navigator.of(context).pop(false),
+      onPrimaryPressed: () => Navigator.of(context).pop(true),
     );
   }
 }

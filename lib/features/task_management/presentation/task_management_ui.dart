@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 import 'dart:async';
 
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_models.dart';
 
 const taskPrimaryBlue = Color(0xFF066FD1);
@@ -52,34 +53,34 @@ class _TaskButtonPalette {
 _TaskButtonPalette _taskButtonPalette(TaskButtonRole role) {
   return switch (role) {
     TaskButtonRole.primary => const _TaskButtonPalette(
-      background: taskPrimaryBlue,
-      pressedBackground: taskPrimaryPressed,
-      disabledBackground: taskPrimaryDisabled,
-      foreground: Colors.white,
-      disabledForeground: Colors.white,
+      background: AppColors.primaryButtonFill,
+      pressedBackground: AppColors.blue600,
+      disabledBackground: AppColors.blue200,
+      foreground: AppColors.primaryButtonText,
+      disabledForeground: AppColors.primaryButtonText,
     ),
     TaskButtonRole.secondary => const _TaskButtonPalette(
-      background: Colors.white,
-      pressedBackground: taskSurfaceAlt,
-      disabledBackground: Colors.white,
-      foreground: taskPrimaryBlue,
-      disabledForeground: taskDisabledText,
-      borderColor: taskBorderColor,
-      disabledBorderColor: taskMutedBorderColor,
+      background: AppColors.secondaryButtonFill,
+      pressedBackground: AppColors.neutral700,
+      disabledBackground: AppColors.neutral200,
+      foreground: AppColors.secondaryButtonText,
+      disabledForeground: AppColors.neutral400,
     ),
     TaskButtonRole.destructive => const _TaskButtonPalette(
-      background: taskDangerText,
-      pressedBackground: taskDangerPressed,
-      disabledBackground: taskDangerDisabled,
-      foreground: Colors.white,
-      disabledForeground: Colors.white,
+      background: AppColors.dangerButtonFill,
+      pressedBackground: AppColors.rose500,
+      disabledBackground: AppColors.rose100,
+      foreground: AppColors.dangerButtonText,
+      disabledForeground: AppColors.dangerButtonText,
     ),
     TaskButtonRole.ghost => const _TaskButtonPalette(
-      background: taskAccentBlue,
-      pressedBackground: Color(0xFFD7E8F8),
-      disabledBackground: Color(0xFFEEF4FA),
-      foreground: taskPrimaryBlue,
-      disabledForeground: Color(0xFF9BB8D4),
+      background: AppColors.neutral200,
+      pressedBackground: AppColors.neutral200,
+      disabledBackground: AppColors.neutral100,
+      foreground: AppColors.titleText,
+      disabledForeground: AppColors.subHeaderText,
+      borderColor: AppColors.cardBorder,
+      disabledBorderColor: AppColors.cardBorder,
     ),
   };
 }

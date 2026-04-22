@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/services/display_name_store.dart';
 import '../../../core/services/onboarding_status_store.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../dashboard/presentation/dashboard_screen.dart';
 import '../domain/onboarding_step_data.dart';
 
@@ -130,17 +131,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF066FD1);
-    const secondary = Color(0xFF90CAF9);
-    const accent = Color(0xFFE6F0FA);
-    const primaryText = Color(0xFF333333);
-    const mutedText = Color(0xFF999999);
     final theme = Theme.of(context);
     final step = onboardingSteps[_currentIndex];
 
     return Scaffold(
       key: OnboardingScreen.markerKey,
-      backgroundColor: accent,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Stack(
           fit: StackFit.expand,
@@ -154,18 +150,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onHorizontalDragEnd: _handleSwipeEnd,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 20,
+                  horizontal: AppSpacing.six,
+                  vertical: AppSpacing.five,
                 ),
                 child: Column(
                   children: [
                     const Spacer(),
-                    _OnboardingVisual(
-                      step: step,
-                      primary: primary,
-                      secondary: secondary,
-                      accent: accent,
-                    ),
+                    _OnboardingVisual(step: step),
                     const Spacer(),
                     Align(
                       alignment: Alignment.bottomCenter,
@@ -180,7 +171,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               currentIndex: _currentIndex,
                               totalSteps: onboardingSteps.length,
                             ),
-                            const SizedBox(height: 18),
+                            const SizedBox(height: AppSpacing.four),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
@@ -205,13 +196,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 step.title,
                                 key: ValueKey('title-$_currentIndex'),
                                 style: theme.textTheme.headlineSmall?.copyWith(
-                                  color: primaryText,
-                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.titleText,
+                                  fontWeight: AppTypography.weightSemibold,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: AppSpacing.twoAndHalf),
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 260),
                               switchInCurve: Curves.easeOutCubic,
@@ -236,13 +227,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 step.description,
                                 key: ValueKey('desc-$_currentIndex'),
                                 style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: mutedText,
-                                  height: 1.5,
+                                  color: AppColors.subHeaderText,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                            const SizedBox(height: 22),
+                            const SizedBox(height: AppSpacing.six),
                             _OnboardingActions(
                               currentIndex: _currentIndex,
                               isCompleting: _isCompleting,
@@ -277,9 +267,11 @@ class _OnboardingBackdrop extends StatelessWidget {
             child: Container(
               width: 220,
               height: 220,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Color(0x3390CAF9),
+                color: AppColors.blue100.withValues(
+                  alpha: AppOpacity.overlay40,
+                ),
               ),
             ),
           ),
@@ -289,8 +281,13 @@ class _OnboardingBackdrop extends StatelessWidget {
               width: 160,
               height: 160,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(48),
-                border: Border.all(color: const Color(0x33066FD1), width: 1.6),
+                borderRadius: BorderRadius.circular(AppRadii.threeXl),
+                border: Border.all(
+                  color: AppColors.blue500.withValues(
+                    alpha: AppOpacity.overlay20,
+                  ),
+                  width: AppSizes.borderDefault,
+                ),
               ),
             ),
           ),
@@ -301,35 +298,27 @@ class _OnboardingBackdrop extends StatelessWidget {
 }
 
 class _OnboardingVisual extends StatelessWidget {
-  const _OnboardingVisual({
-    required this.step,
-    required this.primary,
-    required this.secondary,
-    required this.accent,
-  });
+  const _OnboardingVisual({required this.step});
 
   final OnboardingStepData step;
-  final Color primary;
-  final Color secondary;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
-      width: 144,
-      height: 144,
+      width: AppSizes.onboardingVisual,
+      height: AppSizes.onboardingVisual,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: secondary.withValues(alpha: 0.35),
+        color: AppColors.primaryBadgeFill,
       ),
       child: Center(
         child: Icon(
           step.icon,
           key: ValueKey(step.title),
-          size: 54,
-          color: primary,
+          size: AppSizes.onboardingVisualIcon,
+          color: AppColors.primaryBadgeText,
         ),
       ),
     );
@@ -344,8 +333,8 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const dotSize = 8.0;
-    const gap = 6.0;
+    const dotSize = AppSizes.onboardingDot;
+    const gap = AppSpacing.oneAndHalf;
     final totalWidth = (totalSteps * dotSize) + ((totalSteps - 1) * gap);
 
     return SizedBox(
@@ -364,8 +353,10 @@ class _StepIndicator extends StatelessWidget {
                   right: index == totalSteps - 1 ? 0 : gap,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0x33066FD1),
-                  borderRadius: BorderRadius.circular(999),
+                  color: AppColors.blue500.withValues(
+                    alpha: AppOpacity.overlay20,
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadii.full),
                 ),
               ),
             ),
@@ -378,8 +369,8 @@ class _StepIndicator extends StatelessWidget {
               width: dotSize,
               height: dotSize,
               decoration: BoxDecoration(
-                color: const Color(0xFF066FD1),
-                borderRadius: BorderRadius.circular(999),
+                color: AppColors.blue500,
+                borderRadius: BorderRadius.circular(AppRadii.full),
               ),
             ),
           ),
@@ -415,15 +406,20 @@ class _OnboardingActions extends StatelessWidget {
     final primaryButton = FilledButton(
       onPressed: isCompleting ? null : () => onPrimary(),
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(54),
-        backgroundColor: const Color(0xFF066FD1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        minimumSize: const Size.fromHeight(AppSizes.onboardingButtonHeight),
+        backgroundColor: AppColors.primaryButtonFill,
+        foregroundColor: AppColors.primaryButtonText,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        ),
       ),
       child: isCompleting
           ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2.4),
+              width: AppSizes.progressIndicator,
+              height: AppSizes.progressIndicator,
+              child: CircularProgressIndicator(
+                strokeWidth: AppSizes.progressStroke,
+              ),
             )
           : Text(primaryLabel),
     );
@@ -439,16 +435,18 @@ class _OnboardingActions extends StatelessWidget {
           child: OutlinedButton(
             onPressed: isCompleting ? null : () => onBack(),
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
-              side: const BorderSide(color: Color(0xFFE5E8EC)),
+              minimumSize: const Size.fromHeight(
+                AppSizes.onboardingButtonHeight,
+              ),
+              side: const BorderSide(color: AppColors.cardBorder),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(AppRadii.twoXl),
               ),
             ),
             child: const Text('Back'),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpacing.three),
         Expanded(child: primaryButton),
       ],
     );

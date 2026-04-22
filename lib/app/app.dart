@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +14,7 @@ import '../core/services/onboarding_status_store.dart';
 import '../core/services/task_reminder_scope.dart';
 import '../core/services/task_reminder_service.dart';
 import '../core/services/task_repository_scope.dart';
+import '../core/theme/app_theme.dart';
 import '../core/services/vault_service.dart';
 import '../core/services/vault_service_scope.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
@@ -250,8 +250,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    const primaryBlue = Color(0xFF066FD1);
-
     return TaskReminderScope(
       reminderService: widget.reminderService,
       child: TaskRepositoryScope(
@@ -295,16 +293,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               GlobalWidgetsLocalizations.delegate,
               FlutterQuillLocalizations.delegate,
             ],
-            theme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: primaryBlue,
-                brightness: Brightness.light,
-              ),
-              scaffoldBackgroundColor: Colors.white,
-              textTheme: GoogleFonts.poppinsTextTheme(),
-              primaryTextTheme: GoogleFonts.poppinsTextTheme(),
-            ),
+            theme: buildAppTheme(),
             home: _InitialLaunchGate(
               onboardingStatusStore: widget.onboardingStatusStore,
               displayNameStore: widget.displayNameStore,

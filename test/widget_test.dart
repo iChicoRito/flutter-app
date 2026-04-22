@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/app/app.dart';
 import 'package:flutter_app/core/services/display_name_store.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
+import 'package:flutter_app/core/theme/app_design_tokens.dart';
 import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
@@ -93,6 +94,14 @@ void main() {
 
     expect(find.text('Welcome to Remindly'), findsOneWidget);
     expect(find.byIcon(Icons.task_alt_rounded), findsOneWidget);
+    final onboardingScaffold = tester.widget<Scaffold>(
+      find.byKey(OnboardingScreen.markerKey),
+    );
+    final firstStepIcon = tester.widget<Icon>(
+      find.byIcon(Icons.task_alt_rounded),
+    );
+    expect(onboardingScaffold.backgroundColor, AppColors.background);
+    expect(firstStepIcon.color, AppColors.primaryBadgeText);
 
     await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();

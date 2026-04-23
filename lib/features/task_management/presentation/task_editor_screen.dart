@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:tabler_icons/tabler_icons.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/services/task_data_refresh_scope.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/theme/app_design_tokens.dart';
@@ -403,6 +404,17 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     if (!await _confirmVaultProtectedAction(task)) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
+    final shouldArchive = await showArchiveConfirmationDialog(
+      context: context,
+      itemLabel: 'Task',
+      itemName: task.title,
+    );
+    if (!shouldArchive) {
+      return;
+    }
 
     try {
       final archivedTask = task.copyWith(
@@ -414,6 +426,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       if (!mounted) {
         return;
       }
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       Navigator.of(context).pop(TaskEditorScreen.archivedResult);
     } catch (_) {
       if (!mounted) {

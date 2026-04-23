@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../../core/services/task_data_refresh_scope.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_access.dart';
 import '../../../core/vault/vault_models.dart';
+import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/domain/task_repository.dart';
 import '../../task_management/presentation/task_management_ui.dart';
@@ -47,6 +49,7 @@ class _SpacesPageState extends State<SpacesPage> {
 
   final TextEditingController _searchController = TextEditingController();
   SpacesViewMode _viewMode = SpacesViewMode.list;
+  TaskDataRefreshController? _taskDataRefreshController;
 
   @override
   void initState() {
@@ -55,10 +58,29 @@ class _SpacesPageState extends State<SpacesPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final refreshController = TaskDataRefreshScope.of(context);
+    if (_taskDataRefreshController != refreshController) {
+      _taskDataRefreshController?.removeListener(_handleTaskDataRefresh);
+      _taskDataRefreshController = refreshController;
+      _taskDataRefreshController?.addListener(_handleTaskDataRefresh);
+    }
+  }
+
+  @override
   void dispose() {
+    _taskDataRefreshController?.removeListener(_handleTaskDataRefresh);
     _searchController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _handleTaskDataRefresh() {
+    if (!mounted || _controller.isLoading || _controller.isSaving) {
+      return;
+    }
+    _controller.load();
   }
 
   Future<void> _restoreViewMode() async {
@@ -342,11 +364,24 @@ class _SpacesPageState extends State<SpacesPage> {
   }
 
   Future<void> _archiveSpace(TaskSpace space) async {
+    if (!mounted) {
+      return;
+    }
+    final shouldArchive = await showArchiveConfirmationDialog(
+      context: context,
+      itemLabel: 'Space',
+      itemName: space.name,
+    );
+    if (!shouldArchive) {
+      return;
+    }
+
     try {
       await _controller.archiveSpace(space);
       if (!mounted) {
         return;
       }
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Space archived successfully.');
     } catch (_) {
       if (!mounted) {
@@ -605,6 +640,7 @@ class _SpacesPageState extends State<SpacesPage> {
           ),
           floatingActionButton: FloatingActionButton.extended(
             key: SpacesPage.addSpaceFabKey,
+            heroTag: 'spaces-add-space-fab',
             onPressed: _controller.isSaving ? null : _openSpaceForm,
             backgroundColor: AppColors.primaryButtonFill,
             foregroundColor: AppColors.primaryButtonText,

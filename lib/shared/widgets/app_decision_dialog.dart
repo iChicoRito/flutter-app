@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../core/theme/app_design_tokens.dart';
 
@@ -159,4 +160,27 @@ class AppDecisionDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<bool> showArchiveConfirmationDialog({
+  required BuildContext context,
+  required String itemLabel,
+  required String itemName,
+}) async {
+  final shouldArchive = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AppDecisionDialog(
+      tone: AppDecisionTone.danger,
+      icon: TablerIcons.archive,
+      title: 'Archive $itemLabel?',
+      message:
+          'Are you sure you want to archive "$itemName"? You can restore it later from Archives.',
+      secondaryLabel: 'Cancel',
+      primaryLabel: 'Yes, Archive',
+      onSecondaryPressed: () => Navigator.of(dialogContext).pop(false),
+      onPrimaryPressed: () => Navigator.of(dialogContext).pop(true),
+    ),
+  );
+
+  return shouldArchive ?? false;
 }

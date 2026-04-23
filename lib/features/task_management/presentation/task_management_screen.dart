@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../../core/services/task_data_refresh_scope.dart';
 import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/theme/app_design_tokens.dart';
@@ -91,6 +92,7 @@ class TaskManagementScreen extends StatefulWidget {
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSelectionMode = false;
+  TaskDataRefreshController? _taskDataRefreshController;
 
   TaskManagementController get _controller => widget.controller;
 
@@ -98,14 +100,37 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   void initState() {
     super.initState();
     if (_controller.tasks.isEmpty && _controller.categories.isEmpty) {
-      _controller.load();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _controller.load();
+        }
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final refreshController = TaskDataRefreshScope.of(context);
+    if (_taskDataRefreshController != refreshController) {
+      _taskDataRefreshController?.removeListener(_handleTaskDataRefresh);
+      _taskDataRefreshController = refreshController;
+      _taskDataRefreshController?.addListener(_handleTaskDataRefresh);
     }
   }
 
   @override
   void dispose() {
+    _taskDataRefreshController?.removeListener(_handleTaskDataRefresh);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _handleTaskDataRefresh() {
+    if (!mounted || _controller.isLoading || _controller.isSaving) {
+      return;
+    }
+    _controller.load();
   }
 
   void _clearSelectionMode() {
@@ -433,12 +458,24 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     )) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
+    final shouldArchive = await showArchiveConfirmationDialog(
+      context: context,
+      itemLabel: 'Task',
+      itemName: task.title,
+    );
+    if (!shouldArchive) {
+      return;
+    }
 
     try {
       await _controller.archiveTask(task);
       if (!mounted) {
         return;
       }
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Task archived successfully.');
     } catch (_) {
       if (!mounted) {
@@ -996,6 +1033,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           key: TaskManagementScreen.addTaskFabKey,
+          heroTag: 'task-management-add-task-fab',
           onPressed: _controller.isSaving ? null : _openCreateFlow,
           backgroundColor: AppColors.primaryButtonFill,
           foregroundColor: AppColors.primaryButtonText,
@@ -1405,23 +1443,35 @@ class _TaskCard extends StatelessWidget {
                               surfaceTintColor: AppColors.cardFill,
                               onSelected: (value) => onMenuSelected(value),
                               itemBuilder: (context) => [
-                                const PopupMenuItem<_TaskMenuAction>(
+                                PopupMenuItem<_TaskMenuAction>(
+                                  key: TaskManagementScreen.taskMenuActionKey(
+                                    task.id,
+                                    'move-to-space',
+                                  ),
                                   value: _TaskMenuAction.moveToSpace,
-                                  child: TaskMenuEntry(
+                                  child: const TaskMenuEntry(
                                     icon: TablerIcons.folder,
                                     label: 'Move to Space',
                                   ),
                                 ),
-                                const PopupMenuItem<_TaskMenuAction>(
+                                PopupMenuItem<_TaskMenuAction>(
+                                  key: TaskManagementScreen.taskMenuActionKey(
+                                    task.id,
+                                    'archive',
+                                  ),
                                   value: _TaskMenuAction.archive,
-                                  child: TaskMenuEntry(
+                                  child: const TaskMenuEntry(
                                     icon: TablerIcons.archive,
                                     label: 'Archive',
                                   ),
                                 ),
-                                const PopupMenuItem<_TaskMenuAction>(
+                                PopupMenuItem<_TaskMenuAction>(
+                                  key: TaskManagementScreen.taskMenuActionKey(
+                                    task.id,
+                                    'delete',
+                                  ),
                                   value: _TaskMenuAction.delete,
-                                  child: TaskMenuEntry(
+                                  child: const TaskMenuEntry(
                                     icon: TablerIcons.trash,
                                     label: 'Delete',
                                     color: AppColors.rose500,

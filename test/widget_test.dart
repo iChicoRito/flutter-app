@@ -6,8 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_app/app/app.dart';
 import 'package:flutter_app/core/services/display_name_store.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
+import 'package:flutter_app/core/services/task_data_refresh_scope.dart';
+import 'package:flutter_app/core/services/task_reminder_service.dart';
 import 'package:flutter_app/core/theme/app_design_tokens.dart';
 import 'package:flutter_app/core/vault/vault_models.dart';
+import 'package:flutter_app/features/archive/presentation/archives_screen.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
@@ -55,14 +58,17 @@ void main() {
   }
 
   Widget wrapWithMaterial(Widget child) {
-    return MaterialApp(
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        FlutterQuillLocalizations.delegate,
-      ],
-      home: child,
+    return TaskDataRefreshScope(
+      controller: TaskDataRefreshController(),
+      child: MaterialApp(
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          FlutterQuillLocalizations.delegate,
+        ],
+        home: child,
+      ),
     );
   }
 
@@ -333,7 +339,8 @@ void main() {
 
     expect(find.byKey(DashboardScreen.profileTabKey), findsOneWidget);
     expect(find.text('My Profile'), findsOneWidget);
-    expect(find.text('Manage and update your profile'), findsOneWidget);
+    expect(find.text('Account Details'), findsOneWidget);
+    expect(find.text('User Profile'), findsOneWidget);
     final nameFinder = find.descendant(
       of: find.byKey(DashboardScreen.profileIdentityKey),
       matching: find.text('Mark'),
@@ -342,10 +349,10 @@ void main() {
     final statusText = tester.widget<Text>(find.text('Active'));
 
     expect(nameFinder, findsOneWidget);
-    expect(nameText.style?.fontSize, 15);
-    expect(statusText.style?.fontSize, 10);
-    expect(nameText.style?.fontWeight, FontWeight.w600);
-    expect(statusText.style?.fontWeight, FontWeight.w600);
+    expect(nameText.style?.fontSize, AppTypography.sizeLg);
+    expect(statusText.style?.fontSize, AppTypography.sizeXs);
+    expect(nameText.style?.fontWeight, AppTypography.weightSemibold);
+    expect(statusText.style?.fontWeight, AppTypography.weightMedium);
     expect(
       find.descendant(
         of: find.byKey(DashboardScreen.profileCompletedStatKey),
@@ -482,6 +489,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('My Archives'), findsOneWidget);
+      expect(find.text('Your archive is clear'), findsOneWidget);
       expect(find.text('Edit Profile Name'), findsNothing);
 
       await tester.tap(find.byIcon(TablerIcons.arrow_left));
@@ -492,6 +500,269 @@ void main() {
       expect(find.text('Edit Profile Name'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'archives screen shows filters and restores real archived items',
+    (WidgetTester tester) async {
+      final now = DateTime(2026, 4, 13, 9);
+      const vaultConfig = VaultConfig(
+        isEnabled: true,
+        method: VaultMethod.password,
+        secretKeyRef: 'secret',
+      );
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'archived-task',
+            title: 'Archived task',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+            vaultConfig: vaultConfig,
+            archivedAt: now,
+          ),
+        ],
+        spaces: [
+          TaskSpace(
+            id: 'archived-space',
+            name: 'Archived space',
+            description: '',
+            categoryId: 'personal',
+            colorValue: AppColors.teal500.toARGB32(),
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: now,
+            vaultConfig: vaultConfig,
+          ),
+        ],
+      );
+
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      await tester.pumpWidget(
+        wrapWithMaterial(
+          ArchivesScreen(
+            repository: taskRepository,
+            reminderService: const NoopTaskReminderService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Archives'), findsOneWidget);
+      expect(find.text('Filter'), findsOneWidget);
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Tasks'), findsOneWidget);
+      expect(find.text('Spaces'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('All')).dx,
+        lessThan(tester.getTopLeft(find.text('Tasks')).dx),
+      );
+      expect(
+        tester.getTopLeft(find.text('Tasks')).dx,
+        lessThan(tester.getTopLeft(find.text('Spaces')).dx),
+      );
+      expect(find.text('Archived space'), findsOneWidget);
+      expect(find.text('Archived task'), findsOneWidget);
+      expect(find.text('Locked Content'), findsNWidgets(2));
+
+      await tester.tap(find.text('Restore').first);
+      await tester.pumpAndSettle();
+
+      final restoredSpaces = await taskRepository.getSpaces();
+      expect(restoredSpaces.single.isArchived, isFalse);
+      expect(find.text('Archived space'), findsNothing);
+      expect(find.text('Space restored successfully.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'restoring a space from archives updates spaces without pull to refresh',
+    (WidgetTester tester) async {
+      final now = DateTime(2026, 4, 13, 9);
+      taskRepository = InMemoryTaskRepository(
+        spaces: [
+          TaskSpace(
+            id: 'archived-space',
+            name: 'Archived Space',
+            description: 'Bring me back',
+            categoryId: 'work',
+            colorValue: AppColors.blue500.toARGB32(),
+            createdAt: now,
+            updatedAt: now,
+            archivedAt: now,
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(DashboardScreen.profileArchivesRowKey));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archived Space'), findsOneWidget);
+
+      await tester.tap(find.text('Restore').first);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(TablerIcons.arrow_left));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Spaces'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archived Space'), findsWidgets);
+    },
+  );
+
+  testWidgets('task list archive asks for confirmation before archiving', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'archive-task',
+          title: 'Archive me',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuButtonKey('archive-task')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        TaskManagementScreen.taskMenuActionKey('archive-task', 'archive'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Archive Task?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    var tasks = await taskRepository.getTasks();
+    expect(tasks.single.isArchived, isFalse);
+    expect(find.text('Archive me'), findsWidgets);
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuButtonKey('archive-task')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        TaskManagementScreen.taskMenuActionKey('archive-task', 'archive'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, Archive'));
+    await tester.pumpAndSettle();
+
+    tasks = await taskRepository.getTasks();
+    expect(tasks.single.isArchived, isTrue);
+    expect(find.text('Task archived successfully.'), findsOneWidget);
+  });
+
+  testWidgets('task editor archive asks for confirmation before archiving', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'editor-archive-task',
+          title: 'Editor Archive',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editor Archive'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(TablerIcons.dots_vertical));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.archiveButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Archive Task?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
+    var tasks = await taskRepository.getTasks();
+    expect(tasks.single.isArchived, isFalse);
+
+    await tester.tap(find.byIcon(TablerIcons.dots_vertical));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.archiveButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, Archive'));
+    await tester.pumpAndSettle();
+
+    tasks = await taskRepository.getTasks();
+    expect(tasks.single.isArchived, isTrue);
+    expect(find.text('Task archived successfully.'), findsOneWidget);
+  });
+
+  testWidgets('space archive asks for confirmation before archiving', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime(2026, 4, 13, 9);
+    taskRepository = InMemoryTaskRepository(
+      spaces: [
+        TaskSpace(
+          id: 'archive-space',
+          name: 'Archive Space',
+          description: 'Space to archive',
+          categoryId: 'work',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Spaces'));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('Archive Space').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Archive Space').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Archive Space?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    var spaces = await taskRepository.getSpaces();
+    expect(spaces.single.isArchived, isFalse);
+    expect(find.text('Archive Space'), findsWidgets);
+
+    await tester.longPress(find.text('Archive Space').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Archive Space').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, Archive'));
+    await tester.pumpAndSettle();
+
+    spaces = await taskRepository.getSpaces();
+    expect(spaces.single.isArchived, isTrue);
+    expect(find.text('Space archived successfully.'), findsOneWidget);
+  });
 
   testWidgets('task editor opens from a newly added task', (
     WidgetTester tester,
@@ -645,7 +916,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('New'));
+    await tester.tap(find.text('Create'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(customCategoryNameFieldKey), 'Errands');
@@ -945,7 +1216,7 @@ void main() {
     await tester.tap(find.text('Spaces'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Filters'));
+    await tester.tap(find.byKey(SpacesPage.advancedFiltersButtonKey));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(SpacesPage.vaultDropdownKey));
     await tester.pumpAndSettle();
@@ -1099,6 +1370,7 @@ TaskItem buildTask({
   VaultConfig? vaultConfig,
   DateTime? endDate,
   int? endMinutes,
+  DateTime? archivedAt,
 }) {
   final now = DateTime(2026, 4, 13, 9);
   return TaskItem(
@@ -1110,6 +1382,7 @@ TaskItem buildTask({
     updatedAt: now,
     isCompleted: isCompleted,
     vaultConfig: vaultConfig,
+    archivedAt: archivedAt,
     endDate: endDate,
     endMinutes: endMinutes,
     noteDocumentJson: buildPlainTextNoteDocumentJson(noteText),

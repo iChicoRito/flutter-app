@@ -49,6 +49,12 @@ abstract final class AppColors {
   static const secondaryBadgeFill = neutral200;
   static const secondaryBadgeText = neutral700;
   static const secondaryBadgeIcon = neutral700;
+  static const successBadgeFill = teal100;
+  static const successBadgeText = teal500;
+  static const warningBadgeFill = amber100;
+  static const warningBadgeText = amber500;
+  static const dangerBadgeFill = rose100;
+  static const dangerBadgeText = rose500;
   static const checkboxCardFill = neutral50;
   static const checkboxCardBorder = neutral200;
 }

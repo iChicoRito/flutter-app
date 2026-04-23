@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/services/display_name_store.dart';
 import '../core/services/onboarding_status_store.dart';
+import '../core/services/task_data_refresh_scope.dart';
 import '../core/services/task_reminder_scope.dart';
 import '../core/services/task_reminder_service.dart';
 import '../core/services/task_repository_scope.dart';
@@ -55,6 +56,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   static const String _latchedAlarmPayloadKey = 'active_alarm_payload';
 
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  final TaskDataRefreshController _taskDataRefreshController =
+      TaskDataRefreshController();
   AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
   String? _activeAlarmTaskId;
   TaskReminderPayload? _activeAlarmPayload;
@@ -77,6 +80,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _foregroundAlarmPoller?.cancel();
+    _taskDataRefreshController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -252,51 +256,54 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return TaskReminderScope(
       reminderService: widget.reminderService,
-      child: TaskRepositoryScope(
-        repository: widget.taskRepository,
-        child: VaultServiceScope(
-          vaultService: widget.vaultService,
-          child: MaterialApp(
-            navigatorKey: _navigatorKey,
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  child ?? const SizedBox.shrink(),
-                  if (_activeAlarmPayload != null)
-                    Positioned.fill(
-                      child: TaskAlarmScreen(
-                        payload: _activeAlarmPayload!,
-                        reminderService: widget.reminderService,
-                        taskRepository: widget.taskRepository,
-                        displayNameStore: widget.displayNameStore,
-                        onDismissed: () {
-                          if (!mounted) {
-                            return;
-                          }
-                          unawaited(_clearLatchedAlarm());
-                          setState(() {
-                            _activeAlarmPayload = null;
-                            _activeAlarmTaskId = null;
-                            _isAlarmScreenVisible = false;
-                          });
-                        },
+      child: TaskDataRefreshScope(
+        controller: _taskDataRefreshController,
+        child: TaskRepositoryScope(
+          repository: widget.taskRepository,
+          child: VaultServiceScope(
+            vaultService: widget.vaultService,
+            child: MaterialApp(
+              navigatorKey: _navigatorKey,
+              builder: (context, child) {
+                return Stack(
+                  children: [
+                    child ?? const SizedBox.shrink(),
+                    if (_activeAlarmPayload != null)
+                      Positioned.fill(
+                        child: TaskAlarmScreen(
+                          payload: _activeAlarmPayload!,
+                          reminderService: widget.reminderService,
+                          taskRepository: widget.taskRepository,
+                          displayNameStore: widget.displayNameStore,
+                          onDismissed: () {
+                            if (!mounted) {
+                              return;
+                            }
+                            unawaited(_clearLatchedAlarm());
+                            setState(() {
+                              _activeAlarmPayload = null;
+                              _activeAlarmTaskId = null;
+                              _isAlarmScreenVisible = false;
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                ],
-              );
-            },
-            title: 'Remindly',
-            debugShowCheckedModeBanner: false,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              FlutterQuillLocalizations.delegate,
-            ],
-            theme: buildAppTheme(),
-            home: _InitialLaunchGate(
-              onboardingStatusStore: widget.onboardingStatusStore,
-              displayNameStore: widget.displayNameStore,
+                  ],
+                );
+              },
+              title: 'Remindly',
+              debugShowCheckedModeBanner: false,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                FlutterQuillLocalizations.delegate,
+              ],
+              theme: buildAppTheme(),
+              home: _InitialLaunchGate(
+                onboardingStatusStore: widget.onboardingStatusStore,
+                displayNameStore: widget.displayNameStore,
+              ),
             ),
           ),
         ),

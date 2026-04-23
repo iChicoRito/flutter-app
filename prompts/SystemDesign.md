@@ -21,9 +21,9 @@ BADGE / ICONS / CHIPS
     Icon:             $color-blue-500      #3b82f6
 
   SECONDARY
-    Text:             $color-neutral-700   #404040
-    Fill:             $color-neutral-200   #e5e5e5
-    Icon:             $color-neutral-700   #404040
+    Text:             $color-neutral-50    #404040
+    Fill:             $color-neutral-700   #E5E5E5
+    Icon:             $color-neutral-50    #404040
 
   DANGER
     Text:             $color-rose-500      #f43f5e
@@ -49,9 +49,9 @@ BUTTONS
     Icon:             $color-blue-50       #eff6ff
 
   SECONDARY
-    Text:             $color-neutral-50    #fafafa
-    Fill:             $color-neutral-700   #404040
-    Icon:             $color-neutral-50    #fafafa
+    Text:             $color-neutral-50    #404040
+    Fill:             $color-neutral-700   #E5E5E5
+    Icon:             $color-neutral-50    #404040
 
   DANGER
     Text:             $color-rose-50       #fff1f2
@@ -145,15 +145,15 @@ PADDING AND RADIUS
 BUTTON
 
   Padding / Radius
-    Left:             $spacing-5              20;
-    Right:            $spacing-5              20;
+    Left/Right:       $spacing-5              20;
+    Top/Bottom:       $spacing-5              20;
     Radius            $radius-xl              12;
 
 CARDS / DIALOG
 
   Padding / Radius
-    Left:             $spacing-6              24;
-    Right:            $spacing-8              32;
-    Radius            $radius-3xl             24;
+    Left/Right:       $spacing8              32;
+    Top/Bottom:       $spacing-16            24;
+    Radius            $radius-3xl            24;
 
 ─────────────────────────────────────────────────────────────

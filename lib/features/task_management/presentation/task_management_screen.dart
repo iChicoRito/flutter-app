@@ -44,6 +44,9 @@ class TaskManagementScreen extends StatefulWidget {
   );
   static const Key statusDropdownKey = Key('task-management-status-dropdown');
   static const Key vaultDropdownKey = Key('task-management-vault-dropdown');
+  static const Key advancedFiltersButtonKey = Key(
+    'task-management-advanced-filters',
+  );
   static const Key allCategoriesKey = Key('task-category-filter-all');
   static const Key createTitleFieldKey = Key('task-create-title-field');
   static const Key createDescriptionFieldKey = Key(
@@ -88,7 +91,6 @@ class TaskManagementScreen extends StatefulWidget {
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSelectionMode = false;
-  bool _isFiltersExpanded = false;
 
   TaskManagementController get _controller => widget.controller;
 
@@ -753,6 +755,78 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     return shouldMove == true;
   }
 
+  void _openAdvancedFilters() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.cardFill,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadii.threeXl),
+        ),
+      ),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.eight,
+              vertical: AppSpacing.six,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.neutral200,
+                      borderRadius: BorderRadius.circular(AppRadii.full),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.six),
+                Text(
+                  'More Filters',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.titleText,
+                    fontSize: AppTypography.sizeLg,
+                    fontWeight: AppTypography.weightSemibold,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.four),
+                TaskCompactDropdown<TaskPriorityFilter>(
+                  buttonKey: TaskManagementScreen.priorityDropdownKey,
+                  menuKeyBuilder: (value) =>
+                      TaskManagementScreen.priorityFilterKey(value.name),
+                  currentValue: _controller.priorityFilter,
+                  currentLabel: _priorityFilterLabel(
+                    _controller.priorityFilter,
+                  ),
+                  onSelected: _controller.updatePriorityFilter,
+                  items: TaskPriorityFilter.values,
+                  labelBuilder: _priorityFilterLabel,
+                ),
+                const SizedBox(height: AppSpacing.three),
+                TaskCompactDropdown<TaskVaultFilter>(
+                  buttonKey: TaskManagementScreen.vaultDropdownKey,
+                  menuKeyBuilder: (value) =>
+                      TaskManagementScreen.vaultFilterKey(value.name),
+                  currentValue: _controller.vaultFilter,
+                  currentLabel: _vaultFilterLabel(_controller.vaultFilter),
+                  onSelected: _controller.updateVaultFilter,
+                  items: TaskVaultFilter.values,
+                  labelBuilder: _vaultFilterLabel,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -829,126 +903,37 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   onRefresh: _controller.load,
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.five,
+                      AppSpacing.four,
                       AppSpacing.six,
-                      AppSpacing.five,
+                      AppSpacing.four,
                       120,
                     ),
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'My Tasks',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  color: AppColors.titleText,
-                                  fontWeight: AppTypography.weightSemibold,
-                                  fontSize: AppTypography.sizeXl,
-                                ),
-                          ),
-                          const SizedBox(height: AppSpacing.one),
-                          Text(
-                            'Organize & manage your tasks',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: AppColors.subHeaderText,
-                                  fontSize: AppTypography.sizeSm,
-                                  fontWeight: AppTypography.weightSemibold,
-                                ),
-                          ),
-                        ],
+                      _TaskPageHeader(onFiltersPressed: _openAdvancedFilters),
+                      const SizedBox(height: AppSpacing.six),
+                      Text(
+                        'Filter',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: AppColors.titleText,
+                              fontSize: AppTypography.sizeLg,
+                              fontWeight: AppTypography.weightSemibold,
+                            ),
                       ),
-                      const SizedBox(height: AppSpacing.five),
+                      const SizedBox(height: AppSpacing.four),
                       _SearchField(
                         controller: _searchController,
                         onChanged: _controller.updateSearchQuery,
                       ),
-                      const SizedBox(height: AppSpacing.four),
-                      _FiltersSection(
-                        title: 'Filters',
-                        subtitle:
-                            'Search across task titles, note previews, and categories.',
-                        isExpanded: _isFiltersExpanded,
-                        onHeaderTap: () {
-                          if (_isSelectionMode) {
-                            _clearSelectionMode();
-                            return;
-                          }
-                          setState(() {
-                            _isFiltersExpanded = !_isFiltersExpanded;
-                          });
-                        },
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TaskCompactDropdown<TaskStatusFilter>(
-                                    buttonKey:
-                                        TaskManagementScreen.statusDropdownKey,
-                                    menuKeyBuilder: (value) =>
-                                        TaskManagementScreen.statusFilterKey(
-                                          value.name,
-                                        ),
-                                    currentValue: _controller.statusFilter,
-                                    currentLabel: _statusLabel(
-                                      _controller.statusFilter,
-                                    ),
-                                    onSelected: _controller.updateStatusFilter,
-                                    items: TaskStatusFilter.values,
-                                    labelBuilder: _statusLabel,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: TaskCompactDropdown<TaskPriorityFilter>(
-                                    buttonKey: TaskManagementScreen
-                                        .priorityDropdownKey,
-                                    menuKeyBuilder: (value) =>
-                                        TaskManagementScreen.priorityFilterKey(
-                                          value.name,
-                                        ),
-                                    currentValue: _controller.priorityFilter,
-                                    currentLabel: _priorityFilterLabel(
-                                      _controller.priorityFilter,
-                                    ),
-                                    onSelected:
-                                        _controller.updatePriorityFilter,
-                                    items: TaskPriorityFilter.values,
-                                    labelBuilder: _priorityFilterLabel,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            TaskCompactDropdown<TaskVaultFilter>(
-                              buttonKey: TaskManagementScreen.vaultDropdownKey,
-                              menuKeyBuilder: (value) =>
-                                  TaskManagementScreen.vaultFilterKey(
-                                    value.name,
-                                  ),
-                              currentValue: _controller.vaultFilter,
-                              currentLabel: _vaultFilterLabel(
-                                _controller.vaultFilter,
-                              ),
-                              onSelected: _controller.updateVaultFilter,
-                              items: TaskVaultFilter.values,
-                              labelBuilder: _vaultFilterLabel,
-                            ),
-                            if (widget.lockedCategoryId == null) ...[
-                              const SizedBox(height: 12),
-                              _CategoryFilterRow(
-                                categories: _controller.categories,
-                                selectedCategoryId:
-                                    _controller.categoryFilterId,
-                                onSelected: _controller.updateCategoryFilter,
-                              ),
-                            ],
-                          ],
+                      if (widget.lockedCategoryId == null) ...[
+                        const SizedBox(height: AppSpacing.three),
+                        _CategoryFilterRow(
+                          categories: _controller.categories,
+                          selectedCategoryId: _controller.categoryFilterId,
+                          onSelected: _controller.updateCategoryFilter,
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.four),
+                      ],
+                      const SizedBox(height: AppSpacing.six),
                       if (filteredTasks.isEmpty)
                         _EmptyState(
                           title: widget.emptyTitle,
@@ -1050,19 +1035,71 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       TaskVaultFilter.nonVaultOnly => 'Non-Vault',
     };
   }
-
-  static String _statusLabel(TaskStatusFilter status) {
-    return switch (status) {
-      TaskStatusFilter.all => 'All Status',
-      TaskStatusFilter.today => 'Today',
-      TaskStatusFilter.upcoming => 'Upcoming',
-      TaskStatusFilter.overdue => 'Overdue',
-      TaskStatusFilter.completed => 'Completed',
-    };
-  }
 }
 
 enum _TaskMenuAction { moveToSpace, archive, delete }
+
+class _TaskPageHeader extends StatelessWidget {
+  const _TaskPageHeader({required this.onFiltersPressed});
+
+  final VoidCallback onFiltersPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'My Tasks',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.titleText,
+                  fontSize: AppTypography.sizeLg,
+                  fontWeight: AppTypography.weightSemibold,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.one),
+              Text(
+                'Organize and manage your tasks',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.subHeaderText,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightNormal,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.three),
+        Material(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          child: InkWell(
+            key: TaskManagementScreen.advancedFiltersButtonKey,
+            onTap: onFiltersPressed,
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.xl),
+                border: Border.all(color: AppColors.neutral200),
+              ),
+              child: const Icon(
+                TablerIcons.adjustments_horizontal,
+                size: 20,
+                color: AppColors.titleText,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _SearchField extends StatelessWidget {
   const _SearchField({required this.controller, required this.onChanged});
@@ -1078,7 +1115,7 @@ class _SearchField extends StatelessWidget {
       onChanged: onChanged,
       decoration: taskInputDecoration(
         context: context,
-        hintText: 'Search tasks, notes, categories',
+        hintText: 'Search your tasks',
         prefixIcon: const Icon(
           TablerIcons.search,
           size: 18,
@@ -1125,7 +1162,7 @@ class _CategoryFilterRow extends StatelessWidget {
               child: _CategoryChip(
                 chipKey: TaskManagementScreen.categoryFilterKey(category.id),
                 label: category.name,
-                icon: resolveTaskCategoryIcon(category.iconKey),
+                icon: null,
                 iconColor: selectedCategoryId == category.id
                     ? AppColors.primaryButtonText
                     : AppColors.subHeaderText,
@@ -1164,20 +1201,19 @@ class _CategoryChip extends StatelessWidget {
     return InkWell(
       key: chipKey,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadii.lg),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       child: Container(
-        constraints: const BoxConstraints(
-          minHeight: taskFilterControlHeight,
-          maxHeight: taskFilterControlHeight,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.two,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.three),
         decoration: BoxDecoration(
           color: selected ? AppColors.primaryButtonFill : AppColors.cardFill,
-          borderRadius: BorderRadius.circular(AppRadii.lg),
+          borderRadius: BorderRadius.circular(AppRadii.xl),
           border: Border.all(
             color: selected
                 ? AppColors.primaryButtonFill
-                : AppColors.cardBorder,
+                : AppColors.neutral200,
           ),
         ),
         child: Row(
@@ -1192,90 +1228,13 @@ class _CategoryChip extends StatelessWidget {
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 color: selected
                     ? AppColors.primaryButtonText
-                    : AppColors.titleText,
-                fontWeight: AppTypography.weightSemibold,
+                    : AppColors.subHeaderText,
+                fontSize: AppTypography.sizeSm,
+                fontWeight: AppTypography.weightNormal,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _FiltersSection extends StatelessWidget {
-  const _FiltersSection({
-    required this.title,
-    required this.subtitle,
-    required this.isExpanded,
-    required this.onHeaderTap,
-    required this.child,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool isExpanded;
-  final VoidCallback onHeaderTap;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.five),
-      decoration: BoxDecoration(
-        color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: onHeaderTap,
-            borderRadius: BorderRadius.circular(AppRadii.twoXl),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: AppColors.titleText,
-                              fontWeight: AppTypography.weightSemibold,
-                            ),
-                      ),
-                      const SizedBox(height: AppSpacing.one),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.subHeaderText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.three),
-                Icon(
-                  isExpanded
-                      ? TablerIcons.chevron_up
-                      : TablerIcons.chevron_down,
-                  size: 18,
-                  color: AppColors.subHeaderText,
-                ),
-              ],
-            ),
-          ),
-          if (isExpanded) ...[
-            const SizedBox(height: AppSpacing.four),
-            const Divider(height: 1, thickness: 1, color: AppColors.cardBorder),
-            const SizedBox(height: AppSpacing.four),
-            child,
-          ],
-        ],
       ),
     );
   }
@@ -1307,19 +1266,21 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const trailingSlotWidth = 28.0;
-    const cardStackSpacing = AppSpacing.three;
-    final accentColor = category?.color ?? taskPrimaryBlue;
     final descriptionText = previewProtected
-        ? 'Protected content'
+        ? 'Locked Content'
         : taskDescriptionPreview(task);
     final actualNotePreview = previewProtected
         ? ''
         : taskActualNotePreview(task);
-    final noteText = actualNotePreview.isEmpty
+    final previewText = descriptionText.isEmpty
         ? (previewProtected
-              ? 'Protected content'
+              ? 'Locked Content'
               : 'Open this task to start writing rich notes.')
-        : actualNotePreview;
+        : descriptionText;
+    final shouldShowNotePreview =
+        !previewProtected &&
+        actualNotePreview.isNotEmpty &&
+        actualNotePreview != descriptionText;
 
     return Material(
       color: Colors.transparent,
@@ -1327,19 +1288,17 @@ class _TaskCard extends StatelessWidget {
         key: TaskManagementScreen.taskTileKey(task.id),
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.five,
-            AppSpacing.five,
-            AppSpacing.five,
-            AppSpacing.four,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.eight,
+            vertical: AppSpacing.six,
           ),
           decoration: BoxDecoration(
-            color: AppColors.checkboxCardFill,
-            borderRadius: BorderRadius.circular(AppRadii.twoXl),
+            color: AppColors.cardFill,
+            borderRadius: BorderRadius.circular(AppRadii.threeXl),
             border: Border.all(
-              color: AppColors.checkboxCardBorder,
+              color: AppColors.cardBorder,
               width: AppSizes.borderDefault,
             ),
           ),
@@ -1397,39 +1356,36 @@ class _TaskCard extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      task.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            color: AppColors.titleText,
-                                            fontWeight:
-                                                AppTypography.weightSemibold,
-                                            decoration: task.isCompleted
-                                                ? TextDecoration.lineThrough
-                                                : null,
-                                          ),
+                              Text(
+                                task.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: AppColors.titleText,
+                                      fontSize: AppTypography.sizeLg,
+                                      fontWeight: AppTypography.weightSemibold,
+                                      decoration: task.isCompleted
+                                          ? TextDecoration.lineThrough
+                                          : null,
                                     ),
-                                  ),
-                                ],
                               ),
-                              if (descriptionText.isNotEmpty) ...[
-                                const SizedBox(height: cardStackSpacing),
+                              const SizedBox(height: AppSpacing.one),
+                              _TaskPreviewLine(
+                                text: previewText,
+                                isLocked: previewProtected,
+                              ),
+                              if (shouldShowNotePreview) ...[
+                                const SizedBox(height: AppSpacing.one),
                                 Text(
-                                  descriptionText,
+                                  actualNotePreview,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleMedium
+                                  style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
                                         color: AppColors.subHeaderText,
-                                        fontWeight: AppTypography.weightMedium,
+                                        fontSize: AppTypography.sizeBase,
+                                        fontWeight: AppTypography.weightNormal,
                                       ),
                                 ),
                               ],
@@ -1487,7 +1443,7 @@ class _TaskCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: cardStackSpacing),
+                    const SizedBox(height: AppSpacing.three),
                     if (category != null || space != null) ...[
                       Wrap(
                         spacing: AppSpacing.two,
@@ -1501,37 +1457,7 @@ class _TaskCard extends StatelessWidget {
                           if (space != null) _SpaceBadge(space: space!),
                         ],
                       ),
-                      const SizedBox(height: cardStackSpacing),
                     ],
-                    IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Container(
-                            width: 3,
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              borderRadius: BorderRadius.circular(
-                                AppRadii.full,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.three),
-                          Expanded(
-                            child: Text(
-                              noteText,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: AppColors.subHeaderText,
-                                    fontWeight: AppTypography.weightMedium,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -1539,6 +1465,46 @@ class _TaskCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TaskPreviewLine extends StatelessWidget {
+  const _TaskPreviewLine({required this.text, required this.isLocked});
+
+  final String text;
+  final bool isLocked;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: AppColors.subHeaderText,
+      fontSize: AppTypography.sizeBase,
+      fontWeight: AppTypography.weightNormal,
+    );
+
+    if (!isLocked) {
+      return Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: textStyle,
+      );
+    }
+
+    return Row(
+      children: [
+        const Icon(TablerIcons.lock, size: 18, color: AppColors.subHeaderText),
+        const SizedBox(width: AppSpacing.two),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textStyle,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1742,12 +1708,12 @@ class _EmptyState extends StatelessWidget {
     return Container(
       key: TaskManagementScreen.emptyStateKey,
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.six,
-        vertical: AppSpacing.eight,
+        horizontal: AppSpacing.eight,
+        vertical: AppSpacing.six,
       ),
       decoration: BoxDecoration(
         color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
         border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(

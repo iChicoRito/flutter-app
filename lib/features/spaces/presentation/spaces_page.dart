@@ -4,6 +4,7 @@ import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/services/task_reminder_service.dart';
 import '../../../core/services/vault_service_scope.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_access.dart';
 import '../../../core/vault/vault_models.dart';
 import '../../task_management/domain/task_category.dart';
@@ -23,6 +24,8 @@ class SpacesPage extends StatefulWidget {
     required this.reminderService,
   });
 
+  static const Key advancedFiltersButtonKey = Key('spaces-advanced-filters');
+  static const Key addSpaceFabKey = Key('spaces-add-space');
   static const Key vaultDropdownKey = Key('spaces-vault-dropdown');
 
   static Key vaultFilterKey(String value) => Key('spaces-vault-filter-$value');
@@ -44,7 +47,6 @@ class _SpacesPageState extends State<SpacesPage> {
 
   final TextEditingController _searchController = TextEditingController();
   SpacesViewMode _viewMode = SpacesViewMode.list;
-  bool _isFiltersExpanded = false;
 
   @override
   void initState() {
@@ -81,6 +83,67 @@ class _SpacesPageState extends State<SpacesPage> {
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_viewModeKey, mode.name);
+  }
+
+  void _openAdvancedFilters() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.cardFill,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadii.threeXl),
+        ),
+      ),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.eight,
+              vertical: AppSpacing.six,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.neutral200,
+                      borderRadius: BorderRadius.circular(AppRadii.full),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.six),
+                Text(
+                  'More Filters',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.titleText,
+                    fontSize: AppTypography.sizeLg,
+                    fontWeight: AppTypography.weightSemibold,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.four),
+                TaskCompactDropdown<SpacesVaultFilter>(
+                  buttonKey: SpacesPage.vaultDropdownKey,
+                  menuKeyBuilder: (value) =>
+                      SpacesPage.vaultFilterKey(value.name),
+                  currentValue: _controller.vaultFilter,
+                  currentLabel: _SpacesCategoryFilterRow.vaultFilterLabel(
+                    _controller.vaultFilter,
+                  ),
+                  onSelected: _controller.updateVaultFilter,
+                  items: SpacesVaultFilter.values,
+                  labelBuilder: _SpacesCategoryFilterRow.vaultFilterLabel,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openSpaceForm({TaskSpace? initialSpace}) async {
@@ -431,155 +494,137 @@ class _SpacesPageState extends State<SpacesPage> {
           );
         }
 
-        return ColoredBox(
-          color: taskSurface,
-          child: Stack(
-            children: [
-              RefreshIndicator(
-                color: taskPrimaryBlue,
-                onRefresh: _controller.load,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'My Spaces',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(
-                                color: taskDarkText,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 19,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Organize & manage your tasks spaces',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: taskMutedText,
-                                fontSize: 14,
-                                height: 1.35,
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    _SpacesSearchField(
-                      controller: _searchController,
-                      onChanged: _controller.updateSearchQuery,
-                    ),
-                    const SizedBox(height: 16),
-                    _SpacesFiltersSection(
-                      title: 'Filters',
-                      subtitle:
-                          'Search across space names, descriptions, and categories.',
-                      isExpanded: _isFiltersExpanded,
-                      onHeaderTap: () {
-                        setState(() {
-                          _isFiltersExpanded = !_isFiltersExpanded;
-                        });
-                      },
-                      child: _SpacesCategoryFilterRow(
-                        categories: _controller.categories,
-                        selectedCategoryId: _controller.categoryFilterId,
-                        selectedVaultFilter: _controller.vaultFilter,
-                        onCategorySelected: _controller.updateCategoryFilter,
-                        onVaultSelected: _controller.updateVaultFilter,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        _SpacesViewToggle(
-                          viewMode: _viewMode,
-                          onChanged: _setViewMode,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    if (_controller.spaces.isEmpty)
-                      const _SpacesEmptyState()
-                    else if (filteredSpaces.isEmpty)
-                      const _SpacesFilteredEmptyState()
-                    else if (_viewMode == SpacesViewMode.list)
-                      ...filteredSpaces.map(
-                        (space) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _SpaceListCard(
-                            space: space,
-                            category: _controller.categoryFor(space.categoryId),
-                            taskCount: _controller.taskCountFor(space.id),
-                            previewProtected: isPreviewProtected(
-                              vaultService: VaultServiceScope.of(context),
-                              ownVault: space.vaultConfig,
-                              ownEntityKey: spaceVaultEntityKey(space.id),
-                              inheritedVault: null,
-                              inheritedEntityKey: null,
-                            ),
-                            onTap: () => _openSpace(space),
-                            onLongPress: () => _showSpaceActions(space),
-                            onMenuSelected: (action) =>
-                                _handleSpaceMenuAction(space, action),
-                          ),
-                        ),
-                      )
-                    else
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: filteredSpaces.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 12,
-                              crossAxisSpacing: 12,
-                              childAspectRatio: 0.56,
-                            ),
-                        itemBuilder: (context, index) {
-                          final space = filteredSpaces[index];
-                          return _SpaceGridCard(
-                            space: space,
-                            category: _controller.categoryFor(space.categoryId),
-                            taskCount: _controller.taskCountFor(space.id),
-                            previewProtected: isPreviewProtected(
-                              vaultService: VaultServiceScope.of(context),
-                              ownVault: space.vaultConfig,
-                              ownEntityKey: spaceVaultEntityKey(space.id),
-                              inheritedVault: null,
-                              inheritedEntityKey: null,
-                            ),
-                            onTap: () => _openSpace(space),
-                            onLongPress: () => _showSpaceActions(space),
-                            onMenuSelected: (action) =>
-                                _handleSpaceMenuAction(space, action),
-                          );
-                        },
-                      ),
-                  ],
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          body: ColoredBox(
+            color: taskSurface,
+            child: RefreshIndicator(
+              color: taskPrimaryBlue,
+              onRefresh: _controller.load,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.four,
+                  AppSpacing.six,
+                  AppSpacing.four,
+                  120,
                 ),
-              ),
-              Positioned(
-                right: 16,
-                bottom: 24,
-                child: SafeArea(
-                  top: false,
-                  child: FilledButton.icon(
-                    onPressed: _controller.isSaving ? null : _openSpaceForm,
-                    style: taskButtonStyle(
-                      context,
-                      role: TaskButtonRole.primary,
-                      size: TaskButtonSize.large,
-                      minimumSize: const Size(140, 54),
+                children: [
+                  _SpacesPageHeader(onFiltersPressed: _openAdvancedFilters),
+                  const SizedBox(height: AppSpacing.six),
+                  Text(
+                    'Filter',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: AppTypography.sizeLg,
+                      fontWeight: AppTypography.weightSemibold,
                     ),
-                    icon: const Icon(TablerIcons.plus, size: 18),
-                    label: const Text('Add Space'),
                   ),
-                ),
+                  const SizedBox(height: AppSpacing.four),
+                  _SpacesSearchField(
+                    controller: _searchController,
+                    onChanged: _controller.updateSearchQuery,
+                  ),
+                  const SizedBox(height: AppSpacing.three),
+                  _SpacesCategoryFilterRow(
+                    categories: _controller.categories,
+                    selectedCategoryId: _controller.categoryFilterId,
+                    onCategorySelected: _controller.updateCategoryFilter,
+                  ),
+                  const SizedBox(height: AppSpacing.four),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _SpacesViewToggle(
+                        viewMode: _viewMode,
+                        onChanged: _setViewMode,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.five),
+                  if (_controller.spaces.isEmpty)
+                    const _SpacesEmptyState()
+                  else if (filteredSpaces.isEmpty)
+                    const _SpacesFilteredEmptyState()
+                  else if (_viewMode == SpacesViewMode.list)
+                    ...filteredSpaces.map(
+                      (space) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _SpaceListCard(
+                          space: space,
+                          category: _controller.categoryFor(space.categoryId),
+                          taskCount: _controller.taskCountFor(space.id),
+                          previewProtected: isPreviewProtected(
+                            vaultService: VaultServiceScope.of(context),
+                            ownVault: space.vaultConfig,
+                            ownEntityKey: spaceVaultEntityKey(space.id),
+                            inheritedVault: null,
+                            inheritedEntityKey: null,
+                          ),
+                          onTap: () => _openSpace(space),
+                          onLongPress: () => _showSpaceActions(space),
+                          onMenuSelected: (action) =>
+                              _handleSpaceMenuAction(space, action),
+                        ),
+                      ),
+                    )
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filteredSpaces.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.56,
+                          ),
+                      itemBuilder: (context, index) {
+                        final space = filteredSpaces[index];
+                        return _SpaceGridCard(
+                          space: space,
+                          category: _controller.categoryFor(space.categoryId),
+                          taskCount: _controller.taskCountFor(space.id),
+                          previewProtected: isPreviewProtected(
+                            vaultService: VaultServiceScope.of(context),
+                            ownVault: space.vaultConfig,
+                            ownEntityKey: spaceVaultEntityKey(space.id),
+                            inheritedVault: null,
+                            inheritedEntityKey: null,
+                          ),
+                          onTap: () => _openSpace(space),
+                          onLongPress: () => _showSpaceActions(space),
+                          onMenuSelected: (action) =>
+                              _handleSpaceMenuAction(space, action),
+                        );
+                      },
+                    ),
+                ],
               ),
-            ],
+            ),
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            key: SpacesPage.addSpaceFabKey,
+            onPressed: _controller.isSaving ? null : _openSpaceForm,
+            backgroundColor: AppColors.primaryButtonFill,
+            foregroundColor: AppColors.primaryButtonText,
+            elevation: 0,
+            focusElevation: 0,
+            hoverElevation: 0,
+            highlightElevation: 0,
+            disabledElevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                taskButtonRadius(TaskButtonSize.large),
+              ),
+            ),
+            extendedPadding: taskButtonPadding(TaskButtonSize.large),
+            extendedTextStyle: taskButtonTextStyle(
+              context,
+              TaskButtonSize.large,
+            ),
+            icon: const Icon(TablerIcons.plus, size: 18),
+            label: const Text('Add Space'),
           ),
         );
       },
@@ -625,6 +670,68 @@ class _SpacesViewToggle extends StatelessWidget {
   }
 }
 
+class _SpacesPageHeader extends StatelessWidget {
+  const _SpacesPageHeader({required this.onFiltersPressed});
+
+  final VoidCallback onFiltersPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'My Spaces',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.titleText,
+                  fontSize: AppTypography.sizeLg,
+                  fontWeight: AppTypography.weightSemibold,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.one),
+              Text(
+                'Organize and manage your task spaces',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.subHeaderText,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightNormal,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.three),
+        Material(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          child: InkWell(
+            key: SpacesPage.advancedFiltersButtonKey,
+            onTap: onFiltersPressed,
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.xl),
+                border: Border.all(color: AppColors.neutral200),
+              ),
+              child: const Icon(
+                TablerIcons.adjustments_horizontal,
+                size: 20,
+                color: AppColors.titleText,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SpacesSearchField extends StatelessWidget {
   const _SpacesSearchField({required this.controller, required this.onChanged});
 
@@ -649,155 +756,49 @@ class _SpacesSearchField extends StatelessWidget {
   }
 }
 
-class _SpacesFiltersSection extends StatelessWidget {
-  const _SpacesFiltersSection({
-    required this.title,
-    required this.subtitle,
-    required this.isExpanded,
-    required this.onHeaderTap,
-    required this.child,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool isExpanded;
-  final VoidCallback onHeaderTap;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: taskBorderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: onHeaderTap,
-            borderRadius: BorderRadius.circular(18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: taskDarkText,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: taskSecondaryText,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Icon(
-                  isExpanded
-                      ? TablerIcons.chevron_up
-                      : TablerIcons.chevron_down,
-                  size: 18,
-                  color: taskMutedText,
-                ),
-              ],
-            ),
-          ),
-          if (isExpanded) ...[
-            const SizedBox(height: 16),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            const SizedBox(height: 16),
-            child,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _SpacesCategoryFilterRow extends StatelessWidget {
   const _SpacesCategoryFilterRow({
     required this.categories,
     required this.selectedCategoryId,
-    required this.selectedVaultFilter,
     required this.onCategorySelected,
-    required this.onVaultSelected,
   });
 
   final List<TaskCategory> categories;
   final String? selectedCategoryId;
-  final SpacesVaultFilter selectedVaultFilter;
   final ValueChanged<String?> onCategorySelected;
-  final ValueChanged<SpacesVaultFilter> onVaultSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TaskCompactDropdown<SpacesVaultFilter>(
-          buttonKey: SpacesPage.vaultDropdownKey,
-          menuKeyBuilder: (value) => SpacesPage.vaultFilterKey(value.name),
-          currentValue: selectedVaultFilter,
-          currentLabel: _vaultFilterLabel(selectedVaultFilter),
-          onSelected: onVaultSelected,
-          items: SpacesVaultFilter.values,
-          labelBuilder: _vaultFilterLabel,
-        ),
-        const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _SpacesCategoryChip(
-                  label: 'All Categories',
-                  icon: null,
-                  iconColor: selectedCategoryId == null
-                      ? Colors.white
-                      : taskMutedText,
-                  selected: selectedCategoryId == null,
-                  onTap: () => onCategorySelected(null),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _SpacesCategoryChip(
+              label: 'All Categories',
+              selected: selectedCategoryId == null,
+              onTap: () => onCategorySelected(null),
+            ),
+          ),
+          ...categories.map((category) {
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _SpacesCategoryChip(
+                label: category.name,
+                selected: selectedCategoryId == category.id,
+                onTap: () => onCategorySelected(
+                  selectedCategoryId == category.id ? null : category.id,
                 ),
               ),
-              ...categories.map((category) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _SpacesCategoryChip(
-                    label: category.name,
-                    icon: resolveTaskCategoryIcon(category.iconKey),
-                    iconColor: selectedCategoryId == category.id
-                        ? Colors.white
-                        : category.color,
-                    selected: selectedCategoryId == category.id,
-                    onTap: () => onCategorySelected(
-                      selectedCategoryId == category.id ? null : category.id,
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      ],
+            );
+          }),
+        ],
+      ),
     );
   }
 
-  static String _vaultFilterLabel(SpacesVaultFilter filter) {
+  static String vaultFilterLabel(SpacesVaultFilter filter) {
     return switch (filter) {
       SpacesVaultFilter.all => 'All Vault',
       SpacesVaultFilter.vaultOnly => 'Vault',
@@ -809,15 +810,11 @@ class _SpacesCategoryFilterRow extends StatelessWidget {
 class _SpacesCategoryChip extends StatelessWidget {
   const _SpacesCategoryChip({
     required this.label,
-    required this.icon,
-    required this.iconColor,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
-  final IconData? icon;
-  final Color iconColor;
   final bool selected;
   final VoidCallback onTap;
 
@@ -825,35 +822,30 @@ class _SpacesCategoryChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       child: Container(
-        constraints: const BoxConstraints(
-          minHeight: taskFilterControlHeight,
-          maxHeight: taskFilterControlHeight,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.two,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: selected ? taskPrimaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: selected ? AppColors.primaryButtonFill : AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
           border: Border.all(
-            color: selected ? taskPrimaryBlue : taskBorderColor,
+            color: selected
+                ? AppColors.primaryButtonFill
+                : AppColors.neutral200,
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 13, color: iconColor),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected ? Colors.white : taskSecondaryText,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: selected
+                ? AppColors.primaryButtonText
+                : AppColors.subHeaderText,
+            fontSize: AppTypography.sizeSm,
+            fontWeight: AppTypography.weightNormal,
+          ),
         ),
       ),
     );
@@ -1538,7 +1530,9 @@ class _ActionTile extends StatelessWidget {
     final color = isDestructive ? taskDangerText : taskDarkText;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(taskButtonRadius(TaskButtonSize.medium)),
+      borderRadius: BorderRadius.circular(
+        taskButtonRadius(TaskButtonSize.medium),
+      ),
       child: Container(
         width: double.infinity,
         padding: taskButtonPadding(TaskButtonSize.medium),

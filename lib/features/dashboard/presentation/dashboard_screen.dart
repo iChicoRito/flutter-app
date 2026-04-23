@@ -421,105 +421,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tab = _tabs[_currentIndex];
     final repository = TaskRepositoryScope.of(context);
-    final taskController = _taskController;
+    final taskController = _taskController!;
 
     return Scaffold(
       key: DashboardScreen.markerKey,
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: _currentIndex == 0
-            ? KeyedSubtree(
-                key: DashboardScreen.homeTabKey,
-                child: taskController == null
-                    ? const SizedBox.shrink()
-                    : AnimatedBuilder(
-                        animation: taskController,
-                        builder: (context, _) {
-                          if (taskController.isLoading) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
+        child: IndexedStack(
+          index: _currentIndex,
+          children: [
+            KeyedSubtree(
+              key: DashboardScreen.homeTabKey,
+              child: AnimatedBuilder(
+                animation: taskController,
+                builder: (context, _) {
+                  if (taskController.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-                          return _DashboardHomeTab(
-                            theme: theme,
-                            displayName: _displayName,
-                            profileImageData: _profileImageData,
-                            controller: taskController,
-                            isTodayExpanded: _isTodayExpanded,
-                            isUpcomingExpanded: _isUpcomingExpanded,
-                            isOverdueExpanded: _isOverdueExpanded,
-                            isCompletedExpanded: _isCompletedExpanded,
-                            onTaskToggled: taskController.toggleTaskCompletion,
-                            onTaskOpened: (task) => _openEditor(task.id),
-                            onTodayExpandedChanged: () {
-                              setState(() {
-                                _isTodayExpanded = !_isTodayExpanded;
-                              });
-                            },
-                            onUpcomingExpandedChanged: () {
-                              setState(() {
-                                _isUpcomingExpanded = !_isUpcomingExpanded;
-                              });
-                            },
-                            onOverdueExpandedChanged: () {
-                              setState(() {
-                                _isOverdueExpanded = !_isOverdueExpanded;
-                              });
-                            },
-                            onCompletedExpandedChanged: () {
-                              setState(() {
-                                _isCompletedExpanded = !_isCompletedExpanded;
-                              });
-                            },
-                          );
-                        },
-                      ),
-              )
-            : _currentIndex == 1
-            ? KeyedSubtree(
-                key: DashboardScreen.tasksTabKey,
-                child: TaskManagementScreen(
-                  repository: repository,
-                  controller: taskController!,
-                ),
-              )
-            : _currentIndex == 2
-            ? SpacesPage(
+                  return _DashboardHomeTab(
+                    theme: theme,
+                    displayName: _displayName,
+                    profileImageData: _profileImageData,
+                    controller: taskController,
+                    isTodayExpanded: _isTodayExpanded,
+                    isUpcomingExpanded: _isUpcomingExpanded,
+                    isOverdueExpanded: _isOverdueExpanded,
+                    isCompletedExpanded: _isCompletedExpanded,
+                    onTaskToggled: taskController.toggleTaskCompletion,
+                    onTaskOpened: (task) => _openEditor(task.id),
+                    onTodayExpandedChanged: () {
+                      setState(() {
+                        _isTodayExpanded = !_isTodayExpanded;
+                      });
+                    },
+                    onUpcomingExpandedChanged: () {
+                      setState(() {
+                        _isUpcomingExpanded = !_isUpcomingExpanded;
+                      });
+                    },
+                    onOverdueExpandedChanged: () {
+                      setState(() {
+                        _isOverdueExpanded = !_isOverdueExpanded;
+                      });
+                    },
+                    onCompletedExpandedChanged: () {
+                      setState(() {
+                        _isCompletedExpanded = !_isCompletedExpanded;
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+            KeyedSubtree(
+              key: DashboardScreen.tasksTabKey,
+              child: TaskManagementScreen(
                 repository: repository,
-                reminderService: TaskReminderScope.of(context),
-              )
-            : _currentIndex == 3
-            ? KeyedSubtree(
-                key: DashboardScreen.profileTabKey,
-                child: taskController == null
-                    ? _ProfileTab(
-                        theme: theme,
-                        displayName: _displayName,
-                        profileImageData: _profileImageData,
-                        stats: const _ProfileStats.empty(),
-                        onPickProfileImage: _pickProfileImage,
-                        onEditProfile: _openProfileNameEditor,
-                        onOpenArchives: _openArchives,
-                      )
-                    : AnimatedBuilder(
-                        animation: taskController,
-                        builder: (context, _) {
-                          return _ProfileTab(
-                            theme: theme,
-                            displayName: _displayName,
-                            profileImageData: _profileImageData,
-                            stats: _ProfileStats.fromController(taskController),
-                            onPickProfileImage: _pickProfileImage,
-                            onEditProfile: _openProfileNameEditor,
-                            onOpenArchives: _openArchives,
-                          );
-                        },
-                      ),
-              )
-            : _PlaceholderTab(tab: tab, theme: theme),
+                controller: taskController,
+              ),
+            ),
+            SpacesPage(
+              repository: repository,
+              reminderService: TaskReminderScope.of(context),
+            ),
+            KeyedSubtree(
+              key: DashboardScreen.profileTabKey,
+              child: AnimatedBuilder(
+                animation: taskController,
+                builder: (context, _) {
+                  return _ProfileTab(
+                    theme: theme,
+                    displayName: _displayName,
+                    profileImageData: _profileImageData,
+                    stats: _ProfileStats.fromController(taskController),
+                    onPickProfileImage: _pickProfileImage,
+                    onEditProfile: _openProfileNameEditor,
+                    onOpenArchives: _openArchives,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: _BottomNavBar(
         currentIndex: _currentIndex,
@@ -808,6 +793,7 @@ class _HeaderRow extends StatelessWidget {
                     : 'Good Morning, $displayName',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: AppColors.titleText,
+                  fontSize: AppTypography.sizeLg,
                   fontWeight: AppTypography.weightSemibold,
                 ),
               ),
@@ -816,6 +802,8 @@ class _HeaderRow extends StatelessWidget {
                 'Manage your tasks and stay on track.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: AppColors.subHeaderText,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightNormal,
                 ),
               ),
             ],
@@ -827,7 +815,7 @@ class _HeaderRow extends StatelessWidget {
           height: 44,
           decoration: BoxDecoration(
             color: AppColors.cardFill,
-            borderRadius: BorderRadius.circular(AppRadii.lg),
+            borderRadius: BorderRadius.circular(AppRadii.xl),
             border: Border.all(color: AppColors.cardBorder),
           ),
           clipBehavior: Clip.antiAlias,
@@ -862,10 +850,13 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.eight,
+        vertical: AppSpacing.six,
+      ),
       decoration: BoxDecoration(
         color: AppColors.primaryButtonFill,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -874,6 +865,7 @@ class _ProgressCard extends StatelessWidget {
             'Today\'s Progress',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.primaryButtonText,
+              fontSize: AppTypography.sizeLg,
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
@@ -883,6 +875,8 @@ class _ProgressCard extends StatelessWidget {
             key: DashboardScreen.progressLabelKey,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.primaryButtonText.withValues(alpha: 0.8),
+              fontSize: AppTypography.sizeBase,
+              fontWeight: AppTypography.weightNormal,
             ),
           ),
           const SizedBox(height: AppSpacing.three),
@@ -922,7 +916,7 @@ class _SummaryGrid extends StatelessWidget {
       crossAxisCount: 2,
       mainAxisSpacing: AppSpacing.three,
       crossAxisSpacing: AppSpacing.two,
-      childAspectRatio: 1.45,
+      childAspectRatio: 1.49,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
@@ -983,10 +977,13 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.five),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.five,
+        vertical: AppSpacing.five,
+      ),
       decoration: BoxDecoration(
         color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
         border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
@@ -999,7 +996,7 @@ class _SummaryCard extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: fillColor,
-                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                  borderRadius: BorderRadius.circular(AppRadii.xl),
                 ),
                 child: Icon(icon, size: 20, color: color),
               ),
@@ -1012,7 +1009,8 @@ class _SummaryCard extends StatelessWidget {
                       label,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.subHeaderText,
-                        fontWeight: AppTypography.weightSemibold,
+                        fontSize: AppTypography.sizeSm,
+                        fontWeight: AppTypography.weightNormal,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.one),
@@ -1021,6 +1019,7 @@ class _SummaryCard extends StatelessWidget {
                       key: DashboardScreen.summaryCountKey(label),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.titleText,
+                        fontSize: AppTypography.sizeLg,
                         fontWeight: AppTypography.weightSemibold,
                       ),
                     ),
@@ -1029,7 +1028,7 @@ class _SummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          const Spacer(),
+          const SizedBox(height: AppSpacing.six),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadii.full),
             child: LinearProgressIndicator(
@@ -1038,13 +1037,6 @@ class _SummaryCard extends StatelessWidget {
               backgroundColor: fillColor.withValues(alpha: 0.42),
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
-          ),
-          const SizedBox(height: AppSpacing.one),
-          Text(
-            denominator == 0 ? '0 of 0' : '$count of $denominator',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.subHeaderText),
           ),
         ],
       ),
@@ -1076,10 +1068,13 @@ class _DashboardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.five),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.eight,
+        vertical: AppSpacing.six,
+      ),
       decoration: BoxDecoration(
         color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
         border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
@@ -1088,7 +1083,7 @@ class _DashboardSection extends StatelessWidget {
           InkWell(
             key: headerKey,
             onTap: onHeaderTap,
-            borderRadius: BorderRadius.circular(AppRadii.lg),
+            borderRadius: BorderRadius.circular(AppRadii.xl),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1100,7 +1095,8 @@ class _DashboardSection extends StatelessWidget {
                         title,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(
-                              color: taskDarkText,
+                              color: AppColors.titleText,
+                              fontSize: AppTypography.sizeLg,
                               fontWeight: AppTypography.weightSemibold,
                             ),
                       ),
@@ -1109,6 +1105,8 @@ class _DashboardSection extends StatelessWidget {
                         subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.subHeaderText,
+                          fontSize: AppTypography.sizeBase,
+                          fontWeight: AppTypography.weightNormal,
                         ),
                       ),
                     ],
@@ -1127,6 +1125,7 @@ class _DashboardSection extends StatelessWidget {
                     '$count',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: toneColor,
+                      fontSize: AppTypography.sizeBase,
                       fontWeight: AppTypography.weightSemibold,
                     ),
                   ),
@@ -1135,9 +1134,9 @@ class _DashboardSection extends StatelessWidget {
             ),
           ),
           if (isExpanded) ...[
-            const SizedBox(height: AppSpacing.six),
+            const SizedBox(height: AppSpacing.four),
             const Divider(height: 1, thickness: 1, color: AppColors.cardBorder),
-            const SizedBox(height: AppSpacing.six),
+            const SizedBox(height: AppSpacing.four),
             child,
           ],
         ],
@@ -1173,7 +1172,7 @@ class _TaskListBody extends StatelessWidget {
       children: [
         for (final task in tasks)
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: AppSpacing.two),
             child: _HomeTaskTile(
               task: task,
               previewProtected: isPreviewProtected(
@@ -1217,16 +1216,16 @@ class _HomeTaskTile extends StatelessWidget {
 
     return InkWell(
       onTap: onOpen,
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.checkboxCardFill,
-          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          borderRadius: BorderRadius.circular(AppRadii.xl),
           border: Border.all(color: AppColors.checkboxCardBorder),
         ),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.five,
-          vertical: AppSpacing.six,
+          vertical: AppSpacing.three,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1238,9 +1237,9 @@ class _HomeTaskTile extends StatelessWidget {
                 key: DashboardScreen.taskToggleKey(task.id),
                 value: task.isCompleted,
                 onChanged: (_) => onToggle(),
-                activeColor: AppColors.primaryButtonFill,
-                checkColor: AppColors.primaryButtonText,
-                side: const BorderSide(color: AppColors.checkboxCardBorder),
+                activeColor: AppColors.blue500,
+                checkColor: AppColors.blue50,
+                side: const BorderSide(color: AppColors.blue200),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadii.md),
                 ),
@@ -1248,7 +1247,7 @@ class _HomeTaskTile extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
               ),
             ),
-            const SizedBox(width: AppSpacing.five),
+            const SizedBox(width: AppSpacing.three),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1277,6 +1276,8 @@ class _HomeTaskTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.subHeaderText,
+                      fontSize: AppTypography.sizeSm,
+                      fontWeight: AppTypography.weightNormal,
                     ),
                   ),
                 ],
@@ -1318,6 +1319,7 @@ class _DashboardEmptyState extends StatelessWidget {
               title,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color: AppColors.titleText,
+                fontSize: AppTypography.sizeLg,
                 fontWeight: AppTypography.weightSemibold,
               ),
               textAlign: TextAlign.center,
@@ -1325,9 +1327,11 @@ class _DashboardEmptyState extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.subHeaderText),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.subHeaderText,
+                fontSize: AppTypography.sizeBase,
+                fontWeight: AppTypography.weightNormal,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1356,74 +1360,12 @@ class _LockedBadge extends StatelessWidget {
           Text(
             'Locked',
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: taskSecondaryText,
+              color: AppColors.titleText,
+              fontSize: AppTypography.sizeBase,
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.tab, required this.theme});
-
-  final _DashboardTab tab;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: taskSurface,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: taskBorderColor),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: taskAccentBlue,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    TablerIcons.layout_grid,
-                    color: taskPrimaryBlue,
-                    size: 30,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  tab.title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: taskDarkText,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  tab.description,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: taskSecondaryText,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1435,11 +1377,6 @@ class _ProfileStats {
     required this.pendingCount,
     required this.overdueCount,
   });
-
-  const _ProfileStats.empty()
-    : completedCount = 0,
-      pendingCount = 0,
-      overdueCount = 0;
 
   factory _ProfileStats.fromController(TaskManagementController controller) {
     final tasks = controller.tasks;

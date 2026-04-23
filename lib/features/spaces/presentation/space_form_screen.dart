@@ -3,7 +3,9 @@ import 'package:tabler_icons/tabler_icons.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/services/vault_service_scope.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_models.dart';
+import '../../../shared/widgets/custom_category_sheet.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/presentation/task_management_ui.dart';
 import '../domain/task_space.dart';
@@ -46,7 +48,6 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _uuid = const Uuid();
   late final TextEditingController _nameController;
-  late final TextEditingController _descriptionController;
   late final TextEditingController _vaultSecretController;
   late List<TaskCategory> _categories;
   late String _selectedCategoryId;
@@ -60,6 +61,8 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
 
   bool get _isEditing => widget.initialSpace != null;
 
+  String get _pageTitle => _isEditing ? 'Edit Space' : 'Create Space';
+
   bool get _hasExistingSecretVault =>
       widget.initialSpace?.vaultConfig?.secretKeyRef != null &&
       (widget.initialSpace?.vaultConfig?.usesSecret ?? false);
@@ -72,9 +75,6 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
     super.initState();
     final initialSpace = widget.initialSpace;
     _nameController = TextEditingController(text: initialSpace?.name ?? '');
-    _descriptionController = TextEditingController(
-      text: initialSpace?.description ?? '',
-    );
     _vaultSecretController = TextEditingController();
     _categories = [...widget.categories];
     _selectedCategoryId =
@@ -103,7 +103,6 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _descriptionController.dispose();
     _vaultSecretController.dispose();
     super.dispose();
   }
@@ -130,14 +129,10 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   }
 
   Future<void> _addCategory() async {
-    final category = await showDialog<TaskCategory>(
+    final category = await showCustomCategorySheet(
       context: context,
-      builder: (context) {
-        return _SpaceCategoryDialog(
-          existingNames: _categories.map((item) => item.name).toSet(),
-          uuid: _uuid,
-        );
-      },
+      existingNames: _categories.map((item) => item.name).toSet(),
+      uuid: _uuid,
     );
 
     if (category == null) {
@@ -174,7 +169,7 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
       SpaceFormResult(
         id: widget.initialSpace?.id,
         name: _nameController.text.trim(),
-        description: _descriptionController.text.trim(),
+        description: '',
         categoryId: _selectedCategoryId,
         colorValue: _selectedColor.toARGB32(),
         createdCategories: List<TaskCategory>.unmodifiable(_createdCategories),
@@ -196,27 +191,29 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: taskSurface,
-      appBar: AppBar(
-        title: Text(_isEditing ? 'Edit Space' : 'Create Space'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-      ),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Form(
           key: _formKey,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.four,
+              AppSpacing.five,
+              AppSpacing.four,
+              120,
+            ),
             children: [
+              TaskFormPageHeader(title: _pageTitle),
+              const SizedBox(height: AppSpacing.five),
               TaskSectionCard(
                 title: 'Space Details',
-                subtitle: 'Define the space name and the short preview text.',
+                subtitle: 'Add the core information of spaces',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const TaskFieldLabel('Space Name'),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.two),
                     TextFormField(
                       controller: _nameController,
                       maxLength: 16,
@@ -235,27 +232,9 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: AppSpacing.one + 2),
                     Text(
                       'Maximum of 16 characters',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: taskMutedText),
-                    ),
-                    const SizedBox(height: 16),
-                    const TaskFieldLabel('Short Description'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _descriptionController,
-                      maxLength: 50,
-                      decoration: taskInputDecoration(
-                        context: context,
-                        hintText: 'Folder short description',
-                      ).copyWith(counterText: ''),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Maximum of 50 characters',
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: taskMutedText),
@@ -263,16 +242,15 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.four),
               TaskSectionCard(
                 title: 'Space Settings',
-                subtitle:
-                    'Choose the category and visual color for this space.',
+                subtitle: 'Set category and color of the spaces',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const TaskFieldLabel('Category'),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.two),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -323,28 +301,57 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                             },
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.three),
                         SizedBox(
+                          width: 120,
                           height: 44,
-                          child: OutlinedButton.icon(
+                          child: FilledButton(
                             onPressed: _addCategory,
-                            icon: const Icon(TablerIcons.plus, size: 18),
-                            label: const Text('New'),
                             style: taskButtonStyle(
                               context,
-                              role: TaskButtonRole.secondary,
+                              role: TaskButtonRole.primary,
                               size: TaskButtonSize.medium,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.four,
+                                vertical: AppSpacing.three,
+                              ),
+                              minimumSize: const Size(120, 44),
+                              shrinkTapTarget: true,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    TablerIcons.plus,
+                                    size: 18,
+                                    color: AppColors.primaryButtonText,
+                                  ),
+                                  const SizedBox(width: AppSpacing.two),
+                                  Text(
+                                    'Create',
+                                    style:
+                                        taskButtonTextStyle(
+                                          context,
+                                          TaskButtonSize.medium,
+                                        )?.copyWith(
+                                          color: AppColors.primaryButtonText,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.four),
                     const TaskFieldLabel('Space Color'),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                    const SizedBox(height: AppSpacing.three - 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         for (final color in taskCategoryColorOptions)
                           _ColorOptionChip(
@@ -362,7 +369,7 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.four),
               VaultSettingsFields(
                 enabled: _vaultEnabled,
                 method: _vaultMethod,
@@ -415,7 +422,12 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.four,
+            AppSpacing.three,
+            AppSpacing.four,
+            AppSpacing.four,
+          ),
           child: FilledButton(
             onPressed: _submit,
             style: taskButtonStyle(
@@ -458,269 +470,10 @@ class _ColorOptionChip extends StatelessWidget {
             color: isSelected ? taskDarkText : Colors.transparent,
             width: 2,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.18),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
         ),
         child: isSelected
             ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
             : null,
-      ),
-    );
-  }
-}
-
-class _SpaceCategoryDialog extends StatefulWidget {
-  const _SpaceCategoryDialog({required this.existingNames, required this.uuid});
-
-  final Set<String> existingNames;
-  final Uuid uuid;
-
-  @override
-  State<_SpaceCategoryDialog> createState() => _SpaceCategoryDialogState();
-}
-
-class _SpaceCategoryDialogState extends State<_SpaceCategoryDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-
-  String _selectedIconKey = taskCategoryIconOptions.first.key;
-  Color _selectedColor = taskCategoryColorOptions.first;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    Navigator.of(context).pop(
-      TaskCategory(
-        id: widget.uuid.v4(),
-        name: _nameController.text.trim(),
-        iconKey: _selectedIconKey,
-        colorValue: _selectedColor.toARGB32(),
-        createdAt: DateTime.now(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Create Category',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: taskDarkText,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Create a category with a focused icon and theme-safe color.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: taskSecondaryText, height: 1.4),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(
-                      TablerIcons.x,
-                      size: 18,
-                      color: taskMutedText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const TaskFieldLabel('Category Name'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: taskInputDecoration(
-                        context: context,
-                        hintText: 'Enter a category name',
-                      ),
-                      validator: (value) {
-                        final trimmed = value?.trim() ?? '';
-                        if (trimmed.isEmpty) {
-                          return 'Category name is required.';
-                        }
-                        if (widget.existingNames.any(
-                          (name) => name.toLowerCase() == trimmed.toLowerCase(),
-                        )) {
-                          return 'Choose a unique category name.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    const TaskFieldLabel('Icon'),
-                    const SizedBox(height: 8),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: taskCategoryIconOptions.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                            childAspectRatio: 1,
-                          ),
-                      itemBuilder: (context, index) {
-                        final option = taskCategoryIconOptions[index];
-                        final selected = _selectedIconKey == option.key;
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedIconKey = option.key;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            decoration: BoxDecoration(
-                              color: selected ? taskPrimaryBlue : taskSurface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selected
-                                    ? taskPrimaryBlue
-                                    : taskBorderColor,
-                              ),
-                            ),
-                            child: Icon(
-                              option.icon,
-                              size: 22,
-                              color: selected
-                                  ? Colors.white
-                                  : taskSecondaryText,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    const TaskFieldLabel('Color Selection'),
-                    const SizedBox(height: 8),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: taskCategoryColorOptions.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 5,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            childAspectRatio: 1,
-                          ),
-                      itemBuilder: (context, index) {
-                        final color = taskCategoryColorOptions[index];
-                        final selected = color == _selectedColor;
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedColor = color;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(999),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: selected
-                                    ? taskDarkText
-                                    : taskMutedBorderColor,
-                                width: selected ? 3 : 1.5,
-                              ),
-                              boxShadow: selected
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withValues(alpha: 0.28),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: taskButtonStyle(
-                        context,
-                        role: TaskButtonRole.secondary,
-                        size: TaskButtonSize.small,
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _submit,
-                      style: taskButtonStyle(
-                        context,
-                        role: TaskButtonRole.primary,
-                        size: TaskButtonSize.small,
-                      ),
-                      child: const Text('Create'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

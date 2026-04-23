@@ -11,11 +11,15 @@ import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
+import 'package:flutter_app/features/spaces/presentation/space_form_screen.dart';
 import 'package:flutter_app/features/spaces/presentation/spaces_page.dart';
 import 'package:flutter_app/shared/widgets/first_run_handoff_dialogs.dart';
+import 'package:flutter_app/shared/widgets/custom_category_sheet.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
+import 'package:flutter_app/features/task_management/domain/task_category.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
+import 'package:flutter_app/features/task_management/presentation/task_creation_sheet.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -236,6 +240,25 @@ void main() {
     expect(find.text('Completed'), findsOneWidget);
     expect(find.text('Overdue'), findsOneWidget);
     expect(find.text('Submit project brief'), findsOneWidget);
+
+    final progressTitle = tester.widget<Text>(find.text('Today\'s Progress'));
+    expect(progressTitle.style?.fontSize, AppTypography.sizeLg);
+    expect(progressTitle.style?.fontWeight, AppTypography.weightSemibold);
+
+    final progressCard = tester
+        .widgetList<Container>(find.byType(Container))
+        .firstWhere((container) {
+          final decoration = container.decoration;
+          return decoration is BoxDecoration &&
+              decoration.color == AppColors.primaryButtonFill &&
+              decoration.borderRadius ==
+                  BorderRadius.circular(AppRadii.threeXl);
+        });
+    final progressDecoration = progressCard.decoration as BoxDecoration;
+    expect(
+      progressDecoration.borderRadius,
+      BorderRadius.circular(AppRadii.threeXl),
+    );
   });
 
   testWidgets('dashboard home header shows saved profile picture', (
@@ -496,6 +519,143 @@ void main() {
     expect(find.text('Prepare weekly report'), findsWidgets);
   });
 
+  testWidgets('task creation screen uses the redesigned create form shell', (
+    WidgetTester tester,
+  ) async {
+    final categories = [
+      TaskCategory(
+        id: 'work',
+        name: 'Work',
+        iconKey: 'briefcase',
+        colorValue: AppColors.blue500.toARGB32(),
+        createdAt: DateTime(2026),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskCreationScreen(repository: taskRepository, categories: categories),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Tasks'), findsWidgets);
+    expect(find.text('Tasks Details'), findsOneWidget);
+    expect(find.text('Tasks Settings'), findsOneWidget);
+    expect(find.text('Schedules'), findsOneWidget);
+    expect(find.byKey(createSubmitButtonKey), findsOneWidget);
+  });
+
+  testWidgets('task creation short description now enforces 20 characters', (
+    WidgetTester tester,
+  ) async {
+    final categories = [
+      TaskCategory(
+        id: 'work',
+        name: 'Work',
+        iconKey: 'briefcase',
+        colorValue: AppColors.blue500.toARGB32(),
+        createdAt: DateTime(2026),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskCreationScreen(repository: taskRepository, categories: categories),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(createTitleFieldKey),
+      'Prepare weekly report',
+    );
+    await tester.enterText(
+      find.byKey(createDescriptionFieldKey),
+      '123456789012345678901',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Maximum of 20 characters'), findsOneWidget);
+    expect(find.text('12345678901234567890'), findsOneWidget);
+    expect(find.text('123456789012345678901'), findsNothing);
+  });
+
+  testWidgets('task creation opens custom category as a bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    final categories = [
+      TaskCategory(
+        id: 'work',
+        name: 'Work',
+        iconKey: 'briefcase',
+        colorValue: AppColors.blue500.toARGB32(),
+        createdAt: DateTime(2026),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskCreationScreen(repository: taskRepository, categories: categories),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(createAddCategoryButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Custom Category'), findsOneWidget);
+    expect(find.byKey(customCategoryNameFieldKey), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(customCategoryNameFieldKey),
+      '12345678901',
+    );
+    await tester.tap(find.byKey(customCategoryCreateButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Category name must be 10 characters or fewer.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(customCategoryCancelButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Custom Category'), findsNothing);
+  });
+
+  testWidgets('space form uses the custom category bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    final categories = [
+      TaskCategory(
+        id: 'work',
+        name: 'Work',
+        iconKey: 'briefcase',
+        colorValue: AppColors.blue500.toARGB32(),
+        createdAt: DateTime(2026),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapWithMaterial(SpaceFormScreen(categories: categories)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('New'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(customCategoryNameFieldKey), 'Errands');
+    await tester.tap(find.byKey(customCategoryCreateButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Custom Category'), findsNothing);
+    expect(find.text('Errands'), findsOneWidget);
+  });
+
   testWidgets('task card shows the short creation description', (
     WidgetTester tester,
   ) async {
@@ -614,6 +774,8 @@ void main() {
     await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
     await tester.pumpAndSettle();
 
+    expect(find.text('Edit Tasks'), findsOneWidget);
+    expect(find.text('Save Changes'), findsOneWidget);
     expect(find.text('Urgent'), findsWidgets);
   });
 
@@ -732,7 +894,7 @@ void main() {
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Filters'));
+    await tester.tap(find.byKey(TaskManagementScreen.advancedFiltersButtonKey));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(TaskManagementScreen.vaultDropdownKey));
     await tester.pumpAndSettle();
@@ -903,7 +1065,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Filters'));
+    await tester.tap(find.text('Filter'));
     await tester.pumpAndSettle();
 
     expect(

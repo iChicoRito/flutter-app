@@ -12,6 +12,7 @@ import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_access.dart';
 import '../../../core/vault/vault_models.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
+import '../../../shared/widgets/custom_category_sheet.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -1350,14 +1351,10 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   }
 
   Future<void> _addCategory() async {
-    final category = await showDialog<TaskCategory>(
+    final category = await showCustomCategorySheet(
       context: context,
-      builder: (context) {
-        return _CategoryDialog(
-          existingNames: _categories.map((item) => item.name).toSet(),
-          uuid: _uuid,
-        );
-      },
+      existingNames: _categories.map((item) => item.name).toSet(),
+      uuid: _uuid,
     );
     if (category == null) {
       return;
@@ -1442,34 +1439,36 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Edit Task Details'),
-        backgroundColor: AppColors.cardFill,
-        surfaceTintColor: AppColors.cardFill,
-      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.four,
+              AppSpacing.five,
+              AppSpacing.four,
+              120,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const TaskFormPageHeader(title: 'Edit Tasks'),
+                const SizedBox(height: AppSpacing.five),
                 TaskSectionCard(
-                  title: 'Task Details',
-                  subtitle: 'Add the core information people will scan first.',
+                  title: 'Tasks Details',
+                  subtitle: 'Add the core information of tasks',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const TaskFieldLabel('Task Title'),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.two),
                       TextFormField(
                         key: TaskEditorScreen.titleFieldKey,
                         controller: _titleController,
                         decoration: taskInputDecoration(
                           context: context,
-                          hintText: 'Enter task title',
+                          hintText: 'What needs to get done?',
                         ),
                         textInputAction: TextInputAction.next,
                         validator: (value) {
@@ -1479,46 +1478,47 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.four),
                       const TaskFieldLabel('Short Description'),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.two),
                       TextFormField(
                         key: const Key('task-editor-description-field'),
                         controller: _descriptionController,
                         decoration: taskInputDecoration(
                           context: context,
-                          hintText: 'Short preview for the task card',
+                          hintText: 'Enter Task Title',
                         ).copyWith(counterText: ''),
-                        maxLength: 30,
+                        maxLength: 20,
                         textInputAction: TextInputAction.next,
                         validator: (value) {
                           final trimmed = value?.trim() ?? '';
-                          if (trimmed.length > 30) {
-                            return 'Description must be 30 characters or fewer.';
+                          if (trimmed.length > 20) {
+                            return 'Description must be 20 characters or fewer.';
                           }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: AppSpacing.oneAndHalf),
                       Text(
-                        'Optional, maximum of 30 characters',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: taskMutedText),
+                        'Maximum of 20 characters',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: taskMutedText,
+                          fontSize: AppTypography.sizeSm,
+                          fontWeight: AppTypography.weightNormal,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.four),
                 TaskSectionCard(
-                  title: 'Task Settings',
-                  subtitle:
-                      'Set the category, urgency, and timing before writing notes.',
+                  title: 'Tasks Settings',
+                  subtitle: 'Set category, urgency, and timing of the tasks',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const TaskFieldLabel('Priority'),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.two),
                       TaskCompactDropdown<TaskPriority>(
                         buttonKey: TaskEditorScreen.priorityFieldKey,
                         menuKeyBuilder: (value) =>
@@ -1533,9 +1533,9 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                         items: TaskPriority.values,
                         labelBuilder: _priorityLabel,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.four),
                       const TaskFieldLabel('Category'),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.two),
                       if (widget.lockedCategoryId != null)
                         _LockedCategoryField(
                           category: _categoryById(widget.lockedCategoryId!),
@@ -1576,18 +1576,49 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                                 },
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: AppSpacing.two),
                             SizedBox(
+                              width: 120,
                               height: 44,
-                              child: OutlinedButton.icon(
+                              child: FilledButton(
                                 key: TaskEditorScreen.addCategoryButtonKey,
                                 onPressed: _addCategory,
-                                icon: const Icon(TablerIcons.plus, size: 18),
-                                label: const Text('New'),
                                 style: taskButtonStyle(
                                   context,
-                                  role: TaskButtonRole.secondary,
+                                  role: TaskButtonRole.primary,
                                   size: TaskButtonSize.medium,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.four,
+                                    vertical: AppSpacing.three,
+                                  ),
+                                  minimumSize: const Size(120, 44),
+                                  shrinkTapTarget: true,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        TablerIcons.plus,
+                                        size: 18,
+                                        color: AppColors.primaryButtonText,
+                                      ),
+                                      const SizedBox(width: AppSpacing.two),
+                                      Text(
+                                        'Create',
+                                        style:
+                                            taskButtonTextStyle(
+                                              context,
+                                              TaskButtonSize.medium,
+                                            )?.copyWith(
+                                              color:
+                                                  AppColors.primaryButtonText,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -1596,10 +1627,10 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.four),
                 TaskSectionCard(
-                  title: 'Schedule',
-                  subtitle: 'Set the target date and time for this task.',
+                  title: 'Schedules',
+                  subtitle: 'Set the target date and time for tasks',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1607,32 +1638,33 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                         buttonKey: TaskEditorScreen.dateRangeButtonKey,
                         title: 'Target Date',
                         value: _formatDateValue(_targetDate),
-                        icon: TablerIcons.calendar_event,
+                        icon: TablerIcons.calendar,
                         onTap: _pickDate,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.three),
                       TaskPickerButton(
                         buttonKey: TaskEditorScreen.timeRangeButtonKey,
                         title: 'Target Time',
                         value: _formatTimeValue(context, _targetTime),
-                        icon: TablerIcons.clock_hour_8,
+                        icon: TablerIcons.clock,
                         onTap: _pickTargetTime,
                       ),
                       if (scheduleValidationMessage != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.three),
                         Text(
                           scheduleValidationMessage,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: taskDangerText,
-                                fontWeight: FontWeight.w600,
+                                fontSize: AppTypography.sizeSm,
+                                fontWeight: AppTypography.weightSemibold,
                               ),
                         ),
                       ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.four),
                 VaultSettingsFields(
                   enabled: _vaultEnabled,
                   method: _vaultMethod,
@@ -1686,7 +1718,12 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.four,
+            AppSpacing.three,
+            AppSpacing.four,
+            AppSpacing.four,
+          ),
           child: FilledButton(
             key: TaskEditorScreen.saveButtonKey,
             onPressed: _submit,
@@ -1696,7 +1733,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
               size: TaskButtonSize.large,
               minimumSize: const Size.fromHeight(54),
             ),
-            child: const Text('Apply Details'),
+            child: const Text('Save Changes'),
           ),
         ),
       ),
@@ -1823,261 +1860,6 @@ class _DeleteTaskDialog extends StatelessWidget {
       primaryLabel: 'Yes, Delete',
       onSecondaryPressed: () => Navigator.of(context).pop(false),
       onPrimaryPressed: () => Navigator.of(context).pop(true),
-    );
-  }
-}
-
-class _CategoryDialog extends StatefulWidget {
-  const _CategoryDialog({required this.existingNames, required this.uuid});
-
-  final Set<String> existingNames;
-  final Uuid uuid;
-
-  @override
-  State<_CategoryDialog> createState() => _CategoryDialogState();
-}
-
-class _CategoryDialogState extends State<_CategoryDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-
-  String _selectedIconKey = taskCategoryIconOptions.first.key;
-  Color _selectedColor = taskCategoryColorOptions.first;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    Navigator.of(context).pop(
-      TaskCategory(
-        id: widget.uuid.v4(),
-        name: _nameController.text.trim(),
-        iconKey: _selectedIconKey,
-        colorValue: _selectedColor.toARGB32(),
-        createdAt: DateTime.now(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.cardFill,
-      surfaceTintColor: AppColors.cardFill,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.threeXl),
-        side: const BorderSide(color: AppColors.cardBorder),
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Create Category',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: taskDarkText,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Create a category with a focused icon and theme-safe color.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: taskSecondaryText),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(
-                      TablerIcons.x,
-                      size: 18,
-                      color: taskMutedText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const TaskFieldLabel('Category Name'),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: taskInputDecoration(
-                        context: context,
-                        hintText: 'Enter a category name',
-                      ),
-                      validator: (value) {
-                        final trimmed = value?.trim() ?? '';
-                        if (trimmed.isEmpty) {
-                          return 'Category name is required.';
-                        }
-                        if (widget.existingNames.any(
-                          (name) => name.toLowerCase() == trimmed.toLowerCase(),
-                        )) {
-                          return 'Choose a unique category name.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    const TaskFieldLabel('Icon'),
-                    const SizedBox(height: 8),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: taskCategoryIconOptions.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                            childAspectRatio: 1,
-                          ),
-                      itemBuilder: (context, index) {
-                        final option = taskCategoryIconOptions[index];
-                        final selected = _selectedIconKey == option.key;
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedIconKey = option.key;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            decoration: BoxDecoration(
-                              color: selected ? taskPrimaryBlue : taskSurface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selected
-                                    ? taskPrimaryBlue
-                                    : taskBorderColor,
-                              ),
-                            ),
-                            child: Icon(
-                              option.icon,
-                              size: 22,
-                              color: selected
-                                  ? AppColors.primaryButtonText
-                                  : taskSecondaryText,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    const TaskFieldLabel('Color Selection'),
-                    const SizedBox(height: 8),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: taskCategoryColorOptions.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 5,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            childAspectRatio: 1,
-                          ),
-                      itemBuilder: (context, index) {
-                        final color = taskCategoryColorOptions[index];
-                        final selected = color == _selectedColor;
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _selectedColor = color;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(999),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: selected
-                                    ? taskDarkText
-                                    : taskMutedBorderColor,
-                                width: selected ? 3 : 1.5,
-                              ),
-                              boxShadow: selected
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withValues(alpha: 0.28),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: taskButtonStyle(
-                        context,
-                        role: TaskButtonRole.secondary,
-                        size: TaskButtonSize.small,
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _submit,
-                      style: taskButtonStyle(
-                        context,
-                        role: TaskButtonRole.primary,
-                        size: TaskButtonSize.small,
-                      ),
-                      child: const Text('Create'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

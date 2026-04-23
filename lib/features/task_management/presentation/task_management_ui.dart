@@ -61,7 +61,7 @@ _TaskButtonPalette _taskButtonPalette(TaskButtonRole role) {
     ),
     TaskButtonRole.secondary => const _TaskButtonPalette(
       background: AppColors.secondaryButtonFill,
-      pressedBackground: AppColors.neutral700,
+      pressedBackground: AppColors.secondaryButtonFill,
       disabledBackground: AppColors.neutral200,
       foreground: AppColors.secondaryButtonText,
       disabledForeground: AppColors.neutral400,
@@ -95,9 +95,9 @@ double taskButtonHeight(TaskButtonSize size) {
 
 double taskButtonRadius(TaskButtonSize size) {
   return switch (size) {
-    TaskButtonSize.large => AppRadii.lg,
-    TaskButtonSize.medium => AppRadii.lg,
-    TaskButtonSize.small => AppRadii.lg,
+    TaskButtonSize.large => AppRadii.xl,
+    TaskButtonSize.medium => AppRadii.xl,
+    TaskButtonSize.small => AppRadii.xl,
   };
 }
 
@@ -112,16 +112,16 @@ double taskButtonIconSize(TaskButtonSize size) {
 EdgeInsetsGeometry taskButtonPadding(TaskButtonSize size) {
   return switch (size) {
     TaskButtonSize.large => const EdgeInsets.symmetric(
-      horizontal: 18,
-      vertical: 14,
+      horizontal: AppSpacing.five,
+      vertical: AppSpacing.five,
     ),
     TaskButtonSize.medium => const EdgeInsets.symmetric(
-      horizontal: 14,
-      vertical: 10,
+      horizontal: AppSpacing.five,
+      vertical: AppSpacing.five,
     ),
     TaskButtonSize.small => const EdgeInsets.symmetric(
-      horizontal: 12,
-      vertical: 10,
+      horizontal: AppSpacing.five,
+      vertical: AppSpacing.five,
     ),
   };
 }
@@ -358,25 +358,28 @@ InputDecoration taskInputDecoration({
     prefixIcon: prefixIcon,
     filled: true,
     fillColor: fillColor ?? AppColors.cardFill,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.four,
+      vertical: AppSpacing.three,
+    ),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       borderSide: const BorderSide(color: AppColors.neutral200),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       borderSide: const BorderSide(color: AppColors.neutral200),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       borderSide: const BorderSide(color: AppColors.blue500),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       borderSide: const BorderSide(color: AppColors.rose500),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       borderSide: const BorderSide(color: AppColors.rose500),
     ),
   );
@@ -391,9 +394,10 @@ class TaskFieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
         color: AppColors.titleText,
         fontWeight: AppTypography.weightSemibold,
+        fontSize: AppTypography.sizeBase,
       ),
     );
   }
@@ -414,10 +418,13 @@ class TaskSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.eight,
+        vertical: AppSpacing.six,
+      ),
       decoration: BoxDecoration(
         color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
         border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
@@ -425,23 +432,24 @@ class TaskSectionCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: AppColors.titleText,
               fontWeight: AppTypography.weightSemibold,
+              fontSize: AppTypography.sizeLg,
             ),
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.one),
             Text(
               subtitle!,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.subHeaderText),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.subHeaderText,
+                fontSize: AppTypography.sizeBase,
+                fontWeight: AppTypography.weightNormal,
+              ),
             ),
           ],
-          const SizedBox(height: 16),
-          const Divider(height: 1, thickness: 1, color: AppColors.cardBorder),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.four),
           child,
         ],
       ),
@@ -498,7 +506,8 @@ class TaskCompactDropdown<T> extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.titleText,
-                      fontWeight: AppTypography.weightSemibold,
+                      fontSize: AppTypography.sizeBase,
+                      fontWeight: AppTypography.weightNormal,
                     ),
                   ),
                 ),
@@ -512,11 +521,11 @@ class TaskCompactDropdown<T> extends StatelessWidget {
           minHeight: taskFilterControlHeight,
           maxHeight: taskFilterControlHeight,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.four),
         decoration: BoxDecoration(
           color: AppColors.cardFill,
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-          border: Border.all(color: AppColors.cardBorder),
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          border: Border.all(color: AppColors.neutral200),
         ),
         child: Row(
           children: [
@@ -530,7 +539,8 @@ class TaskCompactDropdown<T> extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.titleText,
-                  fontWeight: AppTypography.weightSemibold,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightNormal,
                 ),
               ),
             ),
@@ -598,47 +608,52 @@ class TaskPickerButton extends StatelessWidget {
     return InkWell(
       key: buttonKey,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      borderRadius: BorderRadius.circular(AppRadii.xl),
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
           color: AppColors.cardFill,
-          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          borderRadius: BorderRadius.circular(AppRadii.xl),
           border: Border.all(
-            color: AppColors.cardBorder,
+            color: AppColors.neutral100,
             width: AppSizes.borderDefault,
           ),
         ),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.four,
+          vertical: AppSpacing.three,
+        ),
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: AppSpacing.ten,
+              height: AppSpacing.ten,
               decoration: BoxDecoration(
                 color: taskAccentBlue,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadii.xl),
               ),
               child: Icon(icon, color: taskPrimaryBlue, size: 18),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.three),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: taskSecondaryText,
-                      fontWeight: FontWeight.w600,
+                      fontSize: AppTypography.sizeSm,
+                      fontWeight: AppTypography.weightNormal,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.one),
                   Text(
                     value,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: taskDarkText,
-                      fontWeight: FontWeight.w700,
+                      fontSize: AppTypography.sizeBase,
+                      fontWeight: AppTypography.weightNormal,
                     ),
                   ),
                 ],
@@ -769,7 +784,7 @@ class VaultSettingsFields extends StatelessWidget {
   Widget build(BuildContext context) {
     return TaskSectionCard(
       title: 'Vault',
-      subtitle: 'Protect this item with a password, PIN, or device security.',
+      subtitle: 'Protect this item with a password',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -782,16 +797,19 @@ class VaultSettingsFields extends StatelessWidget {
               activeTrackColor: taskPrimaryBlue,
               title: Text(
                 'Change Vault',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: taskDarkText,
-                  fontWeight: FontWeight.w700,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
               subtitle: Text(
                 'Leave this off to keep the current ${method == VaultMethod.pin ? 'PIN' : 'password'} unchanged.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: taskSecondaryText,
+                  fontSize: AppTypography.sizeSm,
+                  fontWeight: AppTypography.weightNormal,
+                ),
               ),
             )
           else
@@ -803,16 +821,19 @@ class VaultSettingsFields extends StatelessWidget {
               activeTrackColor: taskPrimaryBlue,
               title: Text(
                 'Enable Vault',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: taskDarkText,
-                  fontWeight: FontWeight.w700,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightSemibold,
                 ),
               ),
               subtitle: Text(
-                'Require authentication before opening this content.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: taskSecondaryText),
+                'Require an authentication',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: taskSecondaryText,
+                  fontSize: AppTypography.sizeSm,
+                  fontWeight: AppTypography.weightNormal,
+                ),
               ),
             ),
           if (_usesEditChangeFlow && !changeVault) ...[
@@ -880,7 +901,7 @@ class VaultSettingsFields extends StatelessWidget {
                             ? 'Leave blank to keep the current PIN'
                             : 'Leave blank to keep the current password'
                       : method == VaultMethod.pin
-                      ? 'Enter 4-digit PIN'
+                      ? 'Enter 4-digit PIN (xxxx)'
                       : 'Enter password',
                 ).copyWith(counterText: ''),
                 validator: (value) {
@@ -943,5 +964,44 @@ class VaultSettingsFields extends StatelessWidget {
       VaultMethod.pin => '4-digit PIN',
       VaultMethod.deviceSecurity => 'Device Security',
     };
+  }
+}
+
+class TaskFormPageHeader extends StatelessWidget {
+  const TaskFormPageHeader({super.key, required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(
+            TablerIcons.chevron_left,
+            color: AppColors.subHeaderText,
+            size: AppTypography.sizeLg,
+          ),
+          splashRadius: AppSpacing.five,
+          constraints: const BoxConstraints.tightFor(
+            width: AppSpacing.six,
+            height: AppSpacing.six,
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        const SizedBox(width: AppSpacing.three),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.titleText,
+              fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
+import '../../../core/theme/app_design_tokens.dart';
+
 class TaskCategory {
   const TaskCategory({
     required this.id,
@@ -124,6 +126,150 @@ const taskCategoryIconOptions = [
     label: 'Garden',
   ),
   TaskCategoryIconOption(key: 'tools', icon: TablerIcons.tools, label: 'Fixes'),
+  TaskCategoryIconOption(key: 'music', icon: TablerIcons.music, label: 'Music'),
+  TaskCategoryIconOption(key: 'paw', icon: TablerIcons.paw, label: 'Pets'),
+  TaskCategoryIconOption(
+    key: 'camera',
+    icon: TablerIcons.camera,
+    label: 'Photos',
+  ),
+  TaskCategoryIconOption(key: 'gift', icon: TablerIcons.gift, label: 'Gifts'),
+  TaskCategoryIconOption(
+    key: 'certificate',
+    icon: TablerIcons.certificate,
+    label: 'Goals',
+  ),
+  TaskCategoryIconOption(
+    key: 'coffee',
+    icon: TablerIcons.coffee,
+    label: 'Break',
+  ),
+  TaskCategoryIconOption(key: 'car', icon: TablerIcons.car, label: 'Commute'),
+  TaskCategoryIconOption(
+    key: 'bicycle',
+    icon: TablerIcons.bike,
+    label: 'Cycling',
+  ),
+  TaskCategoryIconOption(key: 'bulb', icon: TablerIcons.bulb, label: 'Ideas'),
+  TaskCategoryIconOption(key: 'phone', icon: TablerIcons.phone, label: 'Calls'),
+  TaskCategoryIconOption(key: 'mail', icon: TablerIcons.mail, label: 'Email'),
+  TaskCategoryIconOption(
+    key: 'map_pin',
+    icon: TablerIcons.map_pin,
+    label: 'Places',
+  ),
+  TaskCategoryIconOption(key: 'medal', icon: TablerIcons.medal, label: 'Wins'),
+  TaskCategoryIconOption(key: 'notes', icon: TablerIcons.notes, label: 'Notes'),
+  TaskCategoryIconOption(
+    key: 'palette_off',
+    icon: TablerIcons.brush,
+    label: 'Design',
+  ),
+  TaskCategoryIconOption(
+    key: 'trophy',
+    icon: TablerIcons.trophy,
+    label: 'Awards',
+  ),
+  TaskCategoryIconOption(
+    key: 'activity',
+    icon: TablerIcons.activity,
+    label: 'Active',
+  ),
+  TaskCategoryIconOption(key: 'alarm', icon: TablerIcons.alarm, label: 'Alarm'),
+  TaskCategoryIconOption(
+    key: 'archive',
+    icon: TablerIcons.archive,
+    label: 'Archive',
+  ),
+  TaskCategoryIconOption(key: 'bell', icon: TablerIcons.bell, label: 'Alerts'),
+  TaskCategoryIconOption(
+    key: 'building',
+    icon: TablerIcons.building,
+    label: 'Office',
+  ),
+  TaskCategoryIconOption(key: 'bus', icon: TablerIcons.bus, label: 'Bus'),
+  TaskCategoryIconOption(
+    key: 'calculator',
+    icon: TablerIcons.calculator,
+    label: 'Math',
+  ),
+  TaskCategoryIconOption(
+    key: 'chart_bar',
+    icon: TablerIcons.chart_bar,
+    label: 'Stats',
+  ),
+  TaskCategoryIconOption(
+    key: 'checklist',
+    icon: TablerIcons.checklist,
+    label: 'Checklist',
+  ),
+  TaskCategoryIconOption(
+    key: 'clipboard_list',
+    icon: TablerIcons.clipboard_list,
+    label: 'Clipboard',
+  ),
+  TaskCategoryIconOption(key: 'cloud', icon: TablerIcons.cloud, label: 'Cloud'),
+  TaskCategoryIconOption(key: 'code', icon: TablerIcons.code, label: 'Code'),
+  TaskCategoryIconOption(
+    key: 'compass',
+    icon: TablerIcons.compass,
+    label: 'Explore',
+  ),
+  TaskCategoryIconOption(
+    key: 'device_mobile',
+    icon: TablerIcons.device_mobile,
+    label: 'Mobile',
+  ),
+  TaskCategoryIconOption(
+    key: 'flame',
+    icon: TablerIcons.flame,
+    label: 'Streak',
+  ),
+  TaskCategoryIconOption(
+    key: 'gamepad',
+    icon: TablerIcons.device_gamepad_2,
+    label: 'Games',
+  ),
+  TaskCategoryIconOption(
+    key: 'headphones',
+    icon: TablerIcons.headphones,
+    label: 'Audio',
+  ),
+  TaskCategoryIconOption(
+    key: 'microphone',
+    icon: TablerIcons.microphone,
+    label: 'Voice',
+  ),
+  TaskCategoryIconOption(
+    key: 'moon',
+    icon: TablerIcons.moon_stars,
+    label: 'Night',
+  ),
+  TaskCategoryIconOption(
+    key: 'puzzle',
+    icon: TablerIcons.puzzle,
+    label: 'Puzzle',
+  ),
+  TaskCategoryIconOption(
+    key: 'school',
+    icon: TablerIcons.school,
+    label: 'School',
+  ),
+  TaskCategoryIconOption(
+    key: 'shield',
+    icon: TablerIcons.shield,
+    label: 'Secure',
+  ),
+  TaskCategoryIconOption(
+    key: 'shopping_bag',
+    icon: TablerIcons.shopping_bag,
+    label: 'Bag',
+  ),
+  TaskCategoryIconOption(
+    key: 'swimming',
+    icon: TablerIcons.swimming,
+    label: 'Swim',
+  ),
 ];
 
 IconData resolveTaskCategoryIcon(String iconKey) {
@@ -137,11 +283,10 @@ IconData resolveTaskCategoryIcon(String iconKey) {
 }
 
 const taskCategoryColorOptions = [
-  Color(0xFF066FD1),
-  Color(0xFF90CAF9),
-  Color(0xFFE6F0FA),
-  Color(0xFF0CA678),
-  Color(0xFFF59F00),
-  Color(0xFFD63939),
-  Color(0xFF6B7280),
+  AppColors.blue500,
+  AppColors.amber500,
+  AppColors.teal500,
+  AppColors.rose500,
+  AppColors.indigo500,
+  AppColors.neutral500,
 ];

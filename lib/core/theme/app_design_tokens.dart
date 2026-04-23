@@ -4,6 +4,7 @@ abstract final class AppColors {
   static const neutral50 = Color(0xFFFAFAFA);
   static const neutral100 = Color(0xFFF5F5F5);
   static const neutral200 = Color(0xFFE5E5E5);
+  static const neutral500 = Color(0xFF737373);
   static const neutral400 = Color(0xFFA3A3A3);
   static const neutral700 = Color(0xFF404040);
   static const white = Color(0xFFFFFFFF);
@@ -13,6 +14,7 @@ abstract final class AppColors {
   static const blue200 = Color(0xFFBFDBFE);
   static const blue500 = Color(0xFF3B82F6);
   static const blue600 = Color(0xFF2563EB);
+  static const indigo500 = Color(0xFF6366F1);
 
   static const rose100 = Color(0xFFFFE4E6);
   static const rose50 = Color(0xFFFFF1F2);
@@ -34,8 +36,8 @@ abstract final class AppColors {
 
   static const primaryButtonFill = blue500;
   static const primaryButtonText = blue50;
-  static const secondaryButtonFill = neutral700;
-  static const secondaryButtonText = neutral50;
+  static const secondaryButtonFill = neutral200;
+  static const secondaryButtonText = neutral700;
   static const dangerButtonFill = rose500;
   static const dangerButtonText = rose50;
   static const successButtonFill = teal500;
@@ -44,6 +46,9 @@ abstract final class AppColors {
   static const warningButtonText = amber50;
   static const primaryBadgeFill = blue100;
   static const primaryBadgeText = blue500;
+  static const secondaryBadgeFill = neutral200;
+  static const secondaryBadgeText = neutral700;
+  static const secondaryBadgeIcon = neutral700;
   static const checkboxCardFill = neutral50;
   static const checkboxCardBorder = neutral200;
 }

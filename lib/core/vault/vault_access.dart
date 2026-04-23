@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/app_design_tokens.dart';
 import '../services/vault_service.dart';
 import 'vault_models.dart';
 
@@ -123,6 +124,9 @@ Future<VaultUnlockResult> ensureUnlocked({
           final remainingSeconds =
               attempt.remainingLockout?.inSeconds ?? 5 * 60;
           final minutes = ((remainingSeconds + 59) ~/ 60).clamp(1, 5);
+          if (!context.mounted) {
+            return VaultUnlockResult.lockedOut;
+          }
           await _showVaultDangerDialog(
             context: context,
             title: 'Vault Locked',
@@ -238,17 +242,32 @@ Future<void> _showVaultMessageDialog({
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      title: Text(title),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('I Understand'),
-        ),
-      ],
+    builder: (context) => _vaultDialogCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Align(child: _VaultHeroIcon(icon: Icons.info_rounded)),
+          const SizedBox(height: AppSpacing.five),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: _vaultTitleStyle(context),
+          ),
+          const SizedBox(height: AppSpacing.three),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: _vaultSubtitleStyle(context),
+          ),
+          const SizedBox(height: AppSpacing.five),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: _vaultPrimaryButtonStyle(),
+            child: const Text('I Understand'),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -260,69 +279,197 @@ Future<void> _showVaultDangerDialog({
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) => Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              child: Container(
-                width: 62,
-                height: 62,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFECEC),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Color(0xFFD63939),
-                  size: 28,
-                ),
-              ),
+    builder: (context) => _vaultDialogCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Align(child: _VaultHeroIcon(icon: Icons.warning_amber_rounded)),
+          const SizedBox(height: AppSpacing.five),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: _vaultTitleStyle(context).copyWith(color: AppColors.rose500),
+          ),
+          const SizedBox(height: AppSpacing.three),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: _vaultSubtitleStyle(
+              context,
+            ).copyWith(color: AppColors.neutral500),
+          ),
+          const SizedBox(height: AppSpacing.five),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: _vaultPrimaryButtonStyle(
+              backgroundColor: AppColors.rose500,
+              foregroundColor: AppColors.white,
             ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: const Color(0xFFD63939),
-                fontWeight: FontWeight.w700,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF6B7280),
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                backgroundColor: const Color(0xFFD63939),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text('I Understand'),
-            ),
-          ],
-        ),
+            child: const Text('I Understand'),
+          ),
+        ],
       ),
     ),
   );
+}
+
+const _vaultDialogInset = EdgeInsets.symmetric(
+  horizontal: AppSpacing.six,
+  vertical: AppSpacing.six,
+);
+
+const _vaultDialogPadding = EdgeInsets.fromLTRB(
+  AppSpacing.eight,
+  AppSpacing.six,
+  AppSpacing.eight,
+  AppSpacing.six,
+);
+
+const _vaultDialogRadius = AppRadii.threeXl;
+const _vaultDialogMaxWidth = AppSizes.onboardingMaxWidth;
+const _vaultHeroIconSize = AppSpacing.ten + AppSpacing.eight;
+
+TextStyle _vaultTitleStyle(BuildContext context) {
+  return Theme.of(context).textTheme.titleLarge?.copyWith(
+        fontSize: AppTypography.sizeLg,
+        fontWeight: AppTypography.weightSemibold,
+        color: AppColors.titleText,
+        height: 1.15,
+      ) ??
+      const TextStyle(
+        fontSize: AppTypography.sizeLg,
+        fontWeight: AppTypography.weightSemibold,
+        color: AppColors.titleText,
+        height: 1.15,
+      );
+}
+
+TextStyle _vaultSubtitleStyle(BuildContext context) {
+  return Theme.of(context).textTheme.bodyLarge?.copyWith(
+        fontSize: AppTypography.sizeBase,
+        fontWeight: AppTypography.weightNormal,
+        color: AppColors.subHeaderText,
+        height: 1.25,
+      ) ??
+      const TextStyle(
+        fontSize: AppTypography.sizeBase,
+        fontWeight: AppTypography.weightNormal,
+        color: AppColors.subHeaderText,
+        height: 1.25,
+      );
+}
+
+ButtonStyle _vaultPrimaryButtonStyle({
+  Color? backgroundColor,
+  Color? foregroundColor,
+}) {
+  return FilledButton.styleFrom(
+    minimumSize: const Size.fromHeight(54),
+    backgroundColor: backgroundColor ?? AppColors.primaryButtonFill,
+    foregroundColor: foregroundColor ?? AppColors.primaryButtonText,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+    ),
+    textStyle: const TextStyle(
+      fontSize: AppTypography.sizeBase,
+      fontWeight: AppTypography.weightSemibold,
+    ),
+  );
+}
+
+InputDecoration _vaultInputDecoration(
+  String hintText, {
+  String? labelText,
+  String? errorText,
+}) {
+  return InputDecoration(
+    labelText: labelText,
+    hintText: hintText,
+    hintStyle: const TextStyle(
+      fontSize: AppTypography.sizeBase,
+      fontWeight: AppTypography.weightNormal,
+      color: AppColors.subHeaderText,
+    ),
+    labelStyle: const TextStyle(
+      fontSize: AppTypography.sizeSm,
+      fontWeight: AppTypography.weightMedium,
+      color: AppColors.titleText,
+    ),
+    errorText: errorText,
+    errorMaxLines: 3,
+    filled: true,
+    fillColor: AppColors.white,
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.five,
+      vertical: AppSpacing.four,
+    ),
+    constraints: const BoxConstraints(minHeight: 54),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      borderSide: const BorderSide(color: AppColors.neutral200),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      borderSide: const BorderSide(color: AppColors.neutral200),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      borderSide: const BorderSide(color: AppColors.blue500),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      borderSide: const BorderSide(color: AppColors.rose500),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      borderSide: const BorderSide(color: AppColors.rose500),
+    ),
+  );
+}
+
+Widget _vaultDialogCard({
+  required Widget child,
+  EdgeInsetsGeometry padding = _vaultDialogPadding,
+}) {
+  return Dialog(
+    backgroundColor: AppColors.white,
+    surfaceTintColor: AppColors.white,
+    insetPadding: _vaultDialogInset,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(_vaultDialogRadius),
+      side: const BorderSide(color: AppColors.cardBorder),
+    ),
+    child: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _vaultDialogMaxWidth),
+        child: Padding(padding: padding, child: child),
+      ),
+    ),
+  );
+}
+
+class _VaultHeroIcon extends StatelessWidget {
+  const _VaultHeroIcon({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _vaultHeroIconSize,
+      height: _vaultHeroIconSize,
+      decoration: const BoxDecoration(
+        color: AppColors.blue100,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        icon,
+        color: AppColors.blue500,
+        size: AppSpacing.six + AppSpacing.one,
+      ),
+    );
+  }
 }
 
 class _VaultSecretDialogResult {
@@ -420,147 +567,83 @@ class _VaultSecretDialogState extends State<_VaultSecretDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE6F0FA),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.lock_rounded,
-                    color: Color(0xFF066FD1),
-                    size: 30,
-                  ),
+    return _vaultDialogCard(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Align(child: _VaultHeroIcon(icon: Icons.lock_rounded)),
+            const SizedBox(height: AppSpacing.six),
+            Text(
+              'Locked $_entityLabel',
+              textAlign: TextAlign.center,
+              style: _vaultTitleStyle(context),
+            ),
+            const SizedBox(height: AppSpacing.two),
+            Text(
+              _isPin
+                  ? 'Enter the 4 - digit PIN to unlock "${widget.title}"'
+                  : 'Enter the password to unlock "${widget.title}"',
+              textAlign: TextAlign.center,
+              style: _vaultSubtitleStyle(context),
+            ),
+            const SizedBox(height: AppSpacing.six),
+            if (_isPin)
+              _VaultCompactPinField(
+                controller: _controller,
+                focusNode: _pinFocusNode,
+                errorText: _pinError,
+                autofocus: true,
+                validator: _validatePin,
+                onSubmitted: _submit,
+              )
+            else
+              TextFormField(
+                controller: _controller,
+                autofocus: true,
+                keyboardType: TextInputType.text,
+                obscureText: true,
+                decoration: _vaultInputDecoration('Enter password'),
+                style: const TextStyle(
+                  fontSize: AppTypography.sizeBase,
+                  color: AppColors.titleText,
                 ),
+                validator: (value) {
+                  final trimmed = value?.trim() ?? '';
+                  if (trimmed.isEmpty) {
+                    return 'Password is required.';
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) => _submit(),
               ),
-              const SizedBox(height: 18),
-              Text(
-                'Locked $_entityLabel',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF066FD1),
-                  height: 1.1,
-                ),
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'Unlock the "${widget.title}"',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF333333),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _isPin
-                    ? 'Enter the 4 - digit PIN to unlock ${_entityLabel.toLowerCase()}'
-                    : 'Enter the password to unlock $_entityLabel.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF8A94A6),
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 18),
-              if (_isPin)
-                _VaultCompactPinField(
-                  controller: _controller,
-                  focusNode: _pinFocusNode,
-                  errorText: _pinError,
-                  autofocus: true,
-                  validator: _validatePin,
-                  onSubmitted: _submit,
-                )
-              else
-                TextFormField(
-                  controller: _controller,
-                  autofocus: true,
-                  keyboardType: TextInputType.text,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    hintText: 'Enter password',
-                    counterText: '',
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE5E8EC)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF066FD1)),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFD63939)),
-                    ),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFD63939)),
-                    ),
-                  ),
-                  validator: (value) {
-                    final trimmed = value?.trim() ?? '';
-                    if (trimmed.isEmpty) {
-                      return 'Password is required.';
-                    }
-                    return null;
-                  },
-                  onFieldSubmitted: (_) => _submit(),
-                ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _submit,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(54),
-                  backgroundColor: const Color(0xFF2F8AE5),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  textStyle: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                child: Text(_primaryLabel),
-              ),
-              if (widget.config.recoveryKeyRef != null) ...[
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: () => Navigator.of(
-                    context,
-                  ).pop(const _VaultSecretDialogResult.recovery()),
-                  child: Text(
-                    _isPin ? 'Forgot Vault PIN?' : 'Forgot Vault Password?',
+            const SizedBox(height: AppSpacing.four),
+            FilledButton(
+              onPressed: _submit,
+              style: _vaultPrimaryButtonStyle(),
+              child: Text(_primaryLabel),
+            ),
+            if (widget.config.recoveryKeyRef != null) ...[
+              const SizedBox(height: AppSpacing.six),
+              TextButton(
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(const _VaultSecretDialogResult.recovery()),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.titleText,
+                  textStyle: const TextStyle(
+                    fontSize: AppTypography.sizeBase,
+                    fontWeight: AppTypography.weightMedium,
                   ),
                 ),
-              ],
+                child: Text(
+                  _isPin ? 'Forgot Vault PIN?' : 'Forgot Vault Password?',
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -641,90 +724,82 @@ class _VaultRecoveryKeyDialogState extends State<_VaultRecoveryKeyDialog> {
     final entityLabel = widget.entityKind == VaultEntityKind.space
         ? 'space'
         : 'task';
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _VaultDialogIcon(icon: Icons.key_rounded),
-              const SizedBox(height: 14),
-              Text(
-                'Recover Vault',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF066FD1),
-                ),
+    return _vaultDialogCard(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Align(child: _VaultHeroIcon(icon: Icons.lock_open_rounded)),
+            const SizedBox(height: AppSpacing.six),
+            Text(
+              'Recover Vault',
+              textAlign: TextAlign.center,
+              style: _vaultTitleStyle(context),
+            ),
+            const SizedBox(height: AppSpacing.two),
+            Text(
+              'Enter any one of your saved recovery keys to reset this $entityLabel vault.',
+              textAlign: TextAlign.center,
+              style: _vaultSubtitleStyle(context),
+            ),
+            const SizedBox(height: AppSpacing.six),
+            TextFormField(
+              controller: _controller,
+              autofocus: true,
+              enabled: !_isSubmitting,
+              textCapitalization: TextCapitalization.characters,
+              decoration: _vaultInputDecoration(
+                'XXXX-XXXX',
+                errorText: _inlineError,
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Enter any one of your saved recovery keys to reset this $entityLabel vault.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF6B7280),
-                  height: 1.45,
-                ),
+              style: const TextStyle(
+                fontSize: AppTypography.sizeBase,
+                color: AppColors.titleText,
               ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _controller,
-                autofocus: true,
-                enabled: !_isSubmitting,
-                textCapitalization: TextCapitalization.characters,
-                decoration: _vaultInputDecoration(
-                  'XXXX-XXXX',
-                ).copyWith(errorText: _inlineError, errorMaxLines: 3),
-                validator: (value) {
-                  final trimmed = value?.trim() ?? '';
-                  if (trimmed.isEmpty) {
-                    return 'Recovery key is required.';
-                  }
-                  if (!RegExp(
-                    r'^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$',
-                  ).hasMatch(trimmed)) {
-                    return 'Use the XXXX-XXXX recovery key format.';
-                  }
-                  return null;
-                },
-                onChanged: (_) {
-                  if (_inlineError == null) {
-                    return;
-                  }
-                  setState(() {
-                    _inlineError = null;
-                  });
-                },
-                onFieldSubmitted: (_) {
-                  if (!_isSubmitting) {
-                    _submit();
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _isSubmitting ? null : _submit,
-                style: _primaryButtonStyle(context),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Continue'),
-              ),
-            ],
-          ),
+              validator: (value) {
+                final trimmed = value?.trim() ?? '';
+                if (trimmed.isEmpty) {
+                  return 'Recovery key is required.';
+                }
+                if (!RegExp(
+                  r'^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$',
+                ).hasMatch(trimmed)) {
+                  return 'Use the XXXX-XXXX recovery key format.';
+                }
+                return null;
+              },
+              onChanged: (_) {
+                if (_inlineError == null) {
+                  return;
+                }
+                setState(() {
+                  _inlineError = null;
+                });
+              },
+              onFieldSubmitted: (_) {
+                if (!_isSubmitting) {
+                  _submit();
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.four),
+            FilledButton(
+              onPressed: _isSubmitting ? null : _submit,
+              style: _vaultPrimaryButtonStyle(),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.white,
+                      ),
+                    )
+                  : const Text('Continue'),
+            ),
+          ],
         ),
       ),
     );
@@ -794,124 +869,103 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
     final actionLabel = _isPin ? 'Reset Vault PIN' : 'Reset Vault Password';
     return PopScope(
       canPop: false,
-      child: Dialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE6F0FA),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(
-                      Icons.lock_reset_rounded,
-                      color: Color(0xFF066FD1),
-                      size: 30,
-                    ),
-                  ),
+      child: _vaultDialogCard(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Align(
+                child: _VaultHeroIcon(icon: Icons.lock_reset_rounded),
+              ),
+              const SizedBox(height: AppSpacing.six),
+              Text(
+                'Create New Vault $methodLabel',
+                textAlign: TextAlign.center,
+                style: _vaultTitleStyle(context),
+              ),
+              const SizedBox(height: AppSpacing.two),
+              Text(
+                actionLabel,
+                textAlign: TextAlign.center,
+                style: _vaultSubtitleStyle(context).copyWith(
+                  color: AppColors.titleText,
+                  fontWeight: AppTypography.weightMedium,
                 ),
-                const SizedBox(height: 18),
-                Text(
-                  'Create New Vault $methodLabel',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF066FD1),
-                    height: 1.1,
+              ),
+              const SizedBox(height: AppSpacing.oneAndHalf),
+              Text(
+                'Recovery succeeded. Set a new $methodLabel before opening "${widget.title}".',
+                textAlign: TextAlign.center,
+                style: _vaultSubtitleStyle(context),
+              ),
+              const SizedBox(height: AppSpacing.six),
+              if (_isPin)
+                _VaultCompactPinField(
+                  controller: _controller,
+                  focusNode: _primaryFocusNode,
+                  autofocus: true,
+                  errorText: null,
+                  validator: _validateSecret,
+                  onSubmitted: _submit,
+                )
+              else
+                TextFormField(
+                  controller: _controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.text,
+                  obscureText: true,
+                  decoration: _vaultInputDecoration('Enter new password'),
+                  style: const TextStyle(
+                    fontSize: AppTypography.sizeBase,
+                    color: AppColors.titleText,
                   ),
+                  validator: _validateSecret,
                 ),
-                const SizedBox(height: 22),
-                Text(
-                  actionLabel,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF333333),
+              if (!_isPin) ...[
+                const SizedBox(height: AppSpacing.three),
+                TextFormField(
+                  controller: _confirmController,
+                  keyboardType: TextInputType.text,
+                  obscureText: true,
+                  decoration: _vaultInputDecoration('Confirm new password'),
+                  style: const TextStyle(
+                    fontSize: AppTypography.sizeBase,
+                    color: AppColors.titleText,
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Recovery succeeded. Set a new $methodLabel before opening "${widget.title}".',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF8A94A6),
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                if (_isPin)
-                  _VaultCompactPinField(
-                    controller: _controller,
-                    focusNode: _primaryFocusNode,
-                    autofocus: true,
-                    errorText: null,
-                    validator: _validateSecret,
-                    onSubmitted: _submit,
-                  )
-                else
-                  TextFormField(
-                    controller: _controller,
-                    autofocus: true,
-                    keyboardType: TextInputType.text,
-                    obscureText: true,
-                    decoration: _vaultInputDecoration('Enter new password'),
-                    validator: _validateSecret,
-                  ),
-                if (!_isPin) ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _confirmController,
-                    keyboardType: TextInputType.text,
-                    obscureText: true,
-                    decoration: _vaultInputDecoration('Confirm new password'),
-                    validator: (value) {
-                      final error = _validateSecret(value);
-                      if (error != null) {
-                        return error;
-                      }
-                      if (value?.trim() != _controller.text.trim()) {
-                        return 'Passwords do not match.';
-                      }
-                      return null;
-                    },
-                    onFieldSubmitted: (_) => _submit(),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _submit,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(54),
-                    backgroundColor: const Color(0xFF2F8AE5),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    textStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  child: const Text('Reset Vault'),
-                ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  validator: (value) {
+                    final error = _validateSecret(value);
+                    if (error != null) {
+                      return error;
+                    }
+                    if (value?.trim() != _controller.text.trim()) {
+                      return 'Passwords do not match.';
+                    }
+                    return null;
+                  },
+                  onFieldSubmitted: (_) => _submit(),
                 ),
               ],
-            ),
+              const SizedBox(height: AppSpacing.four),
+              FilledButton(
+                onPressed: _submit,
+                style: _vaultPrimaryButtonStyle(),
+                child: const Text('Reset Vault'),
+              ),
+              const SizedBox(height: AppSpacing.four),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.titleText,
+                  textStyle: const TextStyle(
+                    fontSize: AppTypography.sizeBase,
+                    fontWeight: AppTypography.weightMedium,
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ],
           ),
         ),
       ),
@@ -986,118 +1040,75 @@ class _VaultRecoveryKeysDialogState extends State<_VaultRecoveryKeysDialog> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      child: Dialog(
-        backgroundColor: const Color(0xFFF9FAFB),
-        surfaceTintColor: const Color(0xFFF9FAFB),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(35)),
-        child: SingleChildScrollView(
-          child: Container(
-            width: 341,
-            padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: const Color(0xFFE5E8EC), width: 1.4),
+      child: _vaultDialogCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Align(child: _VaultHeroIcon(icon: Icons.lock_open_rounded)),
+            const SizedBox(height: AppSpacing.six),
+            Text(
+              'Your Vault Recovery Keys',
+              textAlign: TextAlign.center,
+              style: _vaultTitleStyle(context),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _VaultDialogIcon(icon: Icons.lock_rounded),
-                const SizedBox(height: 16),
-                Text(
-                  'Your Vault Recovery Keys',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: const Color(0xFF066FD1),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 24,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'If you lose these keys and forget your password, your vault cannot be recovered.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF777777),
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: widget.recoveryKeys.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 20,
-                    childAspectRatio: 2.85,
-                  ),
-                  itemBuilder: (context, index) {
-                    return Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE5E8EC)),
-                      ),
-                      child: Text(
-                        widget.recoveryKeys[index],
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF777777),
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _isCountingDown ? null : _copyKeys,
-                  style: _primaryButtonStyle(context).copyWith(
-                    backgroundColor: WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.disabled)) {
-                        return const Color(0xFFA9CBEF);
-                      }
-                      return const Color(0xFF066FD1);
-                    }),
-                    foregroundColor: WidgetStateProperty.all(Colors.white),
+            const SizedBox(height: AppSpacing.two),
+            Text(
+              'If you lose these keys and forget your password, your vault cannot be recovered.',
+              textAlign: TextAlign.center,
+              style: _vaultSubtitleStyle(context),
+            ),
+            const SizedBox(height: AppSpacing.six),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: widget.recoveryKeys.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: AppSpacing.four,
+                mainAxisSpacing: AppSpacing.four,
+                childAspectRatio: 2.55,
+              ),
+              itemBuilder: (context, index) {
+                return Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(AppRadii.xl),
+                    border: Border.all(color: AppColors.neutral200),
                   ),
                   child: Text(
-                    _isCountingDown
-                        ? 'Copied, closing in (${_secondsUntilClose}s)'
-                        : 'Copy Recovery Keys',
+                    widget.recoveryKeys[index],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.titleText,
+                      fontWeight: AppTypography.weightMedium,
+                      fontSize: AppTypography.sizeBase,
+                      letterSpacing: 0,
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
-          ),
+            const SizedBox(height: AppSpacing.four),
+            FilledButton(
+              onPressed: _isCountingDown ? null : _copyKeys,
+              style: _vaultPrimaryButtonStyle(
+                backgroundColor: _isCountingDown
+                    ? AppColors.blue200
+                    : AppColors.primaryButtonFill,
+                foregroundColor: _isCountingDown
+                    ? AppColors.blue500
+                    : AppColors.primaryButtonText,
+              ),
+              child: Text(
+                _isCountingDown
+                    ? 'Copied, closing in (${_secondsUntilClose}s)'
+                    : 'Copy Recovery Keys',
+              ),
+            ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _VaultDialogIcon extends StatelessWidget {
-  const _VaultDialogIcon({required this.icon});
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      child: Container(
-        width: 72,
-        height: 72,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE6F0FA),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Icon(icon, color: const Color(0xFF066FD1), size: 30),
       ),
     );
   }
@@ -1170,12 +1181,12 @@ class _VaultPinFieldState extends State<_VaultPinField> {
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(24),
+              color: AppColors.neutral50,
+              borderRadius: BorderRadius.circular(AppRadii.threeXl),
               border: Border.all(
                 color: widget.focusNode.hasFocus
-                    ? const Color(0xFF066FD1)
-                    : const Color(0xFFE5E8EC),
+                    ? AppColors.blue500
+                    : AppColors.neutral200,
               ),
             ),
             child: Column(
@@ -1183,8 +1194,8 @@ class _VaultPinFieldState extends State<_VaultPinField> {
                 Text(
                   widget.title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF333333),
-                    fontWeight: FontWeight.w700,
+                    color: AppColors.titleText,
+                    fontWeight: AppTypography.weightSemibold,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -1194,7 +1205,7 @@ class _VaultPinFieldState extends State<_VaultPinField> {
                   digits.length == 4 ? '4 digits entered' : widget.helperText,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF6B7280),
+                    color: AppColors.neutral500,
                     height: 1.4,
                   ),
                 ),
@@ -1202,35 +1213,11 @@ class _VaultPinFieldState extends State<_VaultPinField> {
             ),
           ),
         ),
-        SizedBox(
-          height: 0,
-          child: TextFormField(
-            controller: widget.controller,
-            focusNode: widget.focusNode,
-            keyboardType: TextInputType.number,
-            obscureText: true,
-            obscuringCharacter: '•',
-            maxLength: 4,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(4),
-            ],
-            enableInteractiveSelection: false,
-            style: const TextStyle(
-              color: Colors.transparent,
-              fontSize: 1,
-              height: 0.01,
-            ),
-            cursorColor: Colors.transparent,
-            decoration: const InputDecoration(
-              counterText: '',
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              isCollapsed: true,
-            ),
-            validator: widget.validator,
-            onFieldSubmitted: (_) => widget.onSubmitted(),
-          ),
+        _HiddenVaultPinInput(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          validator: widget.validator,
+          onSubmitted: widget.onSubmitted,
         ),
       ],
     );
@@ -1318,43 +1305,81 @@ class _VaultCompactPinFieldState extends State<_VaultCompactPinField> {
             widget.errorText!,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: const Color(0xFFD63939),
+              color: AppColors.rose500,
               height: 1.35,
             ),
           ),
         ],
-        SizedBox(
-          height: 0,
-          child: TextFormField(
-            controller: widget.controller,
-            focusNode: widget.focusNode,
-            autofocus: widget.autofocus,
-            keyboardType: TextInputType.number,
-            obscureText: true,
-            obscuringCharacter: '*',
-            maxLength: 4,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(4),
-            ],
-            enableInteractiveSelection: false,
-            style: const TextStyle(
-              color: Colors.transparent,
-              fontSize: 1,
-              height: 0.01,
-            ),
-            cursorColor: Colors.transparent,
-            decoration: const InputDecoration(
-              counterText: '',
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              isCollapsed: true,
-            ),
-            validator: widget.validator,
-            onFieldSubmitted: (_) => widget.onSubmitted(),
-          ),
+        _HiddenVaultPinInput(
+          controller: widget.controller,
+          focusNode: widget.focusNode,
+          autofocus: widget.autofocus,
+          validator: widget.validator,
+          onSubmitted: widget.onSubmitted,
         ),
       ],
+    );
+  }
+}
+
+class _HiddenVaultPinInput extends StatelessWidget {
+  const _HiddenVaultPinInput({
+    required this.controller,
+    required this.focusNode,
+    required this.validator,
+    required this.onSubmitted,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String? Function(String?) validator;
+  final VoidCallback onSubmitted;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 1,
+      height: 1,
+      child: Transform.translate(
+        offset: const Offset(-1000, 0),
+        child: TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          obscuringCharacter: '*',
+          maxLength: 4,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(4),
+          ],
+          enableInteractiveSelection: false,
+          showCursor: false,
+          style: const TextStyle(
+            color: Colors.transparent,
+            fontSize: 1,
+            height: 1,
+          ),
+          cursorColor: Colors.transparent,
+          decoration: const InputDecoration(
+            isDense: true,
+            isCollapsed: true,
+            counterText: '',
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            contentPadding: EdgeInsets.zero,
+          ),
+          validator: validator,
+          onFieldSubmitted: (_) => onSubmitted(),
+        ),
+      ),
     );
   }
 }
@@ -1372,102 +1397,64 @@ class _VaultPinPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(4, (index) {
-        final isFilled = index < value.length;
-        return Container(
-          width: compact ? 58 : 56,
-          height: compact ? 50 : 64,
-          margin: EdgeInsets.only(right: index == 3 ? 0 : (compact ? 12 : 10)),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(compact ? 12 : 20),
-            border: Border.all(
-              color: hasError
-                  ? const Color(0xFFD63939)
-                  : isFilled
-                        ? const Color(0xFF066FD1)
-                        : const Color(0xFFD7DDE6),
-              width: isFilled || hasError ? 1.2 : 1,
-            ),
-            boxShadow: compact
-                ? null
-                : [
-                    BoxShadow(
-                      color: const Color(
-                        0xFF066FD1,
-                      ).withValues(alpha: isFilled ? 0.08 : 0),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = AppSpacing.three;
+        final rawSize = (constraints.maxWidth - (spacing * 3)) / 4;
+        final itemSize = rawSize.clamp(48.0, 72.0);
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(4, (index) {
+            final isFilled = index < value.length;
+            return Padding(
+              padding: EdgeInsets.only(right: index == 3 ? 0 : spacing),
+              child: SizedBox.square(
+                dimension: itemSize,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(AppRadii.xl),
+                    border: Border.all(
+                      color: hasError
+                          ? AppColors.rose500
+                          : isFilled
+                          ? AppColors.blue500
+                          : AppColors.neutral200,
                     ),
-                  ],
-          ),
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 160),
-              child: isFilled
-                  ? Text(
-                      '\u2022',
-                      key: ValueKey('filled-$index'),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: const Color(0xFF6B7280),
-                        fontWeight: FontWeight.w600,
-                        height: 1,
-                      ),
-                    )
-                  : Text(
-                      '-',
-                      key: ValueKey('empty-$index'),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF9AA3AF),
-                        fontWeight: FontWeight.w400,
-                        height: 1,
-                      ),
+                  ),
+                  child: Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 160),
+                      child: isFilled
+                          ? Text(
+                              '\u2022',
+                              key: ValueKey('filled-$index'),
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: AppColors.neutral500,
+                                    fontWeight: AppTypography.weightSemibold,
+                                    height: 1,
+                                  ),
+                            )
+                          : Text(
+                              '-',
+                              key: ValueKey('empty-$index'),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: AppColors.neutral400,
+                                    fontWeight: AppTypography.weightNormal,
+                                    height: 1,
+                                  ),
+                            ),
                     ),
-            ),
-          ),
+                  ),
+                ),
+              ),
+            );
+          }),
         );
-      }),
+      },
     );
   }
 }
-
-InputDecoration _vaultInputDecoration(String hintText) {
-  return InputDecoration(
-    hintText: hintText,
-    filled: true,
-    fillColor: Colors.white,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFE5E8EC)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF066FD1)),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD63939)),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFD63939)),
-    ),
-  );
-}
-
-ButtonStyle _primaryButtonStyle(BuildContext context) {
-  return FilledButton.styleFrom(
-    minimumSize: const Size.fromHeight(48),
-    backgroundColor: const Color(0xFF066FD1),
-    foregroundColor: Colors.white,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-    textStyle: Theme.of(
-      context,
-    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-  );
-}
-

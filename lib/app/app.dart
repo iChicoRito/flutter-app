@@ -294,7 +294,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   ],
                 );
               },
-              title: 'Remindly',
+              title: 'RemindLy',
               debugShowCheckedModeBanner: false,
               localizationsDelegates: const [
                 GlobalMaterialLocalizations.delegate,

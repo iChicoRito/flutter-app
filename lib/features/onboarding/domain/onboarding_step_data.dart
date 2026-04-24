@@ -14,7 +14,7 @@ class OnboardingStepData {
 
 const onboardingSteps = <OnboardingStepData>[
   OnboardingStepData(
-    title: 'Welcome to Remindly',
+    title: 'Welcome to RemindLy',
     description:
         'Your smart task companion that helps you remember what matters. Stay on top of your day with simple, powerful tools.',
     icon: Icons.task_alt_rounded,

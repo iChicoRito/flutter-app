@@ -89,7 +89,7 @@ void main() {
 
     expect(find.byKey(OnboardingScreen.markerKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.markerKey), findsNothing);
-    expect(find.text('Welcome to Remindly'), findsOneWidget);
+    expect(find.text('Welcome to RemindLy'), findsOneWidget);
   });
 
   testWidgets('opens dashboard directly for returning users', (
@@ -105,13 +105,13 @@ void main() {
     expect(find.text('Good Morning, Mark'), findsOneWidget);
   });
 
-  testWidgets('onboarding shows the new Remindly copy and matching icons', (
+  testWidgets('onboarding shows the new RemindLy copy and matching icons', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
     await tester.pumpAndSettle();
 
-    expect(find.text('Welcome to Remindly'), findsOneWidget);
+    expect(find.text('Welcome to RemindLy'), findsOneWidget);
     expect(find.byIcon(Icons.task_alt_rounded), findsOneWidget);
     final onboardingScaffold = tester.widget<Scaffold>(
       find.byKey(OnboardingScreen.markerKey),

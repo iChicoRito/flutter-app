@@ -191,7 +191,7 @@ class _WelcomeHandoffDialogState extends State<WelcomeHandoffDialog> {
             ),
             const SizedBox(height: AppSpacing.three),
             Text(
-              'Your Remindly dashboard is ready with tasks, notes, and reminders to keep you on track.',
+              'Your RemindLy dashboard is ready with tasks, notes, and reminders to keep you on track.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),

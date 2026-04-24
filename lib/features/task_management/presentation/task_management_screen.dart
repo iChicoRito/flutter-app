@@ -40,15 +40,15 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key categoryDropdownKey = Key(
     'task-management-category-dropdown',
   );
-  static const Key priorityDropdownKey = Key(
-    'task-management-priority-dropdown',
-  );
   static const Key statusDropdownKey = Key('task-management-status-dropdown');
-  static const Key vaultDropdownKey = Key('task-management-vault-dropdown');
-  static const Key advancedFiltersButtonKey = Key(
-    'task-management-advanced-filters',
-  );
   static const Key allCategoriesKey = Key('task-category-filter-all');
+  static const Key moveToSpaceCancelButtonKey = Key(
+    'task-move-to-space-cancel',
+  );
+  static const Key moveToSpaceConfirmButtonKey = Key(
+    'task-move-to-space-confirm',
+  );
+  static const Key moveToSpaceNoSpaceKey = Key('task-move-to-space-no-space');
   static const Key createTitleFieldKey = Key('task-create-title-field');
   static const Key createDescriptionFieldKey = Key(
     'task-create-description-field',
@@ -57,12 +57,7 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key createCategoryFieldKey = Key('task-create-category-field');
   static const Key createSubmitButtonKey = Key('task-create-submit-button');
 
-  static Key priorityFilterKey(String value) =>
-      Key('task-priority-filter-$value');
-
   static Key statusFilterKey(String value) => Key('task-status-filter-$value');
-
-  static Key vaultFilterKey(String value) => Key('task-vault-filter-$value');
 
   static Key categoryFilterKey(String id) => Key('task-category-filter-$id');
 
@@ -74,6 +69,9 @@ class TaskManagementScreen extends StatefulWidget {
 
   static Key taskMenuActionKey(String taskId, String action) =>
       Key('task-menu-$taskId-$action');
+
+  static Key moveToSpaceOptionKey(String spaceId) =>
+      Key('task-move-to-space-$spaceId');
 
   final TaskRepository repository;
   final TaskManagementController controller;
@@ -606,76 +604,18 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
     final selectedSpaceId = await showModalBottomSheet<String?>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.cardFill,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppRadii.threeXl),
         ),
       ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.five,
-              AppSpacing.four,
-              AppSpacing.five,
-              AppSpacing.five,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: taskMutedBorderColor,
-                    borderRadius: BorderRadius.circular(AppRadii.full),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.five),
-                Text(
-                  'Move to Space',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.titleText,
-                    fontWeight: AppTypography.weightSemibold,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.oneAndHalf),
-                Text(
-                  'Choose where this task should live.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.subHeaderText,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.four),
-                _SpaceDestinationTile(
-                  title: 'No Space',
-                  subtitle: 'Keep this task outside any space.',
-                  isSelected: task.spaceId == null,
-                  onTap: () => Navigator.of(context).pop(''),
-                ),
-                if (spaces.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.twoAndHalf),
-                  for (final space in spaces) ...[
-                    _SpaceDestinationTile(
-                      title: space.name,
-                      subtitle: space.description.isEmpty
-                          ? 'Category-based task space'
-                          : space.description,
-                      isSelected: task.spaceId == space.id,
-                      accentColor: space.color,
-                      onTap: () => Navigator.of(context).pop(space.id),
-                    ),
-                    const SizedBox(height: AppSpacing.twoAndHalf),
-                  ],
-                ],
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (context) => _MoveTaskToSpaceSheet(
+        task: task,
+        spaces: spaces,
+        categoryFor: _controller.categoryFor,
+      ),
     );
 
     if (!mounted || selectedSpaceId == null) {
@@ -792,78 +732,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     return shouldMove == true;
   }
 
-  void _openAdvancedFilters() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.cardFill,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadii.threeXl),
-        ),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.eight,
-              vertical: AppSpacing.six,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.neutral200,
-                      borderRadius: BorderRadius.circular(AppRadii.full),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.six),
-                Text(
-                  'More Filters',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.titleText,
-                    fontSize: AppTypography.sizeLg,
-                    fontWeight: AppTypography.weightSemibold,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.four),
-                TaskCompactDropdown<TaskPriorityFilter>(
-                  buttonKey: TaskManagementScreen.priorityDropdownKey,
-                  menuKeyBuilder: (value) =>
-                      TaskManagementScreen.priorityFilterKey(value.name),
-                  currentValue: _controller.priorityFilter,
-                  currentLabel: _priorityFilterLabel(
-                    _controller.priorityFilter,
-                  ),
-                  onSelected: _controller.updatePriorityFilter,
-                  items: TaskPriorityFilter.values,
-                  labelBuilder: _priorityFilterLabel,
-                ),
-                const SizedBox(height: AppSpacing.three),
-                TaskCompactDropdown<TaskVaultFilter>(
-                  buttonKey: TaskManagementScreen.vaultDropdownKey,
-                  menuKeyBuilder: (value) =>
-                      TaskManagementScreen.vaultFilterKey(value.name),
-                  currentValue: _controller.vaultFilter,
-                  currentLabel: _vaultFilterLabel(_controller.vaultFilter),
-                  onSelected: _controller.updateVaultFilter,
-                  items: TaskVaultFilter.values,
-                  labelBuilder: _vaultFilterLabel,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -938,92 +806,147 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 child: RefreshIndicator(
                   color: AppColors.blue500,
                   onRefresh: _controller.load,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.four,
-                      AppSpacing.six,
-                      AppSpacing.four,
-                      120,
-                    ),
-                    children: [
-                      _TaskPageHeader(onFiltersPressed: _openAdvancedFilters),
-                      const SizedBox(height: AppSpacing.six),
-                      Text(
-                        'Filter',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: AppColors.titleText,
-                              fontSize: AppTypography.sizeLg,
-                              fontWeight: AppTypography.weightSemibold,
-                            ),
-                      ),
-                      const SizedBox(height: AppSpacing.four),
-                      _SearchField(
-                        controller: _searchController,
-                        onChanged: _controller.updateSearchQuery,
-                      ),
-                      if (widget.lockedCategoryId == null) ...[
-                        const SizedBox(height: AppSpacing.three),
-                        _CategoryFilterRow(
-                          categories: _controller.categories,
-                          selectedCategoryId: _controller.categoryFilterId,
-                          onSelected: _controller.updateCategoryFilter,
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.six),
+                  child: CustomScrollView(
+                    slivers: [
                       if (filteredTasks.isEmpty)
-                        _EmptyState(
-                          title: widget.emptyTitle,
-                          message: widget.emptyMessage,
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.four,
+                            AppSpacing.six,
+                            AppSpacing.four,
+                            AppSpacing.zero,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const _TaskPageHeader(),
+                                const SizedBox(height: AppSpacing.six),
+                                _SearchField(
+                                  controller: _searchController,
+                                  onChanged: _controller.updateSearchQuery,
+                                ),
+                                if (widget.lockedCategoryId == null) ...[
+                                  const SizedBox(height: AppSpacing.three),
+                                  _CategoryFilterRow(
+                                    categories: _controller.categories,
+                                    selectedCategoryId:
+                                        _controller.categoryFilterId,
+                                    onSelected:
+                                        _controller.updateCategoryFilter,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         )
                       else
-                        ...filteredTasks.map((task) {
-                          final category = _controller.categoryFor(
-                            task.categoryId,
-                          );
-                          final space = _controller.spaceFor(task.spaceId);
-                          final previewProtected = isPreviewProtected(
-                            vaultService: VaultServiceScope.of(context),
-                            ownVault: task.vaultConfig,
-                            ownEntityKey: taskVaultEntityKey(task.id),
-                            inheritedVault: space?.vaultConfig,
-                            inheritedEntityKey: space == null
-                                ? null
-                                : spaceVaultEntityKey(space.id),
-                          );
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.four,
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.four,
+                            AppSpacing.six,
+                            AppSpacing.four,
+                            120,
+                          ),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              if (index == 0) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const _TaskPageHeader(),
+                                    const SizedBox(height: AppSpacing.six),
+                                    _SearchField(
+                                      controller: _searchController,
+                                      onChanged: _controller.updateSearchQuery,
+                                    ),
+                                    if (widget.lockedCategoryId == null) ...[
+                                      const SizedBox(height: AppSpacing.three),
+                                      _CategoryFilterRow(
+                                        categories: _controller.categories,
+                                        selectedCategoryId:
+                                            _controller.categoryFilterId,
+                                        onSelected:
+                                            _controller.updateCategoryFilter,
+                                      ),
+                                    ],
+                                    const SizedBox(height: AppSpacing.six),
+                                  ],
+                                );
+                              }
+
+                              final task = filteredTasks[index - 1];
+                              final category = _controller.categoryFor(
+                                task.categoryId,
+                              );
+                              final space = _controller.spaceFor(task.spaceId);
+                              final previewProtected = isPreviewProtected(
+                                vaultService: VaultServiceScope.of(context),
+                                ownVault: task.vaultConfig,
+                                ownEntityKey: taskVaultEntityKey(task.id),
+                                inheritedVault: space?.vaultConfig,
+                                inheritedEntityKey: space == null
+                                    ? null
+                                    : spaceVaultEntityKey(space.id),
+                              );
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: index == filteredTasks.length
+                                      ? AppSpacing.zero
+                                      : AppSpacing.four,
+                                ),
+                                child: _TaskCard(
+                                  task: task,
+                                  category: category,
+                                  space: space,
+                                  previewProtected: previewProtected,
+                                  showCheckbox: _isSelectionMode,
+                                  onTap: () => _isSelectionMode
+                                      ? _controller.toggleTaskCompletion(task)
+                                      : _openEditor(task.id),
+                                  onLongPress: () {
+                                    setState(() {
+                                      _isSelectionMode = true;
+                                    });
+                                  },
+                                  onToggle: () =>
+                                      _controller.toggleTaskCompletion(task),
+                                  onMenuSelected: (action) async {
+                                    switch (action) {
+                                      case _TaskMenuAction.moveToSpace:
+                                        await _moveTaskToSpace(task);
+                                      case _TaskMenuAction.archive:
+                                        await _archiveTask(task);
+                                      case _TaskMenuAction.delete:
+                                        await _confirmDelete(task);
+                                    }
+                                  },
+                                ),
+                              );
+                            }, childCount: filteredTasks.length + 1),
+                          ),
+                        ),
+                      if (filteredTasks.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.four,
+                              AppSpacing.zero,
+                              AppSpacing.four,
+                              120,
                             ),
-                            child: _TaskCard(
-                              task: task,
-                              category: category,
-                              space: space,
-                              previewProtected: previewProtected,
-                              showCheckbox: _isSelectionMode,
-                              onTap: () => _isSelectionMode
-                                  ? _controller.toggleTaskCompletion(task)
-                                  : _openEditor(task.id),
-                              onLongPress: () {
-                                setState(() {
-                                  _isSelectionMode = true;
-                                });
-                              },
-                              onToggle: () =>
-                                  _controller.toggleTaskCompletion(task),
-                              onMenuSelected: (action) async {
-                                switch (action) {
-                                  case _TaskMenuAction.moveToSpace:
-                                    await _moveTaskToSpace(task);
-                                  case _TaskMenuAction.archive:
-                                    await _archiveTask(task);
-                                  case _TaskMenuAction.delete:
-                                    await _confirmDelete(task);
-                                }
-                              },
+                            child: Center(
+                              child: _EmptyState(
+                                title: widget.emptyTitle,
+                                message: widget.emptyMessage,
+                              ),
                             ),
-                          );
-                        }),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1055,86 +978,269 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       ),
     );
   }
-
-  static String _priorityFilterLabel(TaskPriorityFilter filter) {
-    return switch (filter) {
-      TaskPriorityFilter.all => 'All Priority',
-      TaskPriorityFilter.low => 'Low',
-      TaskPriorityFilter.medium => 'Medium',
-      TaskPriorityFilter.high => 'High',
-      TaskPriorityFilter.urgent => 'Urgent',
-    };
-  }
-
-  static String _vaultFilterLabel(TaskVaultFilter filter) {
-    return switch (filter) {
-      TaskVaultFilter.all => 'All Vault',
-      TaskVaultFilter.vaultOnly => 'Vault',
-      TaskVaultFilter.nonVaultOnly => 'Non-Vault',
-    };
-  }
 }
 
 enum _TaskMenuAction { moveToSpace, archive, delete }
 
-class _TaskPageHeader extends StatelessWidget {
-  const _TaskPageHeader({required this.onFiltersPressed});
+class _MoveTaskToSpaceSheet extends StatefulWidget {
+  const _MoveTaskToSpaceSheet({
+    required this.task,
+    required this.spaces,
+    required this.categoryFor,
+  });
 
-  final VoidCallback onFiltersPressed;
+  final TaskItem task;
+  final List<TaskSpace> spaces;
+  final TaskCategory? Function(String categoryId) categoryFor;
+
+  @override
+  State<_MoveTaskToSpaceSheet> createState() => _MoveTaskToSpaceSheetState();
+}
+
+class _MoveTaskToSpaceSheetState extends State<_MoveTaskToSpaceSheet> {
+  String? _selectedSpaceId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedSpaceId = widget.task.spaceId;
+  }
+
+  void _selectSpace(String? spaceId) {
+    setState(() {
+      _selectedSpaceId = spaceId;
+    });
+  }
+
+  void _confirmSelection() {
+    Navigator.of(context).pop(_selectedSpaceId ?? '');
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final theme = Theme.of(context);
+    final destinationCount = widget.spaces.length + 1;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final needsScroll = destinationCount > 6;
+
+    final header = Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'My Tasks',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.titleText,
-                  fontSize: AppTypography.sizeLg,
-                  fontWeight: AppTypography.weightSemibold,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.one),
-              Text(
-                'Organize and manage your tasks',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.subHeaderText,
-                  fontSize: AppTypography.sizeBase,
-                  fontWeight: AppTypography.weightNormal,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.three),
-        Material(
-          color: AppColors.cardFill,
-          borderRadius: BorderRadius.circular(AppRadii.xl),
-          child: InkWell(
-            key: TaskManagementScreen.advancedFiltersButtonKey,
-            onTap: onFiltersPressed,
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadii.xl),
-                border: Border.all(color: AppColors.neutral200),
-              ),
-              child: const Icon(
-                TablerIcons.adjustments_horizontal,
-                size: 20,
-                color: AppColors.titleText,
-              ),
+        Center(
+          child: Container(
+            width: 42,
+            height: 4,
+            decoration: BoxDecoration(
+              color: taskMutedBorderColor,
+              borderRadius: BorderRadius.circular(AppRadii.full),
             ),
           ),
         ),
+        const SizedBox(height: AppSpacing.five),
+        Text(
+          'Move to Space',
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: AppColors.titleText,
+            fontWeight: AppTypography.weightSemibold,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.oneAndHalf),
+        Text(
+          'Choose where this task should live.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: AppColors.subHeaderText,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.four),
       ],
+    );
+
+    final footer = Row(
+      children: [
+        Expanded(
+          child: FilledButton(
+            key: TaskManagementScreen.moveToSpaceCancelButtonKey,
+            style: taskButtonStyle(
+              context,
+              role: TaskButtonRole.secondary,
+              size: TaskButtonSize.medium,
+              minimumSize: const Size.fromHeight(44),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.five,
+                vertical: AppSpacing.three,
+              ),
+              shrinkTapTarget: true,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.three),
+        Expanded(
+          child: FilledButton(
+            key: TaskManagementScreen.moveToSpaceConfirmButtonKey,
+            style: taskButtonStyle(
+              context,
+              role: TaskButtonRole.primary,
+              size: TaskButtonSize.medium,
+              minimumSize: const Size.fromHeight(44),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.five,
+                vertical: AppSpacing.three,
+              ),
+              shrinkTapTarget: true,
+            ),
+            onPressed: _confirmSelection,
+            child: const Text('Move to space'),
+          ),
+        ),
+      ],
+    );
+
+    final list = ListView.separated(
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: destinationCount,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return _SpaceDestinationTile(
+            key: TaskManagementScreen.moveToSpaceNoSpaceKey,
+            title: 'No Space',
+            subtitle: 'Keep this task outside any space.',
+            isSelected: _selectedSpaceId == null,
+            onTap: () => _selectSpace(null),
+            accentColor: AppColors.neutral400,
+            isNeutral: true,
+          );
+        }
+
+        final space = widget.spaces[index - 1];
+        final category = widget.categoryFor(space.categoryId);
+        return _SpaceDestinationTile(
+          key: TaskManagementScreen.moveToSpaceOptionKey(space.id),
+          title: space.name,
+          pillLabel: category?.name ?? 'Badge',
+          isSelected: _selectedSpaceId == space.id,
+          accentColor: space.color,
+          onTap: () => _selectSpace(space.id),
+        );
+      },
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: AppSpacing.twoAndHalf),
+    );
+
+    final scrollableList = ListView.separated(
+      padding: EdgeInsets.zero,
+      shrinkWrap: false,
+      physics: const ClampingScrollPhysics(),
+      itemCount: destinationCount,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return _SpaceDestinationTile(
+            key: TaskManagementScreen.moveToSpaceNoSpaceKey,
+            title: 'No Space',
+            subtitle: 'Keep this task outside any space.',
+            isSelected: _selectedSpaceId == null,
+            onTap: () => _selectSpace(null),
+            accentColor: AppColors.neutral400,
+            isNeutral: true,
+          );
+        }
+
+        final space = widget.spaces[index - 1];
+        final category = widget.categoryFor(space.categoryId);
+        return _SpaceDestinationTile(
+          key: TaskManagementScreen.moveToSpaceOptionKey(space.id),
+          title: space.name,
+          pillLabel: category?.name ?? 'Badge',
+          isSelected: _selectedSpaceId == space.id,
+          accentColor: space.color,
+          onTap: () => _selectSpace(space.id),
+        );
+      },
+      separatorBuilder: (context, index) =>
+          const SizedBox(height: AppSpacing.twoAndHalf),
+    );
+
+    final shortSheet = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.five,
+        AppSpacing.four,
+        AppSpacing.five,
+        AppSpacing.five,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          list,
+          const SizedBox(height: AppSpacing.four),
+          footer,
+        ],
+      ),
+    );
+
+    final tallSheet = SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.five,
+          AppSpacing.four,
+          AppSpacing.five,
+          AppSpacing.five,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: screenHeight * 0.92),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              Expanded(child: scrollableList),
+              const SizedBox(height: AppSpacing.four),
+              footer,
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return needsScroll ? tallSheet : shortSheet;
+  }
+}
+
+class _TaskPageHeader extends StatelessWidget {
+  const _TaskPageHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.one),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'My Tasks',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.titleText,
+              fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.one),
+          Text(
+            'Organize and manage your tasks',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.subHeaderText,
+              fontSize: AppTypography.sizeBase,
+              fontWeight: AppTypography.weightNormal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1632,78 +1738,131 @@ class _LockedBadge extends StatelessWidget {
 
 class _SpaceDestinationTile extends StatelessWidget {
   const _SpaceDestinationTile({
+    super.key,
     required this.title,
-    required this.subtitle,
     required this.isSelected,
     required this.onTap,
     this.accentColor,
+    this.subtitle,
+    this.pillLabel,
+    this.isNeutral = false,
   });
 
   final String title;
-  final String subtitle;
   final bool isSelected;
   final VoidCallback onTap;
   final Color? accentColor;
+  final String? subtitle;
+  final String? pillLabel;
+  final bool isNeutral;
 
   @override
   Widget build(BuildContext context) {
     final tone = accentColor ?? taskPrimaryBlue;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadii.twoXl),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.three,
-          vertical: AppSpacing.three,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.blue100 : AppColors.checkboxCardFill,
-          borderRadius: BorderRadius.circular(AppRadii.twoXl),
-          border: Border.all(
-            color: isSelected
-                ? AppColors.blue500
-                : AppColors.checkboxCardBorder,
+    final badgeTone = isNeutral ? AppColors.neutral400 : tone;
+    final badgeFill = isNeutral
+        ? AppColors.neutral100
+        : tone.withValues(alpha: 0.12);
+    final borderColor = isSelected ? tone : AppColors.checkboxCardBorder;
+    final backgroundColor = isSelected
+        ? tone.withValues(alpha: isNeutral ? 0.08 : 0.12)
+        : AppColors.cardFill;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.three),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(AppRadii.twoXl),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: badgeFill,
+                  borderRadius: BorderRadius.circular(AppRadii.xl),
+                ),
+                child: Icon(TablerIcons.folder, color: badgeTone, size: 18),
+              ),
+              const SizedBox(width: AppSpacing.three),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.titleText,
+                        fontWeight: AppTypography.weightSemibold,
+                      ),
+                    ),
+                    if (pillLabel != null) ...[
+                      const SizedBox(height: AppSpacing.one),
+                      _SpaceBadgePill(label: pillLabel!, tone: tone),
+                    ] else if (subtitle != null) ...[
+                      const SizedBox(height: AppSpacing.one),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.subHeaderText,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadii.xl),
-              ),
-              child: Icon(TablerIcons.folder, color: tone, size: 18),
+      ),
+    );
+  }
+}
+
+class _SpaceBadgePill extends StatelessWidget {
+  const _SpaceBadgePill({required this.label, required this.tone});
+
+  final String label;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.twoAndHalf,
+        vertical: AppSpacing.one,
+      ),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadii.full),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(TablerIcons.home_2, size: 12, color: tone),
+          const SizedBox(width: AppSpacing.oneAndHalf),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: tone,
+              fontWeight: AppTypography.weightSemibold,
             ),
-            const SizedBox(width: AppSpacing.three),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppColors.titleText,
-                      fontWeight: AppTypography.weightSemibold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.subHeaderText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected) Icon(TablerIcons.check, color: tone, size: 18),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1755,50 +1914,40 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Column(
       key: TaskManagementScreen.emptyStateKey,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.eight,
-        vertical: AppSpacing.six,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(AppRadii.threeXl),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: taskAccentBlue,
-              borderRadius: BorderRadius.circular(AppRadii.threeXl),
-            ),
-            child: const Icon(
-              TablerIcons.notes,
-              size: 34,
-              color: taskPrimaryBlue,
-            ),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: taskAccentBlue,
+            borderRadius: BorderRadius.circular(AppRadii.threeXl),
           ),
-          const SizedBox(height: AppSpacing.five),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.titleText,
-              fontWeight: AppTypography.weightSemibold,
-            ),
+          child: const Icon(
+            TablerIcons.notes,
+            size: 34,
+            color: taskPrimaryBlue,
           ),
-          const SizedBox(height: AppSpacing.two),
-          Text(
-            message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
-            textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: AppSpacing.five),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: AppColors.titleText,
+            fontWeight: AppTypography.weightSemibold,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.two),
+        Text(
+          message,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }

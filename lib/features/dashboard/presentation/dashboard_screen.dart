@@ -50,6 +50,9 @@ class DashboardScreen extends StatefulWidget {
   static const Key profileImagePermissionContinueKey = Key(
     'dashboard-profile-image-permission-continue',
   );
+  static const Key profileImagePermissionSecondaryKey = Key(
+    'dashboard-profile-image-permission-secondary',
+  );
   static const Key profileUserRowKey = Key('dashboard-profile-user-row');
   static const Key profileNameFieldKey = Key('dashboard-profile-name-field');
   static const Key profileNameSaveButtonKey = Key(
@@ -250,11 +253,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _pickProfileImage() async {
-    final allowed = await showDialog<bool>(
+    final hasProfileImage =
+        _profileImageData != null && _profileImageData!.isNotEmpty;
+    final action = await showDialog<_ProfileImageDialogAction>(
       context: context,
-      builder: (context) => const _ProfileImagePermissionDialog(),
+      barrierDismissible: true,
+      builder: (context) =>
+          _ProfileImagePermissionDialog(hasProfileImage: hasProfileImage),
     );
-    if (allowed != true || !mounted) {
+    if (!mounted ||
+        action == null ||
+        action == _ProfileImageDialogAction.cancel) {
+      return;
+    }
+
+    if (action == _ProfileImageDialogAction.remove) {
+      await widget.displayNameStore.saveProfileImageData(null);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _profileImageData = null;
+      });
+      showTaskToast(context, message: 'Profile photo removed successfully.');
       return;
     }
 
@@ -470,7 +491,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   return _DashboardHomeTab(
                     theme: theme,
                     displayName: _displayName,
-                    profileImageData: _profileImageData,
                     clock: widget.clock,
                     controller: taskController,
                     isTodayExpanded: _isTodayExpanded,
@@ -567,7 +587,6 @@ class _DashboardHomeTab extends StatelessWidget {
   const _DashboardHomeTab({
     required this.theme,
     required this.displayName,
-    required this.profileImageData,
     required this.clock,
     required this.controller,
     required this.isTodayExpanded,
@@ -584,7 +603,6 @@ class _DashboardHomeTab extends StatelessWidget {
 
   final ThemeData theme;
   final String? displayName;
-  final String? profileImageData;
   final DashboardClock clock;
   final TaskManagementController controller;
   final bool isTodayExpanded;
@@ -635,8 +653,10 @@ class _DashboardHomeTab extends StatelessWidget {
         children: [
           _HeaderRow(
             theme: theme,
-            greeting: _buildDashboardGreeting(displayName: displayName, now: now),
-            profileImageData: profileImageData,
+            greeting: _buildDashboardGreeting(
+              displayName: displayName,
+              now: now,
+            ),
             dateLabel: _formatDate(now),
           ),
           const SizedBox(height: AppSpacing.six),
@@ -822,64 +842,43 @@ class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
     required this.theme,
     required this.greeting,
-    required this.profileImageData,
     required this.dateLabel,
   });
 
   final ThemeData theme;
   final String greeting;
-  final String? profileImageData;
   final String dateLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                greeting,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: AppColors.titleText,
-                  fontSize: AppTypography.sizeLg,
-                  fontWeight: AppTypography.weightSemibold,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.one),
-              Text(
-                'Manage your tasks and stay on track.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.subHeaderText,
-                  fontSize: AppTypography.sizeBase,
-                  fontWeight: AppTypography.weightNormal,
-                ),
-              ),
-            ],
+        Text(
+          greeting,
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: AppColors.titleText,
+            fontSize: AppTypography.sizeLg,
+            fontWeight: AppTypography.weightSemibold,
           ),
         ),
-        const SizedBox(width: AppSpacing.three),
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppColors.cardFill,
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-            border: Border.all(color: AppColors.cardBorder),
+        const SizedBox(height: AppSpacing.one),
+        Text(
+          'Manage your tasks and stay on track.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.subHeaderText,
+            fontSize: AppTypography.sizeBase,
+            fontWeight: AppTypography.weightNormal,
           ),
-          clipBehavior: Clip.antiAlias,
-          child: profileImageData == null || profileImageData!.isEmpty
-              ? const Icon(
-                  TablerIcons.clipboard_list,
-                  color: AppColors.titleText,
-                  size: 24,
-                )
-              : _ProfileAvatarImage(
-                  imageData: profileImageData,
-                  imageKey: DashboardScreen.homeAvatarImageKey,
-                  fallbackIconSize: 22,
-                ),
+        ),
+        const SizedBox(height: AppSpacing.one),
+        Text(
+          dateLabel,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppColors.subHeaderText,
+            fontSize: AppTypography.sizeSm,
+            fontWeight: AppTypography.weightNormal,
+          ),
         ),
       ],
     );
@@ -1315,10 +1314,6 @@ class _HomeTaskTile extends StatelessWidget {
                           : null,
                     ),
                   ),
-                  if (task.vaultConfig?.isEnabled == true) ...[
-                    const SizedBox(height: 6),
-                    const _LockedBadge(),
-                  ],
                   const SizedBox(height: AppSpacing.one),
                   Text(
                     preview,
@@ -1333,14 +1328,6 @@ class _HomeTaskTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (previewProtected) ...[
-              const SizedBox(width: AppSpacing.three),
-              const Icon(
-                TablerIcons.lock,
-                color: AppColors.subHeaderText,
-                size: 20,
-              ),
-            ],
           ],
         ),
       ),
@@ -1386,36 +1373,6 @@ class _DashboardEmptyState extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _LockedBadge extends StatelessWidget {
-  const _LockedBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.neutral200,
-        borderRadius: BorderRadius.circular(AppRadii.full),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(TablerIcons.lock, size: 12, color: AppColors.titleText),
-          const SizedBox(width: AppSpacing.oneAndHalf),
-          Text(
-            'Locked',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: AppColors.titleText,
-              fontSize: AppTypography.sizeBase,
-              fontWeight: AppTypography.weightSemibold,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1506,7 +1463,7 @@ class _ProfileTab extends StatelessWidget {
           _ProfileStatsRow(stats: stats),
           const SizedBox(height: AppSpacing.six),
           Text(
-            'Account Details',
+            'Manage Account',
             style: theme.textTheme.bodySmall?.copyWith(
               color: taskMutedText,
               fontSize: AppTypography.sizeBase,
@@ -1564,21 +1521,30 @@ class _ProfileHero extends StatelessWidget {
                     clipBehavior: Clip.none,
                     children: [
                       Container(
-                        width: 88,
-                        height: 88,
+                        width: 96,
+                        height: 96,
                         decoration: BoxDecoration(
-                          color: taskAccentBlue,
+                          color: AppColors.neutral50,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.cardFill,
-                            width: AppSizes.borderDefault * 3,
-                          ),
                         ),
-                        clipBehavior: Clip.antiAlias,
-                        child: _ProfileAvatarImage(
-                          imageData: profileImageData,
-                          imageKey: DashboardScreen.profileAvatarImageKey,
-                          fallbackIconSize: 36,
+                      ),
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.all(
+                            AppSizes.borderDefault * 4,
+                          ),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: taskAccentBlue,
+                              shape: BoxShape.circle,
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: _ProfileAvatarImage(
+                              imageData: profileImageData,
+                              imageKey: DashboardScreen.profileAvatarImageKey,
+                              fallbackIconSize: 36,
+                            ),
+                          ),
                         ),
                       ),
                       Positioned(
@@ -1616,6 +1582,7 @@ class _ProfileHero extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: AppSpacing.two),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.four,
@@ -1834,16 +1801,6 @@ class _ProfileAccountList extends StatelessWidget {
             label: 'User Profile',
             onTap: onEditProfile,
           ),
-          const _ProfileAccountRow(
-            key: DashboardScreen.profileVaultRowKey,
-            icon: TablerIcons.shield_lock,
-            label: 'Vault Management',
-          ),
-          const _ProfileAccountRow(
-            key: DashboardScreen.profileRecoveryRowKey,
-            icon: TablerIcons.key,
-            label: 'Recovery Keys',
-          ),
           _ProfileAccountRow(
             key: DashboardScreen.profileArchivesRowKey,
             icon: TablerIcons.archive,
@@ -2059,49 +2016,112 @@ class _ProfileNameSheetState extends State<_ProfileNameSheet> {
   }
 }
 
+enum _ProfileImageDialogAction { cancel, upload, remove }
+
 class _ProfileImagePermissionDialog extends StatelessWidget {
-  const _ProfileImagePermissionDialog();
+  const _ProfileImagePermissionDialog({required this.hasProfileImage});
+
+  final bool hasProfileImage;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final secondaryLabel = hasProfileImage ? 'Remove' : 'Cancel';
+    final primaryLabel = hasProfileImage ? 'Upload New' : 'Upload Profile';
 
-    return AlertDialog(
+    return Dialog(
       key: DashboardScreen.profileImagePermissionDialogKey,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(
-        'Choose Profile Picture',
-        style: theme.textTheme.titleMedium?.copyWith(
-          color: taskDarkText,
-          fontWeight: FontWeight.w700,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.four,
+        vertical: AppSpacing.six,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.six,
+          AppSpacing.eight,
+          AppSpacing.six,
+          AppSpacing.six,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: AppColors.blue50,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                TablerIcons.photo,
+                color: AppColors.blue500,
+                size: 28,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.six),
+            Text(
+              'Update Profile Photo',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: AppColors.titleText,
+                fontWeight: AppTypography.weightSemibold,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.three),
+            Text(
+              'Adding a photo shows it on your profile you can remove it anytime.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppColors.subHeaderText,
+                fontWeight: AppTypography.weightNormal,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.six),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    key: DashboardScreen.profileImagePermissionSecondaryKey,
+                    onPressed: () => Navigator.of(context).pop(
+                      hasProfileImage
+                          ? _ProfileImageDialogAction.remove
+                          : _ProfileImageDialogAction.cancel,
+                    ),
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.secondary,
+                      size: TaskButtonSize.medium,
+                      minimumSize: const Size.fromHeight(50),
+                    ),
+                    child: Text(secondaryLabel),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.three),
+                Expanded(
+                  child: FilledButton(
+                    key: DashboardScreen.profileImagePermissionContinueKey,
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pop(_ProfileImageDialogAction.upload),
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.primary,
+                      size: TaskButtonSize.medium,
+                      minimumSize: const Size.fromHeight(50),
+                    ),
+                    child: Text(primaryLabel),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
-      content: Text(
-        'Remindly will open your photo picker so you can choose one image. '
-        'The app only uses the photo you select for your profile picture.',
-        style: theme.textTheme.bodyMedium?.copyWith(color: taskSecondaryText),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          style: taskButtonStyle(
-            context,
-            role: TaskButtonRole.secondary,
-            size: TaskButtonSize.small,
-          ),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: DashboardScreen.profileImagePermissionContinueKey,
-          onPressed: () => Navigator.of(context).pop(true),
-          style: taskButtonStyle(
-            context,
-            role: TaskButtonRole.primary,
-            size: TaskButtonSize.small,
-          ),
-          child: const Text('Continue'),
-        ),
-      ],
     );
   }
 }

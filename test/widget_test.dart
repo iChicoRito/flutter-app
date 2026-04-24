@@ -205,17 +205,18 @@ void main() {
     expect(find.text('Good Morning, Jamie'), findsOneWidget);
   });
 
-  testWidgets('dashboard header shows only the greeting when no name is saved', (
-    WidgetTester tester,
-  ) async {
-    onboardingStatusStore.completed = true;
+  testWidgets(
+    'dashboard header shows only the greeting when no name is saved',
+    (WidgetTester tester) async {
+      onboardingStatusStore.completed = true;
 
-    await pumpApp(tester);
-    await tester.pumpAndSettle();
+      await pumpApp(tester);
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
-    expect(find.text('Good Morning'), findsOneWidget);
-  });
+      expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
+      expect(find.text('Good Morning'), findsOneWidget);
+    },
+  );
 
   testWidgets('welcome modal CTA uses a full-width rounded rectangle style', (
     WidgetTester tester,
@@ -288,7 +289,7 @@ void main() {
     );
   });
 
-  testWidgets('dashboard home header shows saved profile picture', (
+  testWidgets('dashboard home header removes the trailing top action slot', (
     WidgetTester tester,
   ) async {
     displayNameStore.profileImageData = base64Encode(_transparentPngBytes);
@@ -296,16 +297,13 @@ void main() {
     await openDashboard(tester);
 
     expect(find.text('Good Morning, Mark'), findsOneWidget);
-    expect(find.byKey(DashboardScreen.homeAvatarImageKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.homeAvatarImageKey), findsNothing);
   });
 
   testWidgets('dashboard home header shows good afternoon at exact noon', (
     WidgetTester tester,
   ) async {
-    await openDashboard(
-      tester,
-      clock: () => DateTime(2026, 4, 13, 12),
-    );
+    await openDashboard(tester, clock: () => DateTime(2026, 4, 13, 12));
 
     expect(find.text('Good Afternoon, Mark'), findsOneWidget);
   });
@@ -313,10 +311,7 @@ void main() {
   testWidgets('dashboard home header shows good evening at 6 PM', (
     WidgetTester tester,
   ) async {
-    await openDashboard(
-      tester,
-      clock: () => DateTime(2026, 4, 13, 18),
-    );
+    await openDashboard(tester, clock: () => DateTime(2026, 4, 13, 18));
 
     expect(find.text('Good Evening, Mark'), findsOneWidget);
   });
@@ -382,7 +377,7 @@ void main() {
 
     expect(find.byKey(DashboardScreen.profileTabKey), findsOneWidget);
     expect(find.text('My Profile'), findsOneWidget);
-    expect(find.text('Account Details'), findsOneWidget);
+    expect(find.text('Manage Account'), findsOneWidget);
     expect(find.text('User Profile'), findsOneWidget);
     final nameFinder = find.descendant(
       of: find.byKey(DashboardScreen.profileIdentityKey),
@@ -440,8 +435,6 @@ void main() {
     );
     expect(find.text('Vaults'), findsNothing);
     expect(find.byKey(DashboardScreen.profileUserRowKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.profileVaultRowKey), findsOneWidget);
-    expect(find.byKey(DashboardScreen.profileRecoveryRowKey), findsOneWidget);
     expect(find.byKey(DashboardScreen.profileArchivesRowKey), findsOneWidget);
   });
 
@@ -459,9 +452,39 @@ void main() {
     expect(find.byKey(DashboardScreen.profileImageButtonKey), findsOneWidget);
   });
 
-  testWidgets('profile picture upload asks before opening photo picker', (
+  testWidgets(
+    'profile picture dialog shows upload variant when no photo exists',
+    (WidgetTester tester) async {
+      await openDashboard(tester);
+
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(DashboardScreen.profileImageButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(DashboardScreen.profileImagePermissionDialogKey),
+        findsOneWidget,
+      );
+      expect(find.text('Update Profile Photo'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Upload Profile'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(DashboardScreen.profileImagePermissionDialogKey),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('profile picture dialog shows remove variant when photo exists', (
     WidgetTester tester,
   ) async {
+    displayNameStore.profileImageData = base64Encode(_transparentPngBytes);
+
     await openDashboard(tester);
 
     await tester.tap(find.text('Profile'));
@@ -469,23 +492,28 @@ void main() {
     await tester.tap(find.byKey(DashboardScreen.profileImageButtonKey));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(DashboardScreen.profileImagePermissionDialogKey),
-      findsOneWidget,
-    );
-    expect(find.text('Choose Profile Picture'), findsOneWidget);
-    expect(
-      find.textContaining('only uses the photo you select'),
-      findsOneWidget,
-    );
+    expect(find.text('Update Profile Photo'), findsOneWidget);
+    expect(find.text('Remove'), findsOneWidget);
+    expect(find.text('Upload New'), findsOneWidget);
+  });
 
-    await tester.tap(find.text('Cancel'));
+  testWidgets('profile picture can be removed from the dialog', (
+    WidgetTester tester,
+  ) async {
+    displayNameStore.profileImageData = base64Encode(_transparentPngBytes);
+
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileImageButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(DashboardScreen.profileImagePermissionDialogKey),
-      findsNothing,
-    );
+    expect(displayNameStore.profileImageData, isNull);
+    expect(find.byKey(DashboardScreen.profileAvatarImageKey), findsNothing);
+    expect(find.text('Profile photo removed successfully.'), findsOneWidget);
   });
 
   testWidgets('profile name can be changed from the bottom sheet', (
@@ -711,6 +739,171 @@ void main() {
     tasks = await taskRepository.getTasks();
     expect(tasks.single.isArchived, isTrue);
     expect(find.text('Task archived successfully.'), findsOneWidget);
+  });
+
+  testWidgets(
+    'move to space sheet expands and moves the task from a long list',
+    (WidgetTester tester) async {
+      final now = DateTime(2026, 4, 13, 9);
+      final spaces = List.generate(10, (index) {
+        final timestamp = now.add(Duration(minutes: index));
+        final colors = [
+          AppColors.blue500,
+          AppColors.teal500,
+          AppColors.amber500,
+          AppColors.rose500,
+        ];
+        return TaskSpace(
+          id: 'space-$index',
+          name: 'Space $index',
+          description: 'Category-based task space',
+          categoryId: 'work',
+          colorValue: colors[index % colors.length].toARGB32(),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        );
+      });
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'move-task',
+            title: 'Move me',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+          ),
+        ],
+        spaces: spaces,
+      );
+
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.taskMenuButtonKey('move-task')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          TaskManagementScreen.taskMenuActionKey('move-task', 'move-to-space'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Move to Space'), findsOneWidget);
+      expect(find.text('Choose where this task should live.'), findsOneWidget);
+      expect(
+        find.byKey(TaskManagementScreen.moveToSpaceNoSpaceKey),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.moveToSpaceCancelButtonKey),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.moveToSpaceConfirmButtonKey),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.dragUntilVisible(
+        find.byKey(TaskManagementScreen.moveToSpaceOptionKey('space-0')),
+        find.byType(ListView).last,
+        const Offset(0, -240),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(TaskManagementScreen.moveToSpaceOptionKey('space-0')),
+      );
+      await tester.pumpAndSettle();
+
+      final selectedTile = tester.widget<AnimatedContainer>(
+        find
+            .descendant(
+              of: find.byKey(
+                TaskManagementScreen.moveToSpaceOptionKey('space-0'),
+              ),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first,
+      );
+      final selectedDecoration = selectedTile.decoration as BoxDecoration;
+      expect(
+        selectedDecoration.color,
+        AppColors.blue500.withValues(alpha: 0.12),
+      );
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.moveToSpaceConfirmButtonKey),
+      );
+      await tester.pumpAndSettle();
+
+      final tasks = await taskRepository.getTasks();
+      expect(tasks.single.spaceId, 'space-0');
+      expect(find.text('Task moved successfully.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('move to space still shows category confirmation before saving', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'confirm-move-task',
+          title: 'Confirm move',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+      spaces: [
+        TaskSpace(
+          id: 'personal-space',
+          name: 'Personal Space',
+          description: 'Private work area',
+          categoryId: 'personal',
+          colorValue: AppColors.teal500.toARGB32(),
+          createdAt: DateTime(2026, 4, 13, 9),
+          updatedAt: DateTime(2026, 4, 13, 9),
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuButtonKey('confirm-move-task')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        TaskManagementScreen.taskMenuActionKey(
+          'confirm-move-task',
+          'move-to-space',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.moveToSpaceOptionKey('personal-space')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(TaskManagementScreen.moveToSpaceConfirmButtonKey),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Move Task?'), findsOneWidget);
+
+    await tester.tap(find.text('Yes, Move'));
+    await tester.pumpAndSettle();
+
+    final tasks = await taskRepository.getTasks();
+    expect(tasks.single.spaceId, 'personal-space');
+    expect(find.text('Task moved successfully.'), findsOneWidget);
   });
 
   testWidgets('task editor archive asks for confirmation before archiving', (
@@ -1159,118 +1352,111 @@ void main() {
     expect(find.text('Planning session'), findsOneWidget);
   });
 
-  testWidgets('task filters can show only vault-protected tasks', (
-    WidgetTester tester,
-  ) async {
-    const vaultConfig = VaultConfig(
-      isEnabled: true,
-      method: VaultMethod.password,
-      secretKeyRef: 'secret',
-    );
-    final now = DateTime(2026, 4, 13, 9);
-    taskRepository = InMemoryTaskRepository(
-      tasks: [
-        buildTask(
-          id: 'direct-vault-task',
-          title: 'Direct Vault Task',
-          priority: TaskPriority.high,
-          categoryId: 'work',
-          vaultConfig: vaultConfig,
-        ),
-        buildTask(
-          id: 'space-vault-task',
-          title: 'Inherited Vault Task',
-          priority: TaskPriority.medium,
-          categoryId: 'work',
-        ).copyWith(spaceId: 'vault-space'),
-        buildTask(
-          id: 'plain-task',
-          title: 'Plain Task',
-          priority: TaskPriority.low,
-          categoryId: 'work',
-        ),
-      ],
-      spaces: [
-        TaskSpace(
-          id: 'vault-space',
-          name: 'Locked Space',
-          description: 'Protected space',
-          categoryId: 'work',
-          colorValue: Colors.blue.toARGB32(),
-          createdAt: now,
-          updatedAt: now,
-          vaultConfig: vaultConfig,
-        ),
-      ],
-    );
+  testWidgets(
+    'tasks header is static and populated layout keeps tight spacing',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'direct-vault-task',
+            title: 'Direct Vault Task',
+            priority: TaskPriority.high,
+            categoryId: 'work',
+          ),
+          buildTask(
+            id: 'space-vault-task',
+            title: 'Inherited Vault Task',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+          ),
+        ],
+      );
 
-    await openDashboard(tester);
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(TaskManagementScreen.advancedFiltersButtonKey));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(TaskManagementScreen.vaultDropdownKey));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(TaskManagementScreen.vaultFilterKey('vaultOnly')).last,
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('My Tasks'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Direct Vault Task'), findsOneWidget);
-    expect(find.text('Inherited Vault Task'), findsOneWidget);
-    expect(find.text('Plain Task'), findsNothing);
-  });
+      expect(find.text('More Filters'), findsNothing);
+      expect(find.text('Direct Vault Task'), findsOneWidget);
+      expect(find.text('Inherited Vault Task'), findsOneWidget);
+      expect(find.text('Filter'), findsNothing);
 
-  testWidgets('spaces filters can show only non-vault spaces', (
-    WidgetTester tester,
-  ) async {
-    const vaultConfig = VaultConfig(
-      isEnabled: true,
-      method: VaultMethod.password,
-      secretKeyRef: 'secret',
-    );
-    final now = DateTime(2026, 4, 13, 9);
-    taskRepository = InMemoryTaskRepository(
-      spaces: [
-        TaskSpace(
-          id: 'vault-space',
-          name: 'Vault Space',
-          description: 'Protected',
-          categoryId: 'work',
-          colorValue: Colors.blue.toARGB32(),
-          createdAt: now,
-          updatedAt: now,
-          vaultConfig: vaultConfig,
-        ),
-        TaskSpace(
-          id: 'plain-space',
-          name: 'Plain Space',
-          description: 'Open',
-          categoryId: 'work',
-          colorValue: Colors.green.toARGB32(),
-          createdAt: now,
-          updatedAt: now,
-        ),
-      ],
-    );
+      final subtitleBottom = tester
+          .getBottomLeft(find.text('Organize and manage your tasks'))
+          .dy;
+      final searchTop = tester
+          .getTopLeft(find.byKey(TaskManagementScreen.searchFieldKey))
+          .dy;
+      final firstCardTop = tester
+          .getTopLeft(
+            find.byKey(TaskManagementScreen.taskTileKey('direct-vault-task')),
+          )
+          .dy;
 
-    await openDashboard(tester);
-    await tester.tap(find.text('Spaces'));
-    await tester.pumpAndSettle();
+      expect(searchTop - subtitleBottom, lessThan(80));
+      expect(firstCardTop - searchTop, lessThan(220));
+    },
+  );
 
-    await tester.tap(find.byKey(SpacesPage.advancedFiltersButtonKey));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(SpacesPage.vaultDropdownKey));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(SpacesPage.vaultFilterKey('nonVaultOnly')).last,
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'spaces header is static and populated layout keeps tight spacing',
+    (WidgetTester tester) async {
+      final now = DateTime(2026, 4, 13, 9);
+      taskRepository = InMemoryTaskRepository(
+        spaces: [
+          TaskSpace(
+            id: 'vault-space',
+            name: 'Vault Space',
+            description: 'Protected',
+            categoryId: 'work',
+            colorValue: Colors.blue.toARGB32(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+          TaskSpace(
+            id: 'plain-space',
+            name: 'Plain Space',
+            description: 'Open',
+            categoryId: 'work',
+            colorValue: Colors.green.toARGB32(),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        ],
+      );
 
-    expect(find.text('Plain Space'), findsWidgets);
-    expect(find.text('Vault Space'), findsNothing);
-  });
+      await openDashboard(tester);
+      await tester.tap(find.text('Spaces'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('My Spaces'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('More Filters'), findsNothing);
+      expect(find.text('Plain Space'), findsWidgets);
+      expect(find.text('Vault Space'), findsWidgets);
+      expect(find.text('Filter'), findsNothing);
+
+      final subtitleBottom = tester
+          .getBottomLeft(find.text('Organize and manage your task spaces'))
+          .dy;
+      final searchTop = tester
+          .getTopLeft(
+            find.widgetWithText(
+              TextField,
+              'Search spaces, descriptions, categories',
+            ),
+          )
+          .dy;
+      final firstCardTop = tester.getTopLeft(find.text('Vault Space').first).dy;
+
+      expect(searchTop - subtitleBottom, lessThan(80));
+      expect(firstCardTop - searchTop, lessThan(260));
+    },
+  );
 
   testWidgets('task editor opens from both tasks tab and dashboard home', (
     WidgetTester tester,
@@ -1379,7 +1565,10 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Filter'));
+    await tester.tapAt(
+      tester.getBottomRight(find.byKey(TaskManagementScreen.markerKey)) -
+          const Offset(12, 160),
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -1401,6 +1590,44 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+    'empty task state is borderless and centered entry remains visible',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository();
+
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
+      expect(find.text('No tasks yet'), findsOneWidget);
+
+      final emptyState = tester.widget<Column>(
+        find.byKey(TaskManagementScreen.emptyStateKey),
+      );
+      expect(emptyState.mainAxisSize, MainAxisSize.min);
+    },
+  );
+
+  testWidgets(
+    'empty spaces state is borderless and centered entry remains visible',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository();
+
+      await openDashboard(tester);
+      await tester.tap(find.text('Spaces'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(SpacesPage.emptyStateKey), findsOneWidget);
+      expect(find.text('No spaces yet'), findsOneWidget);
+
+      final emptyState = tester.widget<Column>(
+        find.byKey(SpacesPage.emptyStateKey),
+      );
+      expect(emptyState.mainAxisSize, MainAxisSize.min);
+    },
+  );
 }
 
 TaskItem buildTask({

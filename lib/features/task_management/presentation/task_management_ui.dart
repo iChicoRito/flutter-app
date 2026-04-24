@@ -990,7 +990,7 @@ class TaskFormPageHeader extends StatelessWidget {
           ),
           padding: EdgeInsets.zero,
         ),
-        const SizedBox(width: AppSpacing.three),
+        const SizedBox(width: AppSpacing.one),
         Expanded(
           child: Text(
             title,

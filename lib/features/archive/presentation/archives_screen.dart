@@ -126,7 +126,7 @@ class _ArchivesScreenState extends State<ArchivesScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.four,
-                    AppSpacing.six,
+                    AppSpacing.one,
                     AppSpacing.four,
                     0,
                   ),
@@ -299,14 +299,14 @@ class _ArchivesHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         _ArchiveBackButton(onTap: () => Navigator.maybePop(context)),
-        const SizedBox(width: AppSpacing.two),
+        const SizedBox(width: AppSpacing.one),
         Expanded(
           child: Text(
             'My Archives',
             style: theme.textTheme.titleMedium?.copyWith(
-              color: taskDarkText,
-              fontWeight: AppTypography.weightSemibold,
               fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+              color: AppColors.titleText,
             ),
           ),
         ),
@@ -322,22 +322,19 @@ class _ArchiveBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(AppRadii.full),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadii.full),
-        child: const SizedBox(
-          width: AppSpacing.six,
-          height: AppSpacing.six,
-          child: Icon(
-            TablerIcons.arrow_left,
-            color: taskMutedText,
-            size: AppTypography.sizeLg,
-          ),
-        ),
+    return IconButton(
+      onPressed: onTap,
+      icon: const Icon(
+        TablerIcons.chevron_left,
+        color: AppColors.subHeaderText,
+        size: AppTypography.sizeLg,
       ),
+      splashRadius: AppSpacing.five,
+      constraints: const BoxConstraints.tightFor(
+        width: AppSpacing.six,
+        height: AppSpacing.six,
+      ),
+      padding: EdgeInsets.zero,
     );
   }
 }
@@ -734,6 +731,7 @@ class _ArchiveEmptyState extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: taskDarkText,
                 fontWeight: FontWeight.w700,
+                fontSize: AppTypography.sizeLg,
               ),
             ),
             const SizedBox(height: 8),
@@ -743,6 +741,7 @@ class _ArchiveEmptyState extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: taskMutedText,
                 height: 1.5,
+                fontSize: AppTypography.sizeSm,
               ),
             ),
           ],

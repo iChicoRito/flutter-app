@@ -32,28 +32,37 @@ void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
   late FakeDisplayNameStore displayNameStore;
   late InMemoryTaskRepository taskRepository;
+  late DateTime Function() dashboardClock;
 
   setUp(() {
     onboardingStatusStore = FakeOnboardingStatusStore();
     displayNameStore = FakeDisplayNameStore();
     taskRepository = InMemoryTaskRepository();
+    dashboardClock = () => DateTime(2026, 4, 13, 9);
   });
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    DateTime Function()? clock,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(430, 1000));
     await tester.pumpWidget(
       MyApp(
         onboardingStatusStore: onboardingStatusStore,
         displayNameStore: displayNameStore,
         taskRepository: taskRepository,
+        dashboardClock: clock ?? dashboardClock,
       ),
     );
   }
 
-  Future<void> openDashboard(WidgetTester tester) async {
+  Future<void> openDashboard(
+    WidgetTester tester, {
+    DateTime Function()? clock,
+  }) async {
     onboardingStatusStore.completed = true;
     displayNameStore.displayName = 'Mark';
-    await pumpApp(tester);
+    await pumpApp(tester, clock: clock);
     await tester.pumpAndSettle();
   }
 
@@ -196,6 +205,18 @@ void main() {
     expect(find.text('Good Morning, Jamie'), findsOneWidget);
   });
 
+  testWidgets('dashboard header shows only the greeting when no name is saved', (
+    WidgetTester tester,
+  ) async {
+    onboardingStatusStore.completed = true;
+
+    await pumpApp(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.namePromptKey), findsOneWidget);
+    expect(find.text('Good Morning'), findsOneWidget);
+  });
+
   testWidgets('welcome modal CTA uses a full-width rounded rectangle style', (
     WidgetTester tester,
   ) async {
@@ -276,6 +297,28 @@ void main() {
 
     expect(find.text('Good Morning, Mark'), findsOneWidget);
     expect(find.byKey(DashboardScreen.homeAvatarImageKey), findsOneWidget);
+  });
+
+  testWidgets('dashboard home header shows good afternoon at exact noon', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(
+      tester,
+      clock: () => DateTime(2026, 4, 13, 12),
+    );
+
+    expect(find.text('Good Afternoon, Mark'), findsOneWidget);
+  });
+
+  testWidgets('dashboard home header shows good evening at 6 PM', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(
+      tester,
+      clock: () => DateTime(2026, 4, 13, 18),
+    );
+
+    expect(find.text('Good Evening, Mark'), findsOneWidget);
   });
 
   testWidgets('profile tab shows dynamic stats and static account sections', (

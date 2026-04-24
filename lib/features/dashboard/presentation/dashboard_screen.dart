@@ -22,8 +22,14 @@ import '../../task_management/presentation/task_management_screen.dart';
 import '../../task_management/presentation/task_management_ui.dart';
 import '../../spaces/presentation/spaces_page.dart';
 
+typedef DashboardClock = DateTime Function();
+
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, required this.displayNameStore});
+  const DashboardScreen({
+    super.key,
+    required this.displayNameStore,
+    this.clock = DateTime.now,
+  });
 
   static const Key markerKey = Key('dashboard-screen');
   static const Key homeTabKey = Key('dashboard-home-tab');
@@ -75,6 +81,7 @@ class DashboardScreen extends StatefulWidget {
   static Key summaryCountKey(String label) => Key('summary-count-$label');
 
   final DisplayNameStore displayNameStore;
+  final DashboardClock clock;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -464,6 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     theme: theme,
                     displayName: _displayName,
                     profileImageData: _profileImageData,
+                    clock: widget.clock,
                     controller: taskController,
                     isTodayExpanded: _isTodayExpanded,
                     isUpcomingExpanded: _isUpcomingExpanded,
@@ -560,6 +568,7 @@ class _DashboardHomeTab extends StatelessWidget {
     required this.theme,
     required this.displayName,
     required this.profileImageData,
+    required this.clock,
     required this.controller,
     required this.isTodayExpanded,
     required this.isUpcomingExpanded,
@@ -576,6 +585,7 @@ class _DashboardHomeTab extends StatelessWidget {
   final ThemeData theme;
   final String? displayName;
   final String? profileImageData;
+  final DashboardClock clock;
   final TaskManagementController controller;
   final bool isTodayExpanded;
   final bool isUpcomingExpanded;
@@ -590,7 +600,7 @@ class _DashboardHomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = clock();
     final tasks = controller.tasks;
     final pendingTasks = tasks.where((task) => !task.isCompleted).toList();
     final completedTasks = tasks.where((task) => task.isCompleted).toList()
@@ -625,9 +635,9 @@ class _DashboardHomeTab extends StatelessWidget {
         children: [
           _HeaderRow(
             theme: theme,
-            displayName: displayName,
+            greeting: _buildDashboardGreeting(displayName: displayName, now: now),
             profileImageData: profileImageData,
-            dateLabel: _formatDate(DateTime.now()),
+            dateLabel: _formatDate(now),
           ),
           const SizedBox(height: AppSpacing.six),
           _ProgressCard(
@@ -786,16 +796,38 @@ class _DashboardHomeTab extends StatelessWidget {
   }
 }
 
+String _buildDashboardGreeting({
+  required String? displayName,
+  required DateTime now,
+}) {
+  final greeting = _resolveGreetingForHour(now.hour);
+  final trimmedName = displayName?.trim();
+  if (trimmedName == null || trimmedName.isEmpty) {
+    return greeting;
+  }
+  return '$greeting, $trimmedName';
+}
+
+String _resolveGreetingForHour(int hour) {
+  if (hour >= 12 && hour < 18) {
+    return 'Good Afternoon';
+  }
+  if (hour >= 18) {
+    return 'Good Evening';
+  }
+  return 'Good Morning';
+}
+
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
     required this.theme,
-    required this.displayName,
+    required this.greeting,
     required this.profileImageData,
     required this.dateLabel,
   });
 
   final ThemeData theme;
-  final String? displayName;
+  final String greeting;
   final String? profileImageData;
   final String dateLabel;
 
@@ -808,9 +840,7 @@ class _HeaderRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                displayName == null || displayName!.isEmpty
-                    ? 'Good Morning'
-                    : 'Good Morning, $displayName',
+                greeting,
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: AppColors.titleText,
                   fontSize: AppTypography.sizeLg,

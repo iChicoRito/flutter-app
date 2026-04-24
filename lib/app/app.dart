@@ -32,6 +32,7 @@ class MyApp extends StatefulWidget {
     TaskRepository? taskRepository,
     TaskReminderService? reminderService,
     VaultService? vaultService,
+    DashboardClock? dashboardClock,
   }) : onboardingStatusStore =
            onboardingStatusStore ??
            const SharedPreferencesOnboardingStatusStore(),
@@ -39,13 +40,15 @@ class MyApp extends StatefulWidget {
            displayNameStore ?? const SharedPreferencesDisplayNameStore(),
        taskRepository = taskRepository ?? InMemoryTaskRepository(),
        reminderService = reminderService ?? const NoopTaskReminderService(),
-       vaultService = vaultService ?? LocalVaultService();
+       vaultService = vaultService ?? LocalVaultService(),
+       dashboardClock = dashboardClock ?? DateTime.now;
 
   final OnboardingStatusStore onboardingStatusStore;
   final DisplayNameStore displayNameStore;
   final TaskRepository taskRepository;
   final TaskReminderService reminderService;
   final VaultService vaultService;
+  final DashboardClock dashboardClock;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -303,6 +306,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               home: _InitialLaunchGate(
                 onboardingStatusStore: widget.onboardingStatusStore,
                 displayNameStore: widget.displayNameStore,
+                dashboardClock: widget.dashboardClock,
               ),
             ),
           ),
@@ -316,10 +320,12 @@ class _InitialLaunchGate extends StatelessWidget {
   const _InitialLaunchGate({
     required this.onboardingStatusStore,
     required this.displayNameStore,
+    required this.dashboardClock,
   });
 
   final OnboardingStatusStore onboardingStatusStore;
   final DisplayNameStore displayNameStore;
+  final DashboardClock dashboardClock;
 
   @override
   Widget build(BuildContext context) {
@@ -333,7 +339,10 @@ class _InitialLaunchGate extends StatelessWidget {
         }
 
         if (snapshot.data ?? false) {
-          return DashboardScreen(displayNameStore: displayNameStore);
+          return DashboardScreen(
+            displayNameStore: displayNameStore,
+            clock: dashboardClock,
+          );
         }
 
         return OnboardingScreen(

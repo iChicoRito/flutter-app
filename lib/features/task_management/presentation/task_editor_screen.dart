@@ -62,7 +62,14 @@ class TaskEditorScreen extends StatefulWidget {
   State<TaskEditorScreen> createState() => _TaskEditorScreenState();
 }
 
-enum _EditorMenuAction { viewDetails, edit, archive, delete }
+enum _EditorMenuAction {
+  viewDetails,
+  readMode,
+  editMode,
+  editDetails,
+  archive,
+  delete,
+}
 
 class _TaskEditorScreenState extends State<TaskEditorScreen> {
   final _titleController = TextEditingController();
@@ -78,6 +85,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
   bool _isHydrating = false;
   bool _isPersisting = false;
   bool _hasPendingChanges = false;
+  bool _isReadMode = false;
   String? _loadError;
 
   @override
@@ -167,6 +175,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final noteController = quill.QuillController(
       document: document,
       selection: const TextSelection.collapsed(offset: 0),
+      readOnly: _isReadMode,
     );
     noteController.addListener(_scheduleAutosave);
     _noteController = noteController;
@@ -348,13 +357,32 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       return;
     }
 
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: AppOpacity.overlay30),
       builder: (context) => _TaskDetailsDialog(
         task: task,
         category: _categoryFor(task.categoryId),
       ),
     );
+  }
+
+  void _setEditorMode({required bool readOnly}) {
+    final noteController = _noteController;
+    if (noteController == null || _isReadMode == readOnly) {
+      return;
+    }
+
+    noteController.readOnly = readOnly;
+    if (readOnly) {
+      _editorFocusNode.unfocus();
+    }
+    setState(() {
+      _isReadMode = readOnly;
+    });
   }
 
   Future<void> _deleteTask() async {
@@ -633,40 +661,39 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         key: TaskEditorScreen.markerKey,
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          toolbarHeight: 86,
+          toolbarHeight: 72,
           backgroundColor: AppColors.cardFill,
           surfaceTintColor: AppColors.cardFill,
+          scrolledUnderElevation: 0,
           leading: IconButton(
             onPressed: () async {
               if (await _flushBeforeExit() && context.mounted) {
                 Navigator.of(context).pop();
               }
             },
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: const Icon(
+              TablerIcons.chevron_left,
+              color: AppColors.subHeaderText,
+              size: AppTypography.sizeLg,
+            ),
+            splashRadius: AppSpacing.five,
+            constraints: const BoxConstraints.tightFor(
+              width: AppSpacing.six,
+              height: AppSpacing.six,
+            ),
+            padding: EdgeInsets.zero,
           ),
-          titleSpacing: 4,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                widget.appBarTitle,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: taskMutedText,
-                  fontWeight: AppTypography.weightSemibold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                task?.title ?? 'Task Title',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: taskDarkText,
-                  fontWeight: AppTypography.weightSemibold,
-                ),
-              ),
-            ],
+          leadingWidth: 40,
+          titleSpacing: AppSpacing.one,
+          title: Text(
+            task?.title ?? 'Task Title',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: taskDarkText,
+              fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+            ),
           ),
           actions: [
             if (_hasVaultProtection)
@@ -711,7 +738,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   switch (value) {
                     case _EditorMenuAction.viewDetails:
                       _showDetailsDialog();
-                    case _EditorMenuAction.edit:
+                    case _EditorMenuAction.readMode:
+                      _setEditorMode(readOnly: true);
+                    case _EditorMenuAction.editMode:
+                      _setEditorMode(readOnly: false);
+                    case _EditorMenuAction.editDetails:
                       _openDetailsSheet();
                     case _EditorMenuAction.archive:
                       _archiveTask();
@@ -728,10 +759,29 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                       label: 'View Details',
                     ),
                   ),
+                  if (!_isReadMode)
+                    const PopupMenuItem<_EditorMenuAction>(
+                      value: _EditorMenuAction.readMode,
+                      child: TaskMenuEntry(
+                        icon: TablerIcons.book,
+                        label: 'Read Mode',
+                      ),
+                    ),
+                  if (_isReadMode)
+                    const PopupMenuItem<_EditorMenuAction>(
+                      value: _EditorMenuAction.editMode,
+                      child: TaskMenuEntry(
+                        icon: TablerIcons.pencil,
+                        label: 'Edit Mode',
+                      ),
+                    ),
                   const PopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.editDetailsButtonKey,
-                    value: _EditorMenuAction.edit,
-                    child: TaskMenuEntry(icon: TablerIcons.edit, label: 'Edit'),
+                    value: _EditorMenuAction.editDetails,
+                    child: TaskMenuEntry(
+                      icon: TablerIcons.edit,
+                      label: 'Edit Details',
+                    ),
                   ),
                   const PopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.archiveButtonKey,
@@ -794,57 +844,59 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               controller: noteController,
               focusNode: _editorFocusNode,
               scrollController: _editorScrollController,
-              config: const quill.QuillEditorConfig(
+              config: quill.QuillEditorConfig(
                 placeholder: 'Start writing your notes...',
-                padding: EdgeInsets.fromLTRB(20, 18, 20, 32),
+                showCursor: !_isReadMode,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
               ),
             ),
           ),
         ),
-        Container(
-          decoration: const BoxDecoration(
-            color: AppColors.cardFill,
-            border: Border(top: BorderSide(color: AppColors.cardBorder)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-              child: quill.QuillSimpleToolbar(
-                controller: noteController,
-                config: const quill.QuillSimpleToolbarConfig(
-                  multiRowsDisplay: false,
-                  toolbarSize: 30,
-                  showDividers: true,
-                  showFontFamily: false,
-                  showFontSize: false,
-                  showBoldButton: true,
-                  showItalicButton: true,
-                  showUnderLineButton: true,
-                  showStrikeThrough: false,
-                  showInlineCode: false,
-                  showColorButton: false,
-                  showBackgroundColorButton: false,
-                  showClearFormat: true,
-                  showAlignmentButtons: false,
-                  showHeaderStyle: true,
-                  showListNumbers: true,
-                  showListBullets: true,
-                  showListCheck: false,
-                  showCodeBlock: false,
-                  showQuote: false,
-                  showIndent: false,
-                  showLink: true,
-                  showUndo: false,
-                  showRedo: false,
-                  showSearchButton: false,
-                  showSubscript: false,
-                  showSuperscript: false,
+        if (!_isReadMode)
+          Container(
+            decoration: const BoxDecoration(
+              color: AppColors.cardFill,
+              border: Border(top: BorderSide(color: AppColors.cardBorder)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: quill.QuillSimpleToolbar(
+                  controller: noteController,
+                  config: const quill.QuillSimpleToolbarConfig(
+                    multiRowsDisplay: false,
+                    toolbarSize: 30,
+                    showDividers: true,
+                    showFontFamily: false,
+                    showFontSize: false,
+                    showBoldButton: true,
+                    showItalicButton: true,
+                    showUnderLineButton: true,
+                    showStrikeThrough: false,
+                    showInlineCode: false,
+                    showColorButton: false,
+                    showBackgroundColorButton: false,
+                    showClearFormat: true,
+                    showAlignmentButtons: false,
+                    showHeaderStyle: true,
+                    showListNumbers: true,
+                    showListBullets: true,
+                    showListCheck: false,
+                    showCodeBlock: false,
+                    showQuote: false,
+                    showIndent: false,
+                    showLink: true,
+                    showUndo: false,
+                    showRedo: false,
+                    showSearchButton: false,
+                    showSubscript: false,
+                    showSuperscript: false,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -860,113 +912,151 @@ class _TaskDetailsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final description = task.description?.trim().isNotEmpty == true
         ? task.description!.trim()
-        : 'No short description added yet.';
-    final detailChips = <Widget>[
-      _InfoPill(
-        icon: TablerIcons.calendar_event,
-        label: 'Created ${_formatDateTime(task.createdAt)}',
-      ),
-      _InfoPill(
-        icon: TablerIcons.clock_edit,
-        label: 'Updated ${_formatDateTime(task.updatedAt)}',
-      ),
-      _InfoPill(icon: TablerIcons.flag_3, label: _priorityLabel(task.priority)),
-      _InfoPill(icon: TablerIcons.calendar_due, label: _scheduleLabel(task)),
-    ];
+        : 'Task Short Description Here';
 
-    return Dialog(
-      key: TaskEditorScreen.metadataCardKey,
-      backgroundColor: AppColors.cardFill,
-      surfaceTintColor: AppColors.cardFill,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.threeXl),
-        side: const BorderSide(color: AppColors.cardBorder),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        key: TaskEditorScreen.metadataCardKey,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadii.threeXl),
+          ),
+          border: Border(
+            top: BorderSide(color: AppColors.cardBorder),
+            left: BorderSide(color: AppColors.cardBorder),
+            right: BorderSide(color: AppColors.cardBorder),
+          ),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Task Details',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: taskDarkText,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(
-                    TablerIcons.x,
-                    size: 18,
-                    color: taskMutedText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (category != null) ...[
-                  const SizedBox(width: 10),
-                  _TaskDetailsBadge(category: category!),
-                ],
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: taskMutedText,
-                fontWeight: FontWeight.w500,
+            const SizedBox(height: AppSpacing.six),
+            Container(
+              width: 108,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppColors.neutral100,
+                borderRadius: BorderRadius.circular(AppRadii.full),
               ),
             ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: Wrap(spacing: 10, runSpacing: 12, children: detailChips),
-            ),
-            const SizedBox(height: 20),
-            const Divider(height: 1, thickness: 1, color: taskBorderColor),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: taskButtonStyle(
-                  context,
-                  role: TaskButtonRole.ghost,
-                  size: TaskButtonSize.small,
-                  minimumSize: const Size.fromHeight(40),
-                ),
-                child: const Text('Close'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.six,
+                AppSpacing.six,
+                AppSpacing.six,
+                AppSpacing.six,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              task.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: AppColors.titleText,
+                                    fontSize: AppTypography.sizeLg,
+                                    fontWeight: AppTypography.weightSemibold,
+                                  ),
+                            ),
+                            const SizedBox(height: AppSpacing.three),
+                            Text(
+                              description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: AppColors.subHeaderText,
+                                    fontSize: AppTypography.sizeBase,
+                                    fontWeight: AppTypography.weightNormal,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.three),
+                      _TaskDetailsBadge(category: category),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.six),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.five,
+                      vertical: AppSpacing.five,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardFill,
+                      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                      border: Border.all(color: AppColors.cardBorder),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _TaskDetailsMetric(
+                                label: 'Priority',
+                                value: _priorityValueLabel(task.priority),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.five),
+                            Expanded(
+                              child: _TaskDetailsMetric(
+                                label: 'Category',
+                                value: category?.name ?? 'Uncategorized',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.five),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _TaskDetailsMetric(
+                                label: 'Target Date',
+                                value: _targetDateLabel(task),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.five),
+                            Expanded(
+                              child: _TaskDetailsMetric(
+                                label: 'Target Time',
+                                value: _targetTimeLabel(task),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.six),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: taskButtonStyle(
+                        context,
+                        role: TaskButtonRole.ghost,
+                        size: TaskButtonSize.large,
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                      child: const Text('Close'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -975,140 +1065,127 @@ class _TaskDetailsDialog extends StatelessWidget {
     );
   }
 
-  static String _priorityLabel(TaskPriority priority) {
+  static String _priorityValueLabel(TaskPriority priority) {
     return switch (priority) {
-      TaskPriority.low => 'Low priority',
-      TaskPriority.medium => 'Medium priority',
-      TaskPriority.high => 'High priority',
-      TaskPriority.urgent => 'Urgent priority',
+      TaskPriority.low => 'Low',
+      TaskPriority.medium => 'Medium',
+      TaskPriority.high => 'High',
+      TaskPriority.urgent => 'Urgent',
     };
   }
 
-  static String _scheduleLabel(TaskItem task) {
-    final start = task.startDateTime;
-    final end = task.endDateTime;
+  static String _targetDateLabel(TaskItem task) {
+    final end = task.endDate;
     if (end == null) {
-      return 'No schedule';
+      return 'No Date';
     }
-    if (start != null) {
-      if (_isSameDay(start, end)) {
-        return '${_shortDate(start)} • ${_shortTime(end)}';
-      }
-      return '${_shortDate(start)} - ${_shortDate(end)}';
-    }
-    if (start != null) {
-      return 'Starts ${_shortDate(start)}';
-    }
-    return 'Due ${_shortDate(end)} at ${_shortTime(end)}';
+    return _fullDate(end);
   }
 
-  static String _formatDateTime(DateTime value) {
-    return '${_shortDate(value)} • ${_shortTime(value)}';
-  }
-
-  static String _shortDate(DateTime value) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[value.month - 1]} ${value.day}, ${value.year}';
-  }
-
-  static String _shortTime(DateTime value) {
-    final hour = value.hour == 0
-        ? 12
-        : (value.hour > 12 ? value.hour - 12 : value.hour);
-    final minute = value.minute.toString().padLeft(2, '0');
-    final suffix = value.hour >= 12 ? 'PM' : 'AM';
+  static String _targetTimeLabel(TaskItem task) {
+    final minutes = task.endMinutes;
+    if (minutes == null) {
+      return 'No Time';
+    }
+    final hour24 = minutes ~/ 60;
+    final minute = (minutes % 60).toString().padLeft(2, '0');
+    final hour = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+    final suffix = hour24 >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $suffix';
   }
 
-  static bool _isSameDay(DateTime left, DateTime right) {
-    return left.year == right.year &&
-        left.month == right.month &&
-        left.day == right.day;
+  static String _fullDate(DateTime value) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${months[value.month - 1]} ${value.day}, ${value.year}';
+  }
+}
+
+class _TaskDetailsMetric extends StatelessWidget {
+  const _TaskDetailsMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: AppColors.titleText,
+            fontSize: AppTypography.sizeBase,
+            fontWeight: AppTypography.weightSemibold,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.one),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.subHeaderText,
+            fontSize: AppTypography.sizeBase,
+            fontWeight: AppTypography.weightNormal,
+          ),
+        ),
+      ],
+    );
   }
 }
 
 class _TaskDetailsBadge extends StatelessWidget {
   const _TaskDetailsBadge({required this.category});
 
-  final TaskCategory category;
+  final TaskCategory? category;
 
   @override
   Widget build(BuildContext context) {
+    final resolvedColor = category?.color ?? AppColors.secondaryBadgeText;
+    final resolvedLabel = category?.name ?? 'Uncategorized';
+    final resolvedIcon = category == null
+        ? TablerIcons.tag
+        : resolveTaskCategoryIcon(category!.iconKey);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.three,
+        vertical: AppSpacing.two,
+      ),
       decoration: BoxDecoration(
-        color: category.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: category.color.withValues(alpha: 0.18)),
+        color: resolvedColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadii.full),
+        border: Border.all(color: resolvedColor.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            resolveTaskCategoryIcon(category.iconKey),
-            size: 11,
-            color: category.color,
-          ),
-          const SizedBox(width: 4),
+          Icon(resolvedIcon, size: 12, color: resolvedColor),
+          const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
-            category.name,
+            resolvedLabel,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: category.color,
-              fontWeight: FontWeight.w700,
+              color: resolvedColor,
+              fontWeight: AppTypography.weightMedium,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 260, minHeight: 40),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.checkboxCardFill,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: taskPrimaryBlue),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: taskDarkText,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

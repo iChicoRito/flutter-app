@@ -1286,6 +1286,233 @@ void main() {
     expect(find.text('Urgent'), findsWidgets);
   });
 
+  testWidgets('editor menu exposes read mode, edit mode, and edit details', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'mode-menu-task',
+          title: 'Mode Menu Task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(repository: taskRepository, taskId: 'mode-menu-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('View Details'), findsOneWidget);
+    expect(find.text('Read Mode'), findsOneWidget);
+    expect(find.text('Edit Mode'), findsNothing);
+    expect(find.text('Edit Details'), findsOneWidget);
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Edit'), findsNothing);
+  });
+
+  testWidgets('read mode locks the note editor and hides formatting tools', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'read-mode-task',
+          title: 'Read Mode Task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          noteText: 'Read-only body',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(repository: taskRepository, taskId: 'read-mode-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(QuillSimpleToolbar), findsOneWidget);
+
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Read Mode'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+
+    final editor = tester.widget<QuillEditor>(
+      find.byKey(TaskEditorScreen.editorBodyKey),
+    );
+    expect(editor.controller.readOnly, isTrue);
+    expect(find.byType(QuillSimpleToolbar), findsNothing);
+    expect(find.text('Read Mode'), findsNothing);
+    expect(find.text('Edit Mode'), findsOneWidget);
+  });
+
+  testWidgets('edit mode restores note editing and formatting tools', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'edit-mode-task',
+          title: 'Edit Mode Task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          noteText: 'Editable body',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(repository: taskRepository, taskId: 'edit-mode-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Read Mode'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit Mode'));
+    await tester.pumpAndSettle();
+
+    final editor = tester.widget<QuillEditor>(
+      find.byKey(TaskEditorScreen.editorBodyKey),
+    );
+    expect(editor.controller.readOnly, isFalse);
+    expect(find.byType(QuillSimpleToolbar), findsOneWidget);
+  });
+
+  testWidgets('view details opens the task details bottom sheet', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'details-sheet-task',
+          title: 'Tasks Title Here',
+          priority: TaskPriority.high,
+          categoryId: 'finance',
+          description: 'Task Short Description Here',
+          endDate: DateTime(2026, 4, 16),
+          endMinutes: 630,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(
+          repository: taskRepository,
+          taskId: 'details-sheet-task',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskEditorScreen.viewDetailsButtonKey));
+    await tester.pumpAndSettle();
+
+    final detailsSheet = find.byKey(TaskEditorScreen.metadataCardKey);
+    expect(find.byKey(TaskEditorScreen.metadataCardKey), findsOneWidget);
+    expect(
+      find.descendant(
+        of: detailsSheet,
+        matching: find.text('Tasks Title Here'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: detailsSheet,
+        matching: find.text('Task Short Description Here'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Finance')),
+      findsNWidgets(2),
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Priority')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('High')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Category')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Finance')),
+      findsNWidgets(2),
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Target Date')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('April 16, 2026')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Target Time')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('10:30 AM')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detailsSheet, matching: find.text('Close')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('editor header uses the archive-style single line navbar', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'header-task',
+          title: 'Sample Tasks #1',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        TaskEditorScreen(repository: taskRepository, taskId: 'header-task'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sample Tasks #1'), findsOneWidget);
+    expect(find.text('Task Notes'), findsNothing);
+    expect(find.byIcon(TablerIcons.chevron_left), findsOneWidget);
+  });
+
   testWidgets('editor metadata changes autosave and update timestamps', (
     WidgetTester tester,
   ) async {
@@ -1635,6 +1862,7 @@ TaskItem buildTask({
   required String title,
   required TaskPriority priority,
   required String categoryId,
+  String? description,
   String? noteText,
   bool isCompleted = false,
   VaultConfig? vaultConfig,
@@ -1646,6 +1874,7 @@ TaskItem buildTask({
   return TaskItem(
     id: id,
     title: title,
+    description: description,
     priority: priority,
     categoryId: categoryId,
     createdAt: now,

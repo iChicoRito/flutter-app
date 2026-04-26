@@ -116,7 +116,7 @@ class _DisplayNamePromptDialogState extends State<DisplayNamePromptDialog> {
                   backgroundColor: AppColors.primaryButtonFill,
                   foregroundColor: AppColors.primaryButtonText,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    borderRadius: BorderRadius.circular(AppRadii.twoXl),
                   ),
                 ),
                 child: const Text('Get Started'),
@@ -211,7 +211,7 @@ class _WelcomeHandoffDialogState extends State<WelcomeHandoffDialog> {
                     backgroundColor: AppColors.primaryButtonFill,
                     foregroundColor: AppColors.primaryButtonText,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadii.lg),
+                      borderRadius: BorderRadius.circular(AppRadii.twoXl),
                     ),
                   ),
                   child: const Text('Let\'s Go'),

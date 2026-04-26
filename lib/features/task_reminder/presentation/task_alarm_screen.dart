@@ -5,6 +5,7 @@ import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/services/display_name_store.dart';
 import '../../../core/services/task_reminder_service.dart';
 import '../../task_management/data/task_note_codec.dart';
@@ -288,7 +289,7 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
                           backgroundColor: const Color(0xFF066FD1),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(AppRadii.twoXl),
                           ),
                         ),
                         child: Text(

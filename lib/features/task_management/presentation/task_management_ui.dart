@@ -95,9 +95,9 @@ double taskButtonHeight(TaskButtonSize size) {
 
 double taskButtonRadius(TaskButtonSize size) {
   return switch (size) {
-    TaskButtonSize.large => AppRadii.xl,
-    TaskButtonSize.medium => AppRadii.xl,
-    TaskButtonSize.small => AppRadii.xl,
+    TaskButtonSize.large => AppRadii.twoXl,
+    TaskButtonSize.medium => AppRadii.twoXl,
+    TaskButtonSize.small => AppRadii.twoXl,
   };
 }
 

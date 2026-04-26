@@ -130,7 +130,7 @@ class AppDecisionDialog extends StatelessWidget {
                       backgroundColor: AppColors.neutral200,
                       foregroundColor: AppColors.titleText,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadii.lg),
+                        borderRadius: BorderRadius.circular(AppRadii.twoXl),
                       ),
                     ),
                     child: Text(secondaryLabel),
@@ -147,7 +147,7 @@ class AppDecisionDialog extends StatelessWidget {
                       backgroundColor: _primaryFill,
                       foregroundColor: _primaryText,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadii.lg),
+                        borderRadius: BorderRadius.circular(AppRadii.twoXl),
                       ),
                     ),
                     child: Text(primaryLabel),

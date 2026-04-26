@@ -369,7 +369,7 @@ ButtonStyle _vaultPrimaryButtonStyle({
     backgroundColor: backgroundColor ?? AppColors.primaryButtonFill,
     foregroundColor: foregroundColor ?? AppColors.primaryButtonText,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(AppRadii.xl),
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
     ),
     textStyle: const TextStyle(
       fontSize: AppTypography.sizeBase,
@@ -633,6 +633,9 @@ class _VaultSecretDialogState extends State<_VaultSecretDialog> {
                 ).pop(const _VaultSecretDialogResult.recovery()),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.titleText,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                  ),
                   textStyle: const TextStyle(
                     fontSize: AppTypography.sizeBase,
                     fontWeight: AppTypography.weightMedium,
@@ -958,6 +961,9 @@ class _VaultResetSecretDialogState extends State<_VaultResetSecretDialog> {
                 onPressed: () => Navigator.of(context).pop(),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.titleText,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                  ),
                   textStyle: const TextStyle(
                     fontSize: AppTypography.sizeBase,
                     fontWeight: AppTypography.weightMedium,

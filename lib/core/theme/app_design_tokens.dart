@@ -104,10 +104,17 @@ abstract final class AppRadii {
 abstract final class AppSizes {
   static const borderDefault = 1.0;
   static const onboardingMaxWidth = 420.0;
-  static const onboardingVisual = 144.0;
+  static const onboardingVisual = 360.0;
   static const onboardingVisualIcon = 54.0;
   static const onboardingDot = 8.0;
   static const onboardingButtonHeight = 54.0;
+  static const onboardingButtonRadius = 12.0;
+  static const onboardingActionHeight = 64.0;
+  static const onboardingContentMaxWidth = 390.0;
+  static const onboardingImageTextGap = 44.0;
+  static const onboardingTitleDescriptionGap = 12.0;
+  static const onboardingDescriptionIndicatorGap = 28.0;
+  static const onboardingIndicatorButtonGap = 24.0;
   static const progressIndicator = 20.0;
   static const progressStroke = 2.4;
 }

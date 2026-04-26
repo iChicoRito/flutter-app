@@ -348,6 +348,7 @@ class _InitialLaunchGate extends StatelessWidget {
         return OnboardingScreen(
           onboardingStatusStore: onboardingStatusStore,
           displayNameStore: displayNameStore,
+          dashboardClock: dashboardClock,
         );
       },
     );

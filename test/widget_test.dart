@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +27,7 @@ import 'package:flutter_app/features/task_management/presentation/task_creation_
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
 void main() {
@@ -105,37 +107,98 @@ void main() {
     expect(find.text('Good Morning, Mark'), findsOneWidget);
   });
 
-  testWidgets('onboarding shows the new RemindLy copy and matching icons', (
+  testWidgets('onboarding shows the new RemindLy copy and matching SVG assets', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
     await tester.pumpAndSettle();
 
+    Future<void> expectOnboardingAsset(String assetPath) async {
+      final svg = tester.widget<SvgPicture>(find.byType(SvgPicture));
+      final loader = svg.bytesLoader;
+
+      expect(loader, isA<SvgAssetLoader>());
+      expect((loader as SvgAssetLoader).assetName, assetPath);
+      final assetBytes = await rootBundle.load(assetPath);
+      expect(assetBytes.lengthInBytes, greaterThan(0));
+    }
+
     expect(find.text('Welcome to RemindLy'), findsOneWidget);
-    expect(find.byIcon(Icons.task_alt_rounded), findsOneWidget);
+    expect(
+      find.text(
+        'Your smart task companion that helps you remember what matters.',
+      ),
+      findsOneWidget,
+    );
+    await expectOnboardingAsset('assets/svgs/on-board/on-board-icon-1.svg');
+    expect(find.text('Next'), findsOneWidget);
+    expect(find.text('Back'), findsNothing);
+    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(find.byKey(OnboardingScreen.pageIndicatorKey), findsOneWidget);
+    final indicatorRow = tester.widget<Row>(
+      find.byKey(OnboardingScreen.pageIndicatorKey),
+    );
+    expect(indicatorRow.children, hasLength(4));
+    final dotFinder = find.descendant(
+      of: find.byKey(OnboardingScreen.pageIndicatorKey),
+      matching: find.byType(AnimatedContainer),
+    );
+    expect(dotFinder, findsNWidgets(4));
+    final dotSizes = List.generate(
+      4,
+      (index) => tester.getSize(dotFinder.at(index)),
+    );
+    final activeDots = dotSizes.where(
+      (size) => size.width == AppSizes.onboardingDot * 3,
+    );
+    expect(activeDots, hasLength(1));
+    expect(find.byIcon(Icons.task_alt_rounded), findsNothing);
+    expect(find.byIcon(Icons.edit_note_rounded), findsNothing);
+    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
+    expect(find.byIcon(Icons.timer_rounded), findsNothing);
     final onboardingScaffold = tester.widget<Scaffold>(
       find.byKey(OnboardingScreen.markerKey),
     );
-    final firstStepIcon = tester.widget<Icon>(
-      find.byIcon(Icons.task_alt_rounded),
-    );
     expect(onboardingScaffold.backgroundColor, AppColors.background);
-    expect(firstStepIcon.color, AppColors.primaryBadgeText);
 
-    await tester.tap(find.text('Get Started'));
+    await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Create Tasks Easily'), findsOneWidget);
-    expect(find.byIcon(Icons.edit_note_rounded), findsOneWidget);
+    expect(
+      find.text(
+        'Add tasks in seconds, organize them by category, and set priorities.',
+      ),
+      findsOneWidget,
+    );
+    await expectOnboardingAsset('assets/svgs/on-board/on-board-icon-2.svg');
+    expect(find.text('Next'), findsOneWidget);
+    expect(find.text('Back'), findsNothing);
 
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Never Miss a Reminder'), findsOneWidget);
-    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
+    expect(
+      find.text(
+        'Set reminders for your tasks and get notified right on time, even when you\'re offline.',
+      ),
+      findsOneWidget,
+    );
+    await expectOnboardingAsset('assets/svgs/on-board/on-board-icon-3.svg');
+    expect(find.text('Next'), findsOneWidget);
+    expect(find.text('Back'), findsNothing);
 
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Stay Focused & Productive'), findsOneWidget);
-    expect(find.byIcon(Icons.timer_rounded), findsOneWidget);
+    expect(
+      find.text(
+        'Use built-in timers to stay focused, manage your time better, and complete your tasks.',
+      ),
+      findsOneWidget,
+    );
+    await expectOnboardingAsset('assets/svgs/on-board/on-board-icon-4.svg');
+    expect(find.text('Continue'), findsOneWidget);
+    expect(find.text('Back'), findsNothing);
   });
 
   testWidgets(
@@ -144,7 +207,7 @@ void main() {
       await pumpApp(tester);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Get Started'));
+      await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
@@ -171,8 +234,7 @@ void main() {
 
       expect(find.byKey(DashboardScreen.welcomeButtonKey), findsOneWidget);
       await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
 
       expect(find.byKey(DashboardScreen.markerKey), findsOneWidget);
       expect(find.text('Good Morning, Mark'), findsOneWidget);

@@ -15,6 +15,7 @@ import 'package:flutter_app/features/archive/presentation/archives_screen.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
+import 'package:flutter_app/features/spaces/presentation/space_detail_screen.dart';
 import 'package:flutter_app/features/spaces/presentation/space_form_screen.dart';
 import 'package:flutter_app/features/spaces/presentation/spaces_page.dart';
 import 'package:flutter_app/shared/widgets/first_run_handoff_dialogs.dart';
@@ -993,6 +994,7 @@ void main() {
     expect(tasks.single.categoryId, 'personal');
     expect(tasks.single.standaloneCategoryId, 'work');
     expect(find.text('Task moved successfully.'), findsOneWidget);
+    expect(find.text('Space - Personal Space'), findsOneWidget);
 
     final movedTaskAccent = tester.widget<Container>(
       find.byKey(TaskManagementScreen.taskAccentKey('confirm-move-task')),
@@ -1090,6 +1092,13 @@ void main() {
       final restoredBadgeDecoration =
           restoredBadge.decoration! as BoxDecoration;
       expect(restoredBadgeDecoration.color, AppColors.blue100);
+      expect(
+        find.descendant(
+          of: find.byKey(TaskManagementScreen.taskBadgeKey('restore-task')),
+          matching: find.text('Work'),
+        ),
+        findsOneWidget,
+      );
     },
   );
 
@@ -2256,6 +2265,17 @@ void main() {
             priority: TaskPriority.high,
             categoryId: 'personal',
             description: 'Attach the April receipts',
+          ).copyWith(spaceId: 'gaming-space'),
+        ],
+        spaces: [
+          TaskSpace(
+            id: 'gaming-space',
+            name: 'Gaming',
+            description: 'Play sessions',
+            categoryId: 'personal',
+            colorValue: AppColors.blue500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
           ),
         ],
       );
@@ -2302,6 +2322,7 @@ void main() {
       expect(find.text('Check blockers before standup'), findsOneWidget);
       expect(find.text('Buy another bottle tonight'), findsOneWidget);
       expect(find.text('Attach the April receipts'), findsOneWidget);
+      expect(find.text('Space - Gaming'), findsOneWidget);
       expect(find.text('Apr 26 • 10:39 AM'), findsOneWidget);
       expect(find.text('Not Set Yet'), findsNWidgets(3));
       expect(
@@ -2314,6 +2335,12 @@ void main() {
       );
       final mediumBadgeDecoration = mediumBadge.decoration! as BoxDecoration;
       expect(mediumBadgeDecoration.color, AppColors.amber100);
+
+      final scheduledLabel = tester.widget<Text>(
+        find.textContaining('10:39 AM'),
+      );
+      expect(scheduledLabel.style?.fontSize, AppTypography.sizeSm);
+      expect(scheduledLabel.overflow, isNull);
 
       final lowAccent = tester.widget<Container>(
         find.byKey(TaskManagementScreen.taskAccentKey('low-task')),
@@ -2463,6 +2490,70 @@ void main() {
 
       expect(searchTop - subtitleBottom, lessThan(80));
       expect(firstCardTop - searchTop, lessThan(260));
+    },
+  );
+
+  testWidgets(
+    'space detail keeps showing tasks when the passed space category is stale',
+    (WidgetTester tester) async {
+      final now = DateTime(2026, 4, 13, 9);
+      final staleSpace = TaskSpace(
+        id: 'space-1',
+        name: 'Client Work',
+        description: 'Old category snapshot',
+        categoryId: 'work',
+        colorValue: AppColors.blue500.toARGB32(),
+        createdAt: now,
+        updatedAt: now,
+      );
+      taskRepository = InMemoryTaskRepository(
+        categories: [
+          TaskCategory(
+            id: 'work',
+            name: 'Work',
+            iconKey: 'briefcase',
+            colorValue: AppColors.blue500.toARGB32(),
+            createdAt: now,
+          ),
+          TaskCategory(
+            id: 'personal',
+            name: 'Personal',
+            iconKey: 'user',
+            colorValue: AppColors.teal500.toARGB32(),
+            createdAt: now,
+          ),
+        ],
+        tasks: [
+          buildTask(
+            id: 'space-detail-task',
+            title: 'Aligned space task',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+          ).copyWith(spaceId: 'space-1'),
+        ],
+        spaces: [
+          staleSpace.copyWith(
+            categoryId: 'personal',
+            colorValue: AppColors.teal500.toARGB32(),
+            updatedAt: now.add(const Duration(minutes: 1)),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        wrapWithMaterial(
+          SpaceDetailScreen(
+            repository: taskRepository,
+            reminderService: const NoopTaskReminderService(),
+            space: staleSpace,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aligned space task'), findsOneWidget);
+      expect(find.text('Client Work'), findsOneWidget);
+      expect(find.text('Space - Client Work'), findsOneWidget);
     },
   );
 

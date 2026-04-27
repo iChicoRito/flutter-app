@@ -146,9 +146,16 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     });
   }
 
+  TaskSpace? get _currentSpace {
+    final liveSpace = _controller.spaceFor(widget.fixedSpaceId);
+    return liveSpace ?? widget.space;
+  }
+
+  String? get _effectiveLockedCategoryId =>
+      _currentSpace?.categoryId ?? widget.lockedCategoryId;
+
   bool get _isCurrentSpaceUnlocked {
-    final currentSpace =
-        widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
+    final currentSpace = _currentSpace;
     if (currentSpace?.vaultConfig?.isEnabled != true) {
       return false;
     }
@@ -158,8 +165,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   Future<void> _toggleCurrentSpaceVault() async {
-    final currentSpace =
-        widget.space ?? _controller.spaceFor(widget.fixedSpaceId);
+    final currentSpace = _currentSpace;
     if (currentSpace?.vaultConfig?.isEnabled != true) {
       return;
     }
@@ -234,7 +240,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         builder: (context) => TaskCreationScreen(
           repository: widget.repository,
           categories: _controller.categories,
-          lockedCategoryId: widget.lockedCategoryId,
+          lockedCategoryId: _effectiveLockedCategoryId,
           spaceId: widget.fixedSpaceId,
           appBarTitle: widget.fixedSpaceId == null
               ? 'Add Task'
@@ -392,7 +398,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         builder: (context) => TaskEditorScreen(
           repository: widget.repository,
           taskId: taskId,
-          lockedCategoryId: widget.lockedCategoryId,
+          lockedCategoryId: _effectiveLockedCategoryId,
           fixedSpaceId: widget.fixedSpaceId,
           appBarTitle: widget.fixedSpaceId == null
               ? 'Task Notes'
@@ -761,15 +767,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         appBar: widget.appBarTitle == null
             ? null
             : AppBar(
-                title: Text(widget.appBarTitle!),
+                title: Text(_currentSpace?.name ?? widget.appBarTitle!),
                 backgroundColor: AppColors.cardFill,
                 surfaceTintColor: AppColors.cardFill,
                 actions: [
-                  if ((widget.space ??
-                              _controller.spaceFor(widget.fixedSpaceId))
-                          ?.vaultConfig
-                          ?.isEnabled ==
-                      true)
+                  if (_currentSpace?.vaultConfig?.isEnabled == true)
                     Padding(
                       padding: const EdgeInsets.only(right: 12),
                       child: Material(
@@ -840,7 +842,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                   controller: _searchController,
                                   onChanged: _controller.updateSearchQuery,
                                 ),
-                                if (widget.lockedCategoryId == null) ...[
+                                if (_effectiveLockedCategoryId == null) ...[
                                   const SizedBox(height: AppSpacing.three),
                                   _CategoryFilterRow(
                                     categories: _controller.categories,
@@ -877,7 +879,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                       controller: _searchController,
                                       onChanged: _controller.updateSearchQuery,
                                     ),
-                                    if (widget.lockedCategoryId == null) ...[
+                                    if (_effectiveLockedCategoryId == null) ...[
                                       const SizedBox(height: AppSpacing.three),
                                       _CategoryFilterRow(
                                         categories: _controller.categories,
@@ -1631,38 +1633,35 @@ class _TaskCard extends StatelessWidget {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                if (category != null)
-                                  _CategoryBadge(
-                                    taskId: task.id,
-                                    category: category!,
-                                    appearance: appearance,
-                                  )
-                                else if (space != null)
-                                  _SpaceBadge(
-                                    taskId: task.id,
-                                    space: space!,
-                                    appearance: appearance,
-                                  ),
-                                const Spacer(),
-                                Flexible(
+                                Expanded(
                                   child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Text(
-                                      scheduleLabel,
-                                      maxLines: 1,
-                                      textAlign: TextAlign.right,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: AppColors.subHeaderText,
-                                            fontSize: AppTypography.sizeBase,
-                                            fontWeight:
-                                                AppTypography.weightNormal,
-                                          ),
-                                    ),
+                                    alignment: Alignment.centerLeft,
+                                    child: space != null
+                                        ? _SpaceBadge(
+                                            taskId: task.id,
+                                            space: space!,
+                                            appearance: appearance,
+                                          )
+                                        : category != null
+                                        ? _CategoryBadge(
+                                            taskId: task.id,
+                                            category: category!,
+                                            appearance: appearance,
+                                          )
+                                        : const SizedBox.shrink(),
                                   ),
+                                ),
+                                const SizedBox(width: AppSpacing.three),
+                                Text(
+                                  scheduleLabel,
+                                  maxLines: 1,
+                                  textAlign: TextAlign.right,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.subHeaderText,
+                                        fontSize: AppTypography.sizeSm,
+                                        fontWeight: AppTypography.weightNormal,
+                                      ),
                                 ),
                               ],
                             ),
@@ -1797,11 +1796,15 @@ class _SpaceBadge extends StatelessWidget {
             color: appearance.badgeForegroundColor,
           ),
           const SizedBox(width: AppSpacing.oneAndHalf),
-          Text(
-            space.name,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: appearance.badgeForegroundColor,
-              fontWeight: AppTypography.weightSemibold,
+          Flexible(
+            child: Text(
+              'Space - ${space.name}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: appearance.badgeForegroundColor,
+                fontWeight: AppTypography.weightSemibold,
+              ),
             ),
           ),
         ],

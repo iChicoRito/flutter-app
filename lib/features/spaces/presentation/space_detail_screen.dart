@@ -27,7 +27,6 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
     widget.repository,
     reminderService: widget.reminderService,
     fixedSpaceId: widget.space.id,
-    lockedCategoryId: widget.space.categoryId,
   )..load();
 
   @override

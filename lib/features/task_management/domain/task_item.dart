@@ -80,6 +80,13 @@ class TaskItem {
   }
 
   TaskItem normalizedSingleSchedule() {
+    if (startDate != null &&
+        startMinutes != null &&
+        endDate != null &&
+        endMinutes != null) {
+      return this;
+    }
+
     final targetDate = endDate ?? startDate;
     final targetMinutes = endMinutes ?? startMinutes;
 

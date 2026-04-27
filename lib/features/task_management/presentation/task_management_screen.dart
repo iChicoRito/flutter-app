@@ -12,10 +12,12 @@ import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
+import 'task_calendar_view.dart';
 import 'task_creation_sheet.dart';
 import 'task_editor_screen.dart';
 import 'task_management_controller.dart';
 import 'task_management_ui.dart';
+import 'task_schedule_sheet.dart';
 
 class TaskManagementScreen extends StatefulWidget {
   const TaskManagementScreen({
@@ -56,6 +58,41 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key createPriorityFieldKey = Key('task-create-priority-field');
   static const Key createCategoryFieldKey = Key('task-create-category-field');
   static const Key createSubmitButtonKey = Key('task-create-submit-button');
+  static const Key tasksSegmentKey = Key('task-view-segment-tasks');
+  static const Key calendarSegmentKey = Key('task-view-segment-calendar');
+  static const Key calendarViewKey = Key('task-calendar-view');
+  static const Key calendarMonthDropdownKey = Key(
+    'task-calendar-month-dropdown',
+  );
+  static const Key calendarScheduleButtonKey = Key(
+    'task-calendar-schedule-button',
+  );
+  static const Key calendarSheetKey = Key('task-calendar-sheet');
+  static const Key calendarSheetTitleFieldKey = Key(
+    'task-calendar-sheet-title',
+  );
+  static const Key calendarSheetDescriptionFieldKey = Key(
+    'task-calendar-sheet-description',
+  );
+  static const Key calendarSheetCategoryFieldKey = Key(
+    'task-calendar-sheet-category',
+  );
+  static const Key calendarSheetSwapButtonKey = Key('task-calendar-sheet-swap');
+  static const Key calendarSheetStartDateButtonKey = Key(
+    'task-calendar-sheet-start-date',
+  );
+  static const Key calendarSheetEndDateButtonKey = Key(
+    'task-calendar-sheet-end-date',
+  );
+  static const Key calendarSheetStartTimeButtonKey = Key(
+    'task-calendar-sheet-start-time',
+  );
+  static const Key calendarSheetEndTimeButtonKey = Key(
+    'task-calendar-sheet-end-time',
+  );
+  static const Key calendarSheetSubmitButtonKey = Key(
+    'task-calendar-sheet-submit',
+  );
 
   static Key statusFilterKey(String value) => Key('task-status-filter-$value');
 
@@ -79,6 +116,14 @@ class TaskManagementScreen extends StatefulWidget {
   static Key moveToSpaceOptionKey(String spaceId) =>
       Key('task-move-to-space-$spaceId');
 
+  static Key calendarStatusChipKey(String value) =>
+      Key('task-calendar-status-$value');
+
+  static Key calendarDateKey(String value) => Key('task-calendar-date-$value');
+
+  static Key calendarSheetCategoryOptionKey(String value) =>
+      Key('task-calendar-sheet-category-$value');
+
   final TaskRepository repository;
   final TaskManagementController controller;
   final String? appBarTitle;
@@ -97,12 +142,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSelectionMode = false;
   TaskDataRefreshController? _taskDataRefreshController;
+  _TaskManagementContentTab _activeTab = _TaskManagementContentTab.tasks;
+  DateTime _selectedCalendarMonth = DateTime.now();
+  DateTime _selectedCalendarDate = DateTime.now();
+  TaskStatusFilter _calendarStatusFilter = TaskStatusFilter.all;
 
   TaskManagementController get _controller => widget.controller;
 
   @override
   void initState() {
     super.initState();
+    _initializeCalendarSelection();
     if (_controller.tasks.isEmpty && _controller.categories.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -135,6 +185,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       return;
     }
     _controller.load();
+  }
+
+  void _initializeCalendarSelection() {
+    for (final task in _controller.tasks) {
+      final scheduledAt = task.startDateTime ?? task.endDateTime;
+      if (scheduledAt == null) {
+        continue;
+      }
+      _selectedCalendarMonth = DateTime(scheduledAt.year, scheduledAt.month, 1);
+      _selectedCalendarDate = DateTime(
+        scheduledAt.year,
+        scheduledAt.month,
+        scheduledAt.day,
+      );
+      return;
+    }
   }
 
   void _clearSelectionMode() {
@@ -267,6 +333,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         categoryId: request.categoryId,
         priority: request.priority,
         spaceId: request.spaceId,
+        startDate: request.startDate,
+        startMinutes: request.startMinutes,
         endDate: request.endDate,
         endMinutes: request.endMinutes,
         vaultConfig: vaultResolution.config,
@@ -293,6 +361,84 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       showTaskToast(
         context,
         message: 'Unable to create the task right now.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _openCalendarScheduleSheet() async {
+    if (_controller.categories.isEmpty) {
+      showTaskToast(
+        context,
+        message: 'Add a category first before scheduling a task.',
+        isError: true,
+      );
+      return;
+    }
+
+    final request = await showModalBottomSheet<TaskQuickScheduleRequest>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskScheduleSheet(
+        categories: _controller.categories,
+        initialDate: _selectedCalendarDate,
+        sheetKey: TaskManagementScreen.calendarSheetKey,
+        titleFieldKey: TaskManagementScreen.calendarSheetTitleFieldKey,
+        descriptionFieldKey:
+            TaskManagementScreen.calendarSheetDescriptionFieldKey,
+        categoryFieldKey: TaskManagementScreen.calendarSheetCategoryFieldKey,
+        categoryOptionKeyBuilder:
+            TaskManagementScreen.calendarSheetCategoryOptionKey,
+        swapButtonKey: TaskManagementScreen.calendarSheetSwapButtonKey,
+        startDateButtonKey:
+            TaskManagementScreen.calendarSheetStartDateButtonKey,
+        endDateButtonKey: TaskManagementScreen.calendarSheetEndDateButtonKey,
+        startTimeButtonKey:
+            TaskManagementScreen.calendarSheetStartTimeButtonKey,
+        endTimeButtonKey: TaskManagementScreen.calendarSheetEndTimeButtonKey,
+        submitButtonKey: TaskManagementScreen.calendarSheetSubmitButtonKey,
+      ),
+    );
+    if (request == null || !mounted) {
+      return;
+    }
+
+    try {
+      await _controller.createTask(
+        title: request.title,
+        description: request.description,
+        categoryId: request.categoryId,
+        priority: TaskPriority.medium,
+        startDate: request.startDate,
+        startMinutes: request.startMinutes,
+        endDate: request.endDate,
+        endMinutes: request.endMinutes,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedCalendarMonth = DateTime(
+          request.startDate.year,
+          request.startDate.month,
+          1,
+        );
+        _selectedCalendarDate = DateTime(
+          request.startDate.year,
+          request.startDate.month,
+          request.startDate.day,
+        );
+        _calendarStatusFilter = TaskStatusFilter.all;
+      });
+      showTaskToast(context, message: 'Task scheduled successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to schedule the task right now.',
         isError: true,
       );
     }
@@ -819,184 +965,365 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
               return GestureDetector(
                 behavior: HitTestBehavior.deferToChild,
                 onTap: _isSelectionMode ? _clearSelectionMode : null,
-                child: RefreshIndicator(
-                  color: AppColors.blue500,
-                  onRefresh: _controller.load,
-                  child: CustomScrollView(
-                    slivers: [
-                      if (filteredTasks.isEmpty)
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.four,
-                            AppSpacing.six,
-                            AppSpacing.four,
-                            AppSpacing.zero,
+                child: _activeTab == _TaskManagementContentTab.tasks
+                    ? _buildTasksView(filteredTasks)
+                    : KeyedSubtree(
+                        key: TaskManagementScreen.calendarViewKey,
+                        child: TaskCalendarView(
+                          controller: _controller,
+                          segmentControl: _TaskViewSegmentedControl(
+                            activeTab: _activeTab,
+                            onChanged: (value) {
+                              setState(() {
+                                _activeTab = value;
+                              });
+                            },
                           ),
-                          sliver: SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _TaskPageHeader(),
-                                const SizedBox(height: AppSpacing.six),
-                                _SearchField(
-                                  controller: _searchController,
-                                  onChanged: _controller.updateSearchQuery,
-                                ),
-                                if (_effectiveLockedCategoryId == null) ...[
-                                  const SizedBox(height: AppSpacing.three),
-                                  _CategoryFilterRow(
-                                    categories: _controller.categories,
-                                    selectedCategoryId:
-                                        _controller.categoryFilterId,
-                                    onSelected:
-                                        _controller.updateCategoryFilter,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.four,
-                            AppSpacing.six,
-                            AppSpacing.four,
-                            120,
-                          ),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              if (index == 0) {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const _TaskPageHeader(),
-                                    const SizedBox(height: AppSpacing.six),
-                                    _SearchField(
-                                      controller: _searchController,
-                                      onChanged: _controller.updateSearchQuery,
-                                    ),
-                                    if (_effectiveLockedCategoryId == null) ...[
-                                      const SizedBox(height: AppSpacing.three),
-                                      _CategoryFilterRow(
-                                        categories: _controller.categories,
-                                        selectedCategoryId:
-                                            _controller.categoryFilterId,
-                                        onSelected:
-                                            _controller.updateCategoryFilter,
-                                      ),
-                                    ],
-                                    const SizedBox(height: AppSpacing.six),
-                                  ],
-                                );
-                              }
-
-                              final task = filteredTasks[index - 1];
-                              final category = _controller.categoryFor(
-                                task.categoryId,
+                          selectedMonth: _selectedCalendarMonth,
+                          selectedDate: _selectedCalendarDate,
+                          statusFilter: _calendarStatusFilter,
+                          onMonthChanged: (value) {
+                            setState(() {
+                              _selectedCalendarMonth = DateTime(
+                                value.year,
+                                value.month,
+                                1,
                               );
-                              final space = _controller.spaceFor(task.spaceId);
-                              final previewProtected = isPreviewProtected(
-                                vaultService: VaultServiceScope.of(context),
-                                ownVault: task.vaultConfig,
-                                ownEntityKey: taskVaultEntityKey(task.id),
-                                inheritedVault: space?.vaultConfig,
-                                inheritedEntityKey: space == null
-                                    ? null
-                                    : spaceVaultEntityKey(space.id),
-                              );
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: index == filteredTasks.length
-                                      ? AppSpacing.zero
-                                      : AppSpacing.four,
-                                ),
-                                child: _TaskCard(
-                                  task: task,
-                                  category: category,
-                                  space: space,
-                                  previewProtected: previewProtected,
-                                  showCheckbox: _isSelectionMode,
-                                  onTap: () => _isSelectionMode
-                                      ? _controller.toggleTaskCompletion(task)
-                                      : _openEditor(task.id),
-                                  onLongPress: () {
-                                    setState(() {
-                                      _isSelectionMode = true;
-                                    });
-                                  },
-                                  onToggle: () =>
-                                      _controller.toggleTaskCompletion(task),
-                                  onMenuSelected: (action) async {
-                                    switch (action) {
-                                      case _TaskMenuAction.moveToSpace:
-                                        await _moveTaskToSpace(task);
-                                      case _TaskMenuAction.archive:
-                                        await _archiveTask(task);
-                                      case _TaskMenuAction.delete:
-                                        await _confirmDelete(task);
-                                    }
-                                  },
-                                ),
-                              );
-                            }, childCount: filteredTasks.length + 1),
-                          ),
+                              final availableDays = _controller
+                                  .calendarDaysForMonth(_selectedCalendarMonth);
+                              final matchingDay = availableDays
+                                  .where(
+                                    (day) =>
+                                        day.day == _selectedCalendarDate.day,
+                                  )
+                                  .cast<DateTime?>()
+                                  .firstWhere(
+                                    (day) => day != null,
+                                    orElse: () => availableDays.first,
+                                  );
+                              _selectedCalendarDate = matchingDay!;
+                            });
+                          },
+                          onDateSelected: (value) {
+                            setState(() {
+                              _selectedCalendarDate = value;
+                            });
+                          },
+                          onStatusSelected: (value) {
+                            setState(() {
+                              _calendarStatusFilter = value;
+                            });
+                          },
+                          onSchedulePressed: _openCalendarScheduleSheet,
+                          onTaskTap: (task) => _openEditor(task.id),
+                          monthDropdownKey:
+                              TaskManagementScreen.calendarMonthDropdownKey,
+                          statusChipKeyBuilder:
+                              TaskManagementScreen.calendarStatusChipKey,
+                          dateKeyBuilder: TaskManagementScreen.calendarDateKey,
+                          scheduleButtonKey:
+                              TaskManagementScreen.calendarScheduleButtonKey,
                         ),
-                      if (filteredTasks.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.four,
-                              AppSpacing.zero,
-                              AppSpacing.four,
-                              120,
-                            ),
-                            child: Center(
-                              child: _EmptyState(
-                                title: widget.emptyTitle,
-                                message: widget.emptyMessage,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                      ),
               );
             },
           ),
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          key: TaskManagementScreen.addTaskFabKey,
-          heroTag: 'task-management-add-task-fab',
-          onPressed: _controller.isSaving ? null : _openCreateFlow,
-          backgroundColor: AppColors.primaryButtonFill,
-          foregroundColor: AppColors.primaryButtonText,
-          elevation: 0,
-          focusElevation: 0,
-          hoverElevation: 0,
-          highlightElevation: 0,
-          disabledElevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              taskButtonRadius(TaskButtonSize.large),
+        floatingActionButton: _activeTab == _TaskManagementContentTab.tasks
+            ? FloatingActionButton.extended(
+                key: TaskManagementScreen.addTaskFabKey,
+                heroTag: 'task-management-add-task-fab',
+                onPressed: _controller.isSaving ? null : _openCreateFlow,
+                backgroundColor: AppColors.primaryButtonFill,
+                foregroundColor: AppColors.primaryButtonText,
+                elevation: 0,
+                focusElevation: 0,
+                hoverElevation: 0,
+                highlightElevation: 0,
+                disabledElevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    taskButtonRadius(TaskButtonSize.large),
+                  ),
+                ),
+                extendedPadding: taskButtonPadding(TaskButtonSize.large),
+                extendedTextStyle: taskButtonTextStyle(
+                  context,
+                  TaskButtonSize.large,
+                ),
+                icon: const Icon(TablerIcons.plus, size: 18),
+                label: Text(widget.fabLabel),
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildTasksView(List<TaskItem> filteredTasks) {
+    return RefreshIndicator(
+      color: AppColors.blue500,
+      onRefresh: _controller.load,
+      child: CustomScrollView(
+        slivers: [
+          if (filteredTasks.isEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.four,
+                AppSpacing.six,
+                AppSpacing.four,
+                AppSpacing.zero,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _TaskPageHeader(),
+                    const SizedBox(height: AppSpacing.six),
+                    _SearchField(
+                      controller: _searchController,
+                      onChanged: _controller.updateSearchQuery,
+                    ),
+                    if (_effectiveLockedCategoryId == null) ...[
+                      const SizedBox(height: AppSpacing.three),
+                      _CategoryFilterRow(
+                        categories: _controller.categories,
+                        selectedCategoryId: _controller.categoryFilterId,
+                        onSelected: _controller.updateCategoryFilter,
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.three),
+                    _TaskViewSegmentedControl(
+                      activeTab: _activeTab,
+                      onChanged: (value) {
+                        setState(() {
+                          _activeTab = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.four,
+                AppSpacing.six,
+                AppSpacing.four,
+                120,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  if (index == 0) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _TaskPageHeader(),
+                        const SizedBox(height: AppSpacing.six),
+                        _SearchField(
+                          controller: _searchController,
+                          onChanged: _controller.updateSearchQuery,
+                        ),
+                        if (_effectiveLockedCategoryId == null) ...[
+                          const SizedBox(height: AppSpacing.three),
+                          _CategoryFilterRow(
+                            categories: _controller.categories,
+                            selectedCategoryId: _controller.categoryFilterId,
+                            onSelected: _controller.updateCategoryFilter,
+                          ),
+                        ],
+                        const SizedBox(height: AppSpacing.three),
+                        _TaskViewSegmentedControl(
+                          activeTab: _activeTab,
+                          onChanged: (value) {
+                            setState(() {
+                              _activeTab = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: AppSpacing.six),
+                      ],
+                    );
+                  }
+
+                  final task = filteredTasks[index - 1];
+                  final category = _controller.categoryFor(task.categoryId);
+                  final space = _controller.spaceFor(task.spaceId);
+                  final previewProtected = isPreviewProtected(
+                    vaultService: VaultServiceScope.of(context),
+                    ownVault: task.vaultConfig,
+                    ownEntityKey: taskVaultEntityKey(task.id),
+                    inheritedVault: space?.vaultConfig,
+                    inheritedEntityKey: space == null
+                        ? null
+                        : spaceVaultEntityKey(space.id),
+                  );
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == filteredTasks.length
+                          ? AppSpacing.zero
+                          : AppSpacing.four,
+                    ),
+                    child: _TaskCard(
+                      task: task,
+                      category: category,
+                      space: space,
+                      previewProtected: previewProtected,
+                      showCheckbox: _isSelectionMode,
+                      onTap: () => _isSelectionMode
+                          ? _controller.toggleTaskCompletion(task)
+                          : _openEditor(task.id),
+                      onLongPress: () {
+                        setState(() {
+                          _isSelectionMode = true;
+                        });
+                      },
+                      onToggle: () => _controller.toggleTaskCompletion(task),
+                      onMenuSelected: (action) async {
+                        switch (action) {
+                          case _TaskMenuAction.moveToSpace:
+                            await _moveTaskToSpace(task);
+                          case _TaskMenuAction.archive:
+                            await _archiveTask(task);
+                          case _TaskMenuAction.delete:
+                            await _confirmDelete(task);
+                        }
+                      },
+                    ),
+                  );
+                }, childCount: filteredTasks.length + 1),
+              ),
             ),
-          ),
-          extendedPadding: taskButtonPadding(TaskButtonSize.large),
-          extendedTextStyle: taskButtonTextStyle(context, TaskButtonSize.large),
-          icon: const Icon(TablerIcons.plus, size: 18),
-          label: Text(widget.fabLabel),
-        ),
+          if (filteredTasks.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.four,
+                  AppSpacing.zero,
+                  AppSpacing.four,
+                  120,
+                ),
+                child: Center(
+                  child: _EmptyState(
+                    title: widget.emptyTitle,
+                    message: widget.emptyMessage,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
 enum _TaskMenuAction { moveToSpace, archive, delete }
+
+enum _TaskManagementContentTab { tasks, calendar }
+
+class _TaskViewSegmentedControl extends StatelessWidget {
+  const _TaskViewSegmentedControl({
+    required this.activeTab,
+    required this.onChanged,
+  });
+
+  final _TaskManagementContentTab activeTab;
+  final ValueChanged<_TaskManagementContentTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.oneAndHalf),
+      decoration: BoxDecoration(
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E8EC)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TaskViewSegmentButton(
+              buttonKey: TaskManagementScreen.tasksSegmentKey,
+              label: 'Tasks Lists',
+              icon: TablerIcons.clipboard_list,
+              selected: activeTab == _TaskManagementContentTab.tasks,
+              onTap: () => onChanged(_TaskManagementContentTab.tasks),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.oneAndHalf),
+          Expanded(
+            child: _TaskViewSegmentButton(
+              buttonKey: TaskManagementScreen.calendarSegmentKey,
+              label: 'Calendar',
+              icon: TablerIcons.calendar_event,
+              selected: activeTab == _TaskManagementContentTab.calendar,
+              onTap: () => onChanged(_TaskManagementContentTab.calendar),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskViewSegmentButton extends StatelessWidget {
+  const _TaskViewSegmentButton({
+    required this.buttonKey,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: buttonKey,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.twoAndHalf,
+          vertical: AppSpacing.two,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blue100 : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: selected ? AppColors.blue500 : AppColors.subHeaderText,
+            ),
+            const SizedBox(width: AppSpacing.oneAndHalf),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: selected ? AppColors.blue500 : AppColors.subHeaderText,
+                  fontSize: AppTypography.sizeSm,
+                  fontWeight: AppTypography.weightNormal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _MoveTaskToSpaceSheet extends StatefulWidget {
   const _MoveTaskToSpaceSheet({
@@ -2011,11 +2338,14 @@ class _CategoryBadge extends StatelessWidget {
             color: appearance.badgeForegroundColor,
           ),
           const SizedBox(width: AppSpacing.oneAndHalf),
-          Text(
-            category.name,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: appearance.badgeForegroundColor,
-              fontWeight: AppTypography.weightSemibold,
+          Flexible(
+            child: Text(
+              category.name,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: appearance.badgeForegroundColor,
+                fontWeight: AppTypography.weightSemibold,
+              ),
             ),
           ),
         ],

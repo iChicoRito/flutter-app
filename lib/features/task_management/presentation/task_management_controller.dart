@@ -79,6 +79,8 @@ class TaskManagementController extends ChangeNotifier {
     String? description,
     required String categoryId,
     required TaskPriority priority,
+    DateTime? startDate,
+    int? startMinutes,
     DateTime? endDate,
     int? endMinutes,
     String? spaceId,
@@ -98,6 +100,8 @@ class TaskManagementController extends ChangeNotifier {
       priority: priority,
       categoryId: lockedCategoryId ?? categoryId,
       standaloneCategoryId: lockedCategoryId ?? categoryId,
+      startDate: startDate,
+      startMinutes: startMinutes,
       endDate: endDate,
       endMinutes: endMinutes,
       createdAt: now,
@@ -273,6 +277,68 @@ class TaskManagementController extends ChangeNotifier {
       }
 
       return b.updatedAt.compareTo(a.updatedAt);
+    });
+
+    return filtered;
+  }
+
+  List<DateTime> calendarDaysForMonth(DateTime month) {
+    final firstDay = DateTime(month.year, month.month, 1);
+    final nextMonth = month.month == 12
+        ? DateTime(month.year + 1, 1, 1)
+        : DateTime(month.year, month.month + 1, 1);
+    final dayCount = nextMonth.difference(firstDay).inDays;
+
+    return List<DateTime>.generate(
+      dayCount,
+      (index) => DateTime(month.year, month.month, index + 1),
+    );
+  }
+
+  List<TaskItem> calendarTasksForDate({
+    required DateTime selectedDate,
+    required TaskStatusFilter statusFilter,
+    required DateTime now,
+  }) {
+    final targetDate = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+
+    final filtered = _visibleTasks(_tasks).where((task) {
+      final scheduledAt = task.startDateTime ?? task.endDateTime;
+      if (scheduledAt == null) {
+        return false;
+      }
+
+      final scheduledDate = DateTime(
+        scheduledAt.year,
+        scheduledAt.month,
+        scheduledAt.day,
+      );
+      if (scheduledDate != targetDate) {
+        return false;
+      }
+
+      return switch (statusFilter) {
+        TaskStatusFilter.all => true,
+        TaskStatusFilter.completed => task.isCompleted,
+        TaskStatusFilter.today => _isTodayBucket(task, now),
+        TaskStatusFilter.upcoming => _isUpcomingBucket(task, now),
+        TaskStatusFilter.overdue =>
+          !task.isCompleted && task.statusAt(now) == TaskStatus.overdue,
+      };
+    }).toList();
+
+    filtered.sort((left, right) {
+      final leftMinutes = left.startMinutes ?? left.endMinutes ?? 0;
+      final rightMinutes = right.startMinutes ?? right.endMinutes ?? 0;
+      final timeComparison = leftMinutes.compareTo(rightMinutes);
+      if (timeComparison != 0) {
+        return timeComparison;
+      }
+      return left.updatedAt.compareTo(right.updatedAt);
     });
 
     return filtered;

@@ -72,4 +72,23 @@ void main() {
       expect(task.statusAt(now), TaskStatus.overdue);
     },
   );
+
+  test('keeps explicit start and end schedule ranges intact', () {
+    final now = DateTime(2026, 4, 13, 9);
+    final task = TaskItem(
+      id: 'range-task',
+      title: 'Science assessment',
+      priority: TaskPriority.medium,
+      categoryId: 'school',
+      createdAt: now,
+      updatedAt: now,
+      startDate: DateTime(2026, 4, 20),
+      startMinutes: 8 * 60,
+      endDate: DateTime(2026, 4, 20),
+      endMinutes: 11 * 60,
+    ).normalizedSingleSchedule();
+
+    expect(task.startDateTime, DateTime(2026, 4, 20, 8));
+    expect(task.endDateTime, DateTime(2026, 4, 20, 11));
+  });
 }

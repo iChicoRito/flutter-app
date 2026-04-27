@@ -30,6 +30,8 @@ class TaskCreationRequest {
     required this.priority,
     required this.vaultDraft,
     this.spaceId,
+    this.startDate,
+    this.startMinutes,
     this.endDate,
     this.endMinutes,
   });
@@ -40,6 +42,8 @@ class TaskCreationRequest {
   final TaskPriority priority;
   final VaultDraft vaultDraft;
   final String? spaceId;
+  final DateTime? startDate;
+  final int? startMinutes;
   final DateTime? endDate;
   final int? endMinutes;
 }
@@ -298,6 +302,8 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
           secret: _vaultSecretController.text.trim(),
         ),
         spaceId: widget.spaceId,
+        startDate: null,
+        startMinutes: null,
         endDate: _targetDate,
         endMinutes: _targetTime == null
             ? null

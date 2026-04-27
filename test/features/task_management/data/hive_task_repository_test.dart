@@ -47,71 +47,74 @@ void main() {
       expect(spaces.single.categoryId, 'work');
     });
 
-    test('cascade delete removes only tasks inside the selected space', () async {
-      await repository.upsertSpace(
-        TaskSpace(
-          id: 'space-a',
-          name: 'Alpha',
-          description: 'Alpha space',
-          categoryId: 'work',
-          colorValue: const Color(0xFF066FD1).toARGB32(),
-          createdAt: DateTime(2026, 4, 15, 8),
-          updatedAt: DateTime(2026, 4, 15, 8),
-        ),
-      );
-      await repository.upsertSpace(
-        TaskSpace(
-          id: 'space-b',
-          name: 'Beta',
-          description: 'Beta space',
-          categoryId: 'work',
-          colorValue: const Color(0xFF0CA678).toARGB32(),
-          createdAt: DateTime(2026, 4, 15, 8),
-          updatedAt: DateTime(2026, 4, 15, 8),
-        ),
-      );
-      await repository.upsertTask(
-        TaskItem(
-          id: 'task-a',
-          title: 'Inside alpha',
-          spaceId: 'space-a',
-          priority: TaskPriority.medium,
-          categoryId: 'work',
-          createdAt: DateTime(2026, 4, 15, 9),
-          updatedAt: DateTime(2026, 4, 15, 9),
-        ),
-      );
-      await repository.upsertTask(
-        TaskItem(
-          id: 'task-b',
-          title: 'Inside beta',
-          spaceId: 'space-b',
-          priority: TaskPriority.medium,
-          categoryId: 'work',
-          createdAt: DateTime(2026, 4, 15, 9),
-          updatedAt: DateTime(2026, 4, 15, 9),
-        ),
-      );
-      await repository.upsertTask(
-        TaskItem(
-          id: 'task-c',
-          title: 'Unassigned',
-          priority: TaskPriority.medium,
-          categoryId: 'work',
-          createdAt: DateTime(2026, 4, 15, 9),
-          updatedAt: DateTime(2026, 4, 15, 9),
-        ),
-      );
+    test(
+      'cascade delete removes only tasks inside the selected space',
+      () async {
+        await repository.upsertSpace(
+          TaskSpace(
+            id: 'space-a',
+            name: 'Alpha',
+            description: 'Alpha space',
+            categoryId: 'work',
+            colorValue: const Color(0xFF066FD1).toARGB32(),
+            createdAt: DateTime(2026, 4, 15, 8),
+            updatedAt: DateTime(2026, 4, 15, 8),
+          ),
+        );
+        await repository.upsertSpace(
+          TaskSpace(
+            id: 'space-b',
+            name: 'Beta',
+            description: 'Beta space',
+            categoryId: 'work',
+            colorValue: const Color(0xFF0CA678).toARGB32(),
+            createdAt: DateTime(2026, 4, 15, 8),
+            updatedAt: DateTime(2026, 4, 15, 8),
+          ),
+        );
+        await repository.upsertTask(
+          TaskItem(
+            id: 'task-a',
+            title: 'Inside alpha',
+            spaceId: 'space-a',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+            createdAt: DateTime(2026, 4, 15, 9),
+            updatedAt: DateTime(2026, 4, 15, 9),
+          ),
+        );
+        await repository.upsertTask(
+          TaskItem(
+            id: 'task-b',
+            title: 'Inside beta',
+            spaceId: 'space-b',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+            createdAt: DateTime(2026, 4, 15, 9),
+            updatedAt: DateTime(2026, 4, 15, 9),
+          ),
+        );
+        await repository.upsertTask(
+          TaskItem(
+            id: 'task-c',
+            title: 'Unassigned',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+            createdAt: DateTime(2026, 4, 15, 9),
+            updatedAt: DateTime(2026, 4, 15, 9),
+          ),
+        );
 
-      await repository.deleteSpaceWithTasks('space-a');
+        await repository.deleteSpaceWithTasks('space-a');
 
-      final spaces = await repository.getSpaces();
-      final tasks = await repository.getTasks();
+        final spaces = await repository.getSpaces();
+        final tasks = await repository.getTasks();
 
-      expect(spaces.map((space) => space.id), ['space-b']);
-      expect(tasks.map((task) => task.id), containsAll(['task-b', 'task-c']));
-      expect(tasks.map((task) => task.id), isNot(contains('task-a')));
-    });
+        expect(spaces.map((space) => space.id), ['space-b']);
+        expect(tasks.map((task) => task.id), containsAll(['task-b', 'task-c']));
+        expect(tasks.map((task) => task.id), isNot(contains('task-a')));
+      },
+    );
   });
 
   group('TaskItemAdapter', () {
@@ -144,6 +147,36 @@ void main() {
       expect(restored.spaceId, 'space-1');
       expect(restored.noteDocumentJson, task.noteDocumentJson);
     });
+
+    test(
+      'preserves explicit schedule ranges in the current serialization format',
+      () {
+        final task = TaskItem(
+          id: 'task-range',
+          title: 'Timeline task',
+          description: 'Keeps its full range',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          createdAt: DateTime(2026, 4, 15, 10),
+          updatedAt: DateTime(2026, 4, 15, 10),
+          startDate: DateTime(2026, 4, 20),
+          startMinutes: 8 * 60,
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 11 * 60,
+        );
+
+        final writer = BinaryWriterImpl(TypeRegistryImpl.nullImpl);
+        adapter.write(writer, task);
+        final reader = BinaryReaderImpl(
+          writer.toBytes(),
+          TypeRegistryImpl.nullImpl,
+        );
+        final restored = adapter.read(reader);
+
+        expect(restored.startDateTime, DateTime(2026, 4, 20, 8));
+        expect(restored.endDateTime, DateTime(2026, 4, 20, 11));
+      },
+    );
 
     test('reads legacy payloads that do not include spaceId', () {
       final writer = BinaryWriterImpl(TypeRegistryImpl.nullImpl)

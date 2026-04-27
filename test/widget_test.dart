@@ -26,6 +26,7 @@ import 'package:flutter_app/features/task_management/domain/task_item.dart';
 import 'package:flutter_app/features/task_management/presentation/task_creation_sheet.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
+import 'package:flutter_app/features/task_management/presentation/task_management_ui.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
@@ -1171,11 +1172,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(createCategoryColorSelectionKey), findsOneWidget);
+    expect(
+      find.byKey(
+        taskCategorySelectedColorCheckKey('task-create', AppColors.blue500),
+      ),
+      findsOneWidget,
+    );
+
     await tester.tap(find.byKey(createAddCategoryButtonKey));
     await tester.pumpAndSettle();
 
     expect(find.text('Custom Category'), findsOneWidget);
     expect(find.byKey(customCategoryNameFieldKey), findsOneWidget);
+    expect(
+      find.byKey(customCategoryColorChoiceKey(AppColors.blue500)),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(customCategorySelectedColorCheckKey(AppColors.blue500)),
+      findsOneWidget,
+    );
 
     await tester.enterText(
       find.byKey(customCategoryNameFieldKey),
@@ -1194,6 +1211,120 @@ void main() {
 
     expect(find.text('Custom Category'), findsNothing);
   });
+
+  testWidgets(
+    'task creation category section applies the inline selected color to new custom categories',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      final categories = [
+        TaskCategory(
+          id: 'work',
+          name: 'Work',
+          iconKey: 'briefcase',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: DateTime(2026),
+        ),
+      ];
+
+      await tester.pumpWidget(
+        wrapWithMaterial(
+          TaskCreationScreen(
+            repository: taskRepository,
+            categories: categories,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          taskCategoryColorChoiceKey('task-create', AppColors.teal500),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          taskCategorySelectedColorCheckKey('task-create', AppColors.teal500),
+        ),
+        findsOneWidget,
+      );
+      final currentCategoryIcon = tester.widget<Icon>(
+        find.byKey(createCategoryCurrentIconKey),
+      );
+      expect(currentCategoryIcon.color, AppColors.teal500);
+
+      await tester.tap(find.byKey(createAddCategoryButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(customCategoryColorChoiceKey(AppColors.teal500)),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byKey(customCategoryNameFieldKey), 'Errands');
+      await tester.tap(find.byKey(customCategoryCreateButtonKey));
+      await tester.pumpAndSettle();
+
+      final savedCategories = await taskRepository.getCategories();
+      final createdCategory = savedCategories.singleWhere(
+        (category) => category.name == 'Errands',
+      );
+      expect(createdCategory.colorValue, AppColors.teal500.toARGB32());
+      expect(find.text('Errands'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'custom category sheet updates selected color checkmark and icon tint dynamically',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      await tester.pumpWidget(
+        wrapWithMaterial(SpaceFormScreen(categories: const [])),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(customCategorySelectedColorCheckKey(AppColors.blue500)),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(customCategorySelectedColorCheckKey(AppColors.teal500)),
+        findsNothing,
+      );
+
+      final initialSelectedIcon = tester.widget<Icon>(
+        find.byKey(customCategoryIconTileIconKey('briefcase')),
+      );
+      expect(initialSelectedIcon.color, AppColors.blue500);
+
+      await tester.ensureVisible(
+        find.byKey(customCategoryColorChoiceKey(AppColors.teal500)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(customCategoryColorChoiceKey(AppColors.teal500)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(customCategorySelectedColorCheckKey(AppColors.blue500)),
+        findsNothing,
+      );
+      expect(
+        find.byKey(customCategorySelectedColorCheckKey(AppColors.teal500)),
+        findsOneWidget,
+      );
+
+      final recoloredSelectedIcon = tester.widget<Icon>(
+        find.byKey(customCategoryIconTileIconKey('briefcase')),
+      );
+      expect(recoloredSelectedIcon.color, AppColors.teal500);
+    },
+  );
 
   testWidgets('space form uses the custom category bottom sheet', (
     WidgetTester tester,
@@ -1380,6 +1511,75 @@ void main() {
     expect(find.text('Delete'), findsOneWidget);
     expect(find.text('Edit'), findsNothing);
   });
+
+  testWidgets(
+    'task editor details category section applies the inline selected color to new custom categories',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      final task = buildTask(
+        id: 'edit-color-task',
+        title: 'Prepare investor notes',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+      );
+      taskRepository = InMemoryTaskRepository(tasks: [task]);
+
+      await tester.pumpWidget(
+        wrapWithMaterial(
+          TaskEditorScreen(repository: taskRepository, taskId: task.id),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(TaskEditorScreen.autosaveStatusKey));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(TaskEditorScreen.editDetailsButtonKey));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(TaskEditorScreen.categoryColorSelectionKey),
+        findsOneWidget,
+      );
+
+      await tester.ensureVisible(
+        find.byKey(
+          taskCategoryColorChoiceKey('task-editor', AppColors.amber500),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          taskCategoryColorChoiceKey('task-editor', AppColors.amber500),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          taskCategorySelectedColorCheckKey('task-editor', AppColors.amber500),
+        ),
+        findsOneWidget,
+      );
+      final currentCategoryIcon = tester.widget<Icon>(
+        find.byKey(TaskEditorScreen.categoryCurrentIconKey),
+      );
+      expect(currentCategoryIcon.color, AppColors.amber500);
+
+      await tester.tap(find.byKey(TaskEditorScreen.addCategoryButtonKey));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(customCategoryNameFieldKey), 'Errands');
+      await tester.tap(find.byKey(customCategoryCreateButtonKey));
+      await tester.pumpAndSettle();
+
+      final savedCategories = await taskRepository.getCategories();
+      final createdCategory = savedCategories.singleWhere(
+        (category) => category.name == 'Errands',
+      );
+      expect(createdCategory.colorValue, AppColors.amber500.toARGB32());
+      expect(find.text('Errands'), findsWidgets);
+    },
+  );
 
   testWidgets('read mode locks the note editor and hides formatting tools', (
     WidgetTester tester,
@@ -1640,6 +1840,180 @@ void main() {
 
     expect(find.text('Planning session'), findsOneWidget);
   });
+
+  testWidgets(
+    'task cards render accent strips badge pills and locked previews with the new visual shell',
+    (WidgetTester tester) async {
+      const vaultConfig = VaultConfig(
+        isEnabled: true,
+        method: VaultMethod.password,
+        secretKeyRef: 'task-secret',
+      );
+      taskRepository = InMemoryTaskRepository(
+        categories: [
+          TaskCategory(
+            id: 'work',
+            name: 'Work',
+            iconKey: 'briefcase',
+            colorValue: AppColors.amber500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskCategory(
+            id: 'health',
+            name: 'Health',
+            iconKey: 'heartbeat',
+            colorValue: AppColors.indigo500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskCategory(
+            id: 'finance',
+            name: 'Finance',
+            iconKey: 'cash',
+            colorValue: AppColors.teal500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskCategory(
+            id: 'personal',
+            name: 'Personal',
+            iconKey: 'user',
+            colorValue: AppColors.blue500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+        ],
+        tasks: [
+          buildTask(
+            id: 'medium-task',
+            title: 'Review sprint board',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+            description: 'Check blockers before standup',
+            endDate: DateTime(2026, 4, 26),
+            endMinutes: 10 * 60 + 39,
+          ),
+          buildTask(
+            id: 'low-task',
+            title: 'Refill vitamins',
+            priority: TaskPriority.low,
+            categoryId: 'health',
+            description: 'Buy another bottle tonight',
+          ),
+          buildTask(
+            id: 'locked-task',
+            title: 'Private planning note',
+            priority: TaskPriority.urgent,
+            categoryId: 'finance',
+            vaultConfig: vaultConfig,
+            description: 'This should stay protected',
+          ),
+          buildTask(
+            id: 'high-task',
+            title: 'Submit travel reimbursement',
+            priority: TaskPriority.high,
+            categoryId: 'personal',
+            description: 'Attach the April receipts',
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(TaskManagementScreen.taskAccentKey('medium-task')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.taskAccentKey('low-task')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.taskAccentKey('locked-task')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.taskAccentKey('high-task')),
+        findsOneWidget,
+      );
+
+      expect(
+        find.byKey(TaskManagementScreen.taskBadgeKey('medium-task')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.taskBadgeKey('low-task')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.taskBadgeKey('locked-task')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.taskBadgeKey('high-task')),
+        findsOneWidget,
+      );
+
+      expect(find.text('Locked Content'), findsOneWidget);
+      expect(find.text('Check blockers before standup'), findsOneWidget);
+      expect(find.text('Buy another bottle tonight'), findsOneWidget);
+      expect(find.text('Attach the April receipts'), findsOneWidget);
+      expect(find.text('Apr 26 • 10:39 AM'), findsOneWidget);
+      expect(find.text('Not Set Yet'), findsNWidgets(3));
+      expect(
+        find.byKey(TaskManagementScreen.taskMenuButtonKey('locked-task')),
+        findsOneWidget,
+      );
+
+      final mediumBadge = tester.widget<Container>(
+        find.byKey(TaskManagementScreen.taskBadgeKey('medium-task')),
+      );
+      final mediumBadgeDecoration = mediumBadge.decoration! as BoxDecoration;
+      expect(mediumBadgeDecoration.color, AppColors.amber100);
+
+      final lowAccent = tester.widget<Container>(
+        find.byKey(TaskManagementScreen.taskAccentKey('low-task')),
+      );
+      expect(lowAccent.color, AppColors.indigo500);
+
+      final lockedBadge = tester.widget<Container>(
+        find.byKey(TaskManagementScreen.taskBadgeKey('locked-task')),
+      );
+      final lockedBadgeDecoration = lockedBadge.decoration! as BoxDecoration;
+      expect(lockedBadgeDecoration.color, AppColors.rose100);
+
+      final taskCard = tester.widget<Container>(
+        find.descendant(
+          of: find.byKey(TaskManagementScreen.taskTileKey('medium-task')),
+          matching: find.byKey(
+            TaskManagementScreen.taskCardShellKey('medium-task'),
+          ),
+        ),
+      );
+      final cardDecoration = taskCard.decoration! as BoxDecoration;
+      expect(cardDecoration.color, AppColors.cardFill);
+      expect(cardDecoration.border, isNotNull);
+      expect(
+        cardDecoration.borderRadius,
+        BorderRadius.circular(AppRadii.twoXl),
+      );
+
+      final mediumAccent = tester.widget<Container>(
+        find.byKey(TaskManagementScreen.taskAccentKey('medium-task')),
+      );
+      expect(mediumAccent.color, AppColors.amber500);
+
+      final mediumCardSize = tester.getSize(
+        find.byKey(TaskManagementScreen.taskTileKey('medium-task')),
+      );
+      final lockedCardSize = tester.getSize(
+        find.byKey(TaskManagementScreen.taskTileKey('locked-task')),
+      );
+      expect(mediumCardSize.height, greaterThanOrEqualTo(120));
+      expect(mediumCardSize.height, lessThan(128));
+      expect(lockedCardSize.height, greaterThanOrEqualTo(120));
+      expect(lockedCardSize.height, lessThan(126));
+    },
+  );
 
   testWidgets(
     'tasks header is static and populated layout keeps tight spacing',

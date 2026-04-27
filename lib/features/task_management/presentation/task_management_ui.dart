@@ -5,6 +5,8 @@ import 'dart:async';
 
 import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_models.dart';
+import '../domain/task_category.dart';
+import '../domain/task_item.dart';
 
 const taskPrimaryBlue = AppColors.blue500;
 const taskPrimaryPressed = AppColors.blue600;
@@ -25,6 +27,129 @@ const taskDangerDisabled = AppColors.rose100;
 const taskFilterControlHeight = 44.0;
 const taskSuccessText = AppColors.teal500;
 const taskWarningText = AppColors.amber500;
+
+enum TaskCardTone { primary, success, danger, warning }
+
+Key taskCategoryColorChoiceKey(String scope, Color color) =>
+    Key('$scope-category-color-${color.toARGB32()}');
+
+Key taskCategorySelectedColorCheckKey(String scope, Color color) =>
+    Key('$scope-category-color-check-${color.toARGB32()}');
+
+class TaskCardAppearance {
+  const TaskCardAppearance({
+    required this.accentColor,
+    required this.badgeBackgroundColor,
+    required this.badgeForegroundColor,
+    required this.lockedForegroundColor,
+  });
+
+  final Color accentColor;
+  final Color badgeBackgroundColor;
+  final Color badgeForegroundColor;
+  final Color lockedForegroundColor;
+}
+
+Color _taskBadgeBackgroundFor(Color color) {
+  final argb = color.toARGB32();
+  if (argb == AppColors.blue500.toARGB32()) {
+    return AppColors.blue100;
+  }
+  if (argb == AppColors.teal500.toARGB32()) {
+    return AppColors.teal100;
+  }
+  if (argb == AppColors.rose500.toARGB32()) {
+    return AppColors.rose100;
+  }
+  if (argb == AppColors.amber500.toARGB32()) {
+    return AppColors.amber100;
+  }
+  return color.withValues(alpha: 0.16);
+}
+
+TaskCardAppearance taskCardAppearanceForCategory({
+  required Color categoryColor,
+  required bool previewProtected,
+}) {
+  if (previewProtected) {
+    return const TaskCardAppearance(
+      accentColor: AppColors.rose500,
+      badgeBackgroundColor: AppColors.rose100,
+      badgeForegroundColor: AppColors.rose500,
+      lockedForegroundColor: AppColors.subHeaderText,
+    );
+  }
+
+  return TaskCardAppearance(
+    accentColor: categoryColor,
+    badgeBackgroundColor: _taskBadgeBackgroundFor(categoryColor),
+    badgeForegroundColor: categoryColor,
+    lockedForegroundColor: AppColors.subHeaderText,
+  );
+}
+
+TaskCardTone taskCardToneFor({
+  required TaskItem task,
+  required bool previewProtected,
+}) {
+  if (previewProtected) {
+    return TaskCardTone.danger;
+  }
+
+  return switch (task.priority) {
+    TaskPriority.low => TaskCardTone.success,
+    TaskPriority.high => TaskCardTone.warning,
+    TaskPriority.urgent => TaskCardTone.danger,
+    TaskPriority.medium => TaskCardTone.primary,
+  };
+}
+
+TaskCardAppearance taskCardAppearance(TaskCardTone tone) {
+  return switch (tone) {
+    TaskCardTone.primary => const TaskCardAppearance(
+      accentColor: AppColors.blue500,
+      badgeBackgroundColor: AppColors.blue100,
+      badgeForegroundColor: AppColors.blue500,
+      lockedForegroundColor: AppColors.subHeaderText,
+    ),
+    TaskCardTone.success => const TaskCardAppearance(
+      accentColor: AppColors.teal500,
+      badgeBackgroundColor: AppColors.teal100,
+      badgeForegroundColor: AppColors.teal500,
+      lockedForegroundColor: AppColors.subHeaderText,
+    ),
+    TaskCardTone.danger => const TaskCardAppearance(
+      accentColor: AppColors.rose500,
+      badgeBackgroundColor: AppColors.rose100,
+      badgeForegroundColor: AppColors.rose500,
+      lockedForegroundColor: AppColors.subHeaderText,
+    ),
+    TaskCardTone.warning => const TaskCardAppearance(
+      accentColor: AppColors.amber500,
+      badgeBackgroundColor: AppColors.amber100,
+      badgeForegroundColor: AppColors.amber500,
+      lockedForegroundColor: AppColors.subHeaderText,
+    ),
+  };
+}
+
+BoxDecoration taskCardShellDecoration() {
+  return BoxDecoration(
+    color: AppColors.cardFill,
+    borderRadius: BorderRadius.circular(AppRadii.twoXl),
+    border: Border.all(
+      color: AppColors.cardBorder,
+      width: AppSizes.borderDefault,
+    ),
+  );
+}
+
+BoxDecoration taskCardBadgeDecoration(TaskCardAppearance appearance) {
+  return BoxDecoration(
+    color: appearance.badgeBackgroundColor,
+    borderRadius: BorderRadius.circular(AppRadii.full),
+  );
+}
 
 enum TaskButtonRole { primary, secondary, destructive, ghost }
 
@@ -398,6 +523,76 @@ class TaskFieldLabel extends StatelessWidget {
         color: AppColors.titleText,
         fontWeight: AppTypography.weightSemibold,
         fontSize: AppTypography.sizeBase,
+      ),
+    );
+  }
+}
+
+class TaskCategoryColorSelector extends StatelessWidget {
+  const TaskCategoryColorSelector({
+    super.key,
+    required this.scope,
+    required this.selectedColor,
+    required this.onSelected,
+  });
+
+  final String scope;
+  final Color selectedColor;
+  final ValueChanged<Color> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        for (final color in taskCategoryColorOptions)
+          _TaskCategoryColorChoiceChip(
+            key: taskCategoryColorChoiceKey(scope, color),
+            color: color,
+            selected: selectedColor.toARGB32() == color.toARGB32(),
+            selectedCheckKey: taskCategorySelectedColorCheckKey(scope, color),
+            onTap: () => onSelected(color),
+          ),
+      ],
+    );
+  }
+}
+
+class _TaskCategoryColorChoiceChip extends StatelessWidget {
+  const _TaskCategoryColorChoiceChip({
+    super.key,
+    required this.color,
+    required this.selected,
+    required this.selectedCheckKey,
+    required this.onTap,
+  });
+
+  final Color color;
+  final bool selected;
+  final Key selectedCheckKey;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.full),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.cardFill, width: 2),
+        ),
+        child: selected
+            ? Icon(
+                key: selectedCheckKey,
+                Icons.check_rounded,
+                color: AppColors.white,
+                size: 22,
+              )
+            : null,
       ),
     );
   }

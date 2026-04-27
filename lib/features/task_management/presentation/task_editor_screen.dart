@@ -43,6 +43,12 @@ class TaskEditorScreen extends StatefulWidget {
   static const Key categoryFieldKey = Key('task-editor-category-field');
   static const Key priorityFieldKey = Key('task-editor-priority-field');
   static const Key addCategoryButtonKey = Key('task-editor-add-category');
+  static const Key categoryColorSelectionKey = Key(
+    'task-editor-category-color-label',
+  );
+  static const Key categoryCurrentIconKey = Key(
+    'task-editor-category-current-icon',
+  );
   static const Key saveButtonKey = Key('task-editor-save-button');
   static const Key autosaveStatusKey = Key('task-editor-autosave-status');
   static const Key metadataCardKey = Key('task-editor-metadata-card');
@@ -1047,12 +1053,21 @@ class _TaskDetailsDialog extends StatelessWidget {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      style: taskButtonStyle(
-                        context,
-                        role: TaskButtonRole.ghost,
-                        size: TaskButtonSize.large,
-                        minimumSize: const Size.fromHeight(52),
-                      ),
+                      style:
+                          taskButtonStyle(
+                            context,
+                            role: TaskButtonRole.ghost,
+                            size: TaskButtonSize.large,
+                            minimumSize: const Size.fromHeight(52),
+                          ).copyWith(
+                            elevation: const WidgetStatePropertyAll(0),
+                            shadowColor: const WidgetStatePropertyAll(
+                              Colors.transparent,
+                            ),
+                            surfaceTintColor: const WidgetStatePropertyAll(
+                              Colors.transparent,
+                            ),
+                          ),
                       child: const Text('Close'),
                     ),
                   ),
@@ -1276,6 +1291,7 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   late List<TaskCategory> _categories;
   late TaskPriority _priority;
   late String _selectedCategoryId;
+  late Color _selectedCategoryColor;
   DateTime? _targetDate;
   TimeOfDay? _targetTime;
   bool _vaultEnabled = false;
@@ -1302,6 +1318,9 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
     _categories = [...widget.categories];
     _priority = widget.task.priority;
     _selectedCategoryId = widget.lockedCategoryId ?? widget.task.categoryId;
+    _selectedCategoryColor =
+        _colorForCategory(_selectedCategoryId) ??
+        taskCategoryColorOptions.first;
     _targetDate = widget.task.endDate;
     _targetTime = _toTimeOfDay(widget.task.endMinutes);
     if (widget.task.vaultConfig case final vaultConfig?) {
@@ -1445,6 +1464,8 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       context: context,
       existingNames: _categories.map((item) => item.name).toSet(),
       uuid: _uuid,
+      initialColor: _selectedCategoryColor,
+      showColorSelection: true,
     );
     if (category == null) {
       return;
@@ -1455,10 +1476,11 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
       _categories = [..._categories, category]
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       _selectedCategoryId = category.id;
+      _selectedCategoryColor = category.color;
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
       return;
@@ -1482,6 +1504,11 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
         isError: true,
       );
       return;
+    }
+
+    final selectedCategory = _categoryById(_selectedCategoryId);
+    if (selectedCategory != null) {
+      await widget.repository.upsertCategory(selectedCategory);
     }
 
     final trimmedTitle = _titleController.text.trim();
@@ -1646,6 +1673,9 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                                 onSelected: (value) {
                                   setState(() {
                                     _selectedCategoryId = value;
+                                    _selectedCategoryColor =
+                                        _colorForCategory(value) ??
+                                        _selectedCategoryColor;
                                   });
                                 },
                                 items: _categories
@@ -1653,17 +1683,12 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                                     .toList(),
                                 labelBuilder: (value) =>
                                     _categoryLabel(value) ?? 'Category',
-                                leadingBuilder: (value) {
-                                  final category = _categoryById(value);
-                                  if (category == null) {
-                                    return null;
-                                  }
-                                  return Icon(
-                                    resolveTaskCategoryIcon(category.iconKey),
-                                    color: category.color,
-                                    size: 18,
-                                  );
-                                },
+                                currentLeading: _buildCategoryIcon(
+                                  _categoryById(_selectedCategoryId),
+                                  key: TaskEditorScreen.categoryCurrentIconKey,
+                                ),
+                                leadingBuilder: (value) =>
+                                    _buildCategoryIcon(_categoryById(value)),
                               ),
                             ),
                             const SizedBox(width: AppSpacing.two),
@@ -1714,6 +1739,24 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
                             ),
                           ],
                         ),
+                      if (widget.lockedCategoryId == null) ...[
+                        const SizedBox(height: AppSpacing.three),
+                        const TaskFieldLabel(
+                          'Color Selection',
+                          key: TaskEditorScreen.categoryColorSelectionKey,
+                        ),
+                        const SizedBox(height: AppSpacing.three),
+                        TaskCategoryColorSelector(
+                          scope: 'task-editor',
+                          selectedColor: _selectedCategoryColor,
+                          onSelected: (color) {
+                            setState(() {
+                              _selectedCategoryColor = color;
+                              _syncSelectedCategoryColor(color);
+                            });
+                          },
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1840,6 +1883,35 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
   }
 
   String? _categoryLabel(String id) => _categoryById(id)?.name;
+
+  Color? _colorForCategory(String? id) =>
+      id == null ? null : _categoryById(id)?.color;
+
+  Widget? _buildCategoryIcon(TaskCategory? category, {Key? key}) {
+    if (category == null) {
+      return null;
+    }
+
+    final iconColor = category.id == _selectedCategoryId
+        ? _selectedCategoryColor
+        : category.color;
+    return Icon(
+      key: key,
+      resolveTaskCategoryIcon(category.iconKey),
+      color: iconColor,
+      size: 18,
+    );
+  }
+
+  void _syncSelectedCategoryColor(Color color) {
+    _categories = [
+      for (final category in _categories)
+        if (category.id == _selectedCategoryId)
+          category.copyWith(colorValue: color.toARGB32())
+        else
+          category,
+    ];
+  }
 
   String _priorityLabel(TaskPriority priority) {
     return switch (priority) {

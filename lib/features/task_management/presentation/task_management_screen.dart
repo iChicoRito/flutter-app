@@ -63,6 +63,12 @@ class TaskManagementScreen extends StatefulWidget {
 
   static Key taskTileKey(String taskId) => Key('task-tile-$taskId');
 
+  static Key taskCardShellKey(String taskId) => Key('task-card-shell-$taskId');
+
+  static Key taskAccentKey(String taskId) => Key('task-card-accent-$taskId');
+
+  static Key taskBadgeKey(String taskId) => Key('task-card-badge-$taskId');
+
   static Key taskToggleKey(String taskId) => Key('task-toggle-$taskId');
 
   static Key taskMenuButtonKey(String taskId) => Key('task-menu-$taskId');
@@ -1409,22 +1415,20 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const trailingSlotWidth = 28.0;
+    const trailingSlotWidth = 20.0;
+    final appearance = taskCardAppearanceForCategory(
+      categoryColor: category?.color ?? AppColors.blue500,
+      previewProtected: previewProtected,
+    );
+    final scheduleLabel = _taskScheduleLabel(task);
     final descriptionText = previewProtected
         ? 'Locked Content'
         : taskDescriptionPreview(task);
-    final actualNotePreview = previewProtected
-        ? ''
-        : taskActualNotePreview(task);
     final previewText = descriptionText.isEmpty
         ? (previewProtected
               ? 'Locked Content'
               : 'Open this task to start writing rich notes.')
         : descriptionText;
-    final shouldShowNotePreview =
-        !previewProtected &&
-        actualNotePreview.isNotEmpty &&
-        actualNotePreview != descriptionText;
 
     return Material(
       color: Colors.transparent,
@@ -1432,203 +1436,290 @@ class _TaskCard extends StatelessWidget {
         key: TaskManagementScreen.taskTileKey(task.id),
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(AppRadii.threeXl),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.eight,
-            vertical: AppSpacing.six,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.cardFill,
-            borderRadius: BorderRadius.circular(AppRadii.threeXl),
-            border: Border.all(
-              color: AppColors.cardBorder,
-              width: AppSizes.borderDefault,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: showCheckbox
+                  ? Padding(
+                      key: ValueKey(task.id),
+                      padding: const EdgeInsets.only(top: AppSpacing.two),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          checkboxTheme: CheckboxThemeData(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppRadii.defaultRadius,
+                              ),
+                            ),
+                            side: const BorderSide(
+                              color: AppColors.blue200,
+                              width: AppSizes.borderDefault,
+                            ),
+                            fillColor: WidgetStatePropertyAll(
+                              AppColors.blue500,
+                            ),
+                            checkColor: WidgetStatePropertyAll(
+                              AppColors.blue50,
+                            ),
+                          ),
+                        ),
+                        child: Checkbox(
+                          key: TaskManagementScreen.taskToggleKey(task.id),
+                          value: task.isCompleted,
+                          onChanged: (_) => onToggle(),
+                          activeColor: AppColors.blue500,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('hidden-checkbox')),
             ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: showCheckbox
-                    ? Padding(
-                        key: ValueKey(task.id),
-                        padding: const EdgeInsets.only(top: AppSpacing.two),
-                        child: Theme(
-                          data: Theme.of(context).copyWith(
-                            checkboxTheme: CheckboxThemeData(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadii.defaultRadius,
-                                ),
-                              ),
-                              side: const BorderSide(
-                                color: AppColors.blue200,
-                                width: AppSizes.borderDefault,
-                              ),
-                              fillColor: WidgetStatePropertyAll(
-                                AppColors.blue500,
-                              ),
-                              checkColor: WidgetStatePropertyAll(
-                                AppColors.blue50,
-                              ),
-                            ),
-                          ),
-                          child: Checkbox(
-                            key: TaskManagementScreen.taskToggleKey(task.id),
-                            value: task.isCompleted,
-                            onChanged: (_) => onToggle(),
-                            activeColor: AppColors.blue500,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
+            if (showCheckbox) const SizedBox(width: AppSpacing.three),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                child: Container(
+                  key: TaskManagementScreen.taskCardShellKey(task.id),
+                  decoration: taskCardShellDecoration(),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            key: TaskManagementScreen.taskAccentKey(task.id),
+                            width: 6,
+                            color: appearance.accentColor,
                           ),
                         ),
-                      )
-                    : const SizedBox.shrink(key: ValueKey('hidden-checkbox')),
-              ),
-              if (showCheckbox) const SizedBox(width: AppSpacing.three),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                task.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: AppColors.titleText,
-                                      fontSize: AppTypography.sizeLg,
-                                      fontWeight: AppTypography.weightSemibold,
-                                      decoration: task.isCompleted
-                                          ? TextDecoration.lineThrough
-                                          : null,
-                                    ),
-                              ),
-                              const SizedBox(height: AppSpacing.one),
-                              _TaskPreviewLine(
-                                text: previewText,
-                                isLocked: previewProtected,
-                              ),
-                              if (shouldShowNotePreview) ...[
-                                const SizedBox(height: AppSpacing.one),
-                                Text(
-                                  actualNotePreview,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.subHeaderText,
-                                        fontSize: AppTypography.sizeBase,
-                                        fontWeight: AppTypography.weightNormal,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          16,
+                          AppSpacing.four,
+                          AppSpacing.four,
+                          AppSpacing.four,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    task.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: AppColors.titleText,
+                                          fontSize: AppTypography.sizeLg,
+                                          fontWeight:
+                                              AppTypography.weightSemibold,
+                                          decoration: task.isCompleted
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.three),
+                                SizedBox(
+                                  width: trailingSlotWidth,
+                                  child: Align(
+                                    alignment: Alignment.topRight,
+                                    child: PopupMenuButton<_TaskMenuAction>(
+                                      key:
+                                          TaskManagementScreen.taskMenuButtonKey(
+                                            task.id,
+                                          ),
+                                      color: AppColors.cardFill,
+                                      surfaceTintColor: AppColors.cardFill,
+                                      onSelected: (value) =>
+                                          onMenuSelected(value),
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem<_TaskMenuAction>(
+                                          key:
+                                              TaskManagementScreen.taskMenuActionKey(
+                                                task.id,
+                                                'move-to-space',
+                                              ),
+                                          value: _TaskMenuAction.moveToSpace,
+                                          child: const TaskMenuEntry(
+                                            icon: TablerIcons.folder,
+                                            label: 'Move to Space',
+                                          ),
+                                        ),
+                                        PopupMenuItem<_TaskMenuAction>(
+                                          key:
+                                              TaskManagementScreen.taskMenuActionKey(
+                                                task.id,
+                                                'archive',
+                                              ),
+                                          value: _TaskMenuAction.archive,
+                                          child: const TaskMenuEntry(
+                                            icon: TablerIcons.archive,
+                                            label: 'Archive',
+                                          ),
+                                        ),
+                                        PopupMenuItem<_TaskMenuAction>(
+                                          key:
+                                              TaskManagementScreen.taskMenuActionKey(
+                                                task.id,
+                                                'delete',
+                                              ),
+                                          value: _TaskMenuAction.delete,
+                                          child: const TaskMenuEntry(
+                                            icon: TablerIcons.trash,
+                                            label: 'Delete',
+                                            color: AppColors.rose500,
+                                          ),
+                                        ),
+                                      ],
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 18,
+                                        minHeight: 18,
                                       ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.three),
-                        SizedBox(
-                          width: trailingSlotWidth,
-                          child: Align(
-                            alignment: Alignment.topRight,
-                            child: PopupMenuButton<_TaskMenuAction>(
-                              key: TaskManagementScreen.taskMenuButtonKey(
-                                task.id,
-                              ),
-                              color: AppColors.cardFill,
-                              surfaceTintColor: AppColors.cardFill,
-                              onSelected: (value) => onMenuSelected(value),
-                              itemBuilder: (context) => [
-                                PopupMenuItem<_TaskMenuAction>(
-                                  key: TaskManagementScreen.taskMenuActionKey(
-                                    task.id,
-                                    'move-to-space',
-                                  ),
-                                  value: _TaskMenuAction.moveToSpace,
-                                  child: const TaskMenuEntry(
-                                    icon: TablerIcons.folder,
-                                    label: 'Move to Space',
-                                  ),
-                                ),
-                                PopupMenuItem<_TaskMenuAction>(
-                                  key: TaskManagementScreen.taskMenuActionKey(
-                                    task.id,
-                                    'archive',
-                                  ),
-                                  value: _TaskMenuAction.archive,
-                                  child: const TaskMenuEntry(
-                                    icon: TablerIcons.archive,
-                                    label: 'Archive',
-                                  ),
-                                ),
-                                PopupMenuItem<_TaskMenuAction>(
-                                  key: TaskManagementScreen.taskMenuActionKey(
-                                    task.id,
-                                    'delete',
-                                  ),
-                                  value: _TaskMenuAction.delete,
-                                  child: const TaskMenuEntry(
-                                    icon: TablerIcons.trash,
-                                    label: 'Delete',
-                                    color: AppColors.rose500,
+                                      child: const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: Center(
+                                          child: Icon(
+                                            TablerIcons.dots_vertical,
+                                            size: 18,
+                                            color: AppColors.subHeaderText,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ],
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 24,
-                                minHeight: 24,
-                              ),
-                              icon: const Icon(
-                                TablerIcons.dots_vertical,
-                                size: 18,
-                                color: AppColors.subHeaderText,
-                              ),
                             ),
-                          ),
+                            SizedBox(
+                              height: previewProtected
+                                  ? AppSpacing.one
+                                  : AppSpacing.oneAndHalf,
+                            ),
+                            _TaskPreviewLine(
+                              text: previewText,
+                              appearance: appearance,
+                              isLocked: previewProtected,
+                            ),
+                            SizedBox(
+                              height: previewProtected
+                                  ? AppSpacing.two
+                                  : AppSpacing.two,
+                            ),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                if (category != null)
+                                  _CategoryBadge(
+                                    taskId: task.id,
+                                    category: category!,
+                                    appearance: appearance,
+                                  )
+                                else if (space != null)
+                                  _SpaceBadge(
+                                    taskId: task.id,
+                                    space: space!,
+                                    appearance: appearance,
+                                  ),
+                                const Spacer(),
+                                Flexible(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      scheduleLabel,
+                                      maxLines: 1,
+                                      textAlign: TextAlign.right,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: AppColors.subHeaderText,
+                                            fontSize: AppTypography.sizeBase,
+                                            fontWeight:
+                                                AppTypography.weightNormal,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.three),
-                    if (category != null || space != null) ...[
-                      Wrap(
-                        spacing: AppSpacing.two,
-                        runSpacing: AppSpacing.two,
-                        children: [
-                          if (task.vaultConfig?.isEnabled == true ||
-                              space?.vaultConfig?.isEnabled == true)
-                            const _LockedBadge(),
-                          if (category != null)
-                            _CategoryBadge(category: category!),
-                          if (space != null) _SpaceBadge(space: space!),
-                        ],
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+String _taskScheduleLabel(TaskItem task) {
+  final endDate = task.endDate;
+  if (endDate == null) {
+    return 'Not Set Yet';
+  }
+
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final dateLabel = '${months[endDate.month - 1]} ${endDate.day}';
+  final endMinutes = task.endMinutes;
+  if (endMinutes == null) {
+    return dateLabel;
+  }
+
+  final hour24 = endMinutes ~/ 60;
+  final minute = endMinutes % 60;
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  final hour12 = switch (hour24 % 12) {
+    0 => 12,
+    _ => hour24 % 12,
+  };
+  final minuteLabel = minute.toString().padLeft(2, '0');
+  return '$dateLabel • $hour12:$minuteLabel $period';
+}
+
 class _TaskPreviewLine extends StatelessWidget {
-  const _TaskPreviewLine({required this.text, required this.isLocked});
+  const _TaskPreviewLine({
+    required this.text,
+    required this.appearance,
+    required this.isLocked,
+  });
 
   final String text;
+  final TaskCardAppearance appearance;
   final bool isLocked;
 
   @override
@@ -1650,14 +1741,18 @@ class _TaskPreviewLine extends StatelessWidget {
 
     return Row(
       children: [
-        const Icon(TablerIcons.lock, size: 18, color: AppColors.subHeaderText),
+        Icon(
+          TablerIcons.lock,
+          size: 18,
+          color: appearance.lockedForegroundColor,
+        ),
         const SizedBox(width: AppSpacing.two),
         Expanded(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: textStyle,
+            style: textStyle?.copyWith(color: appearance.lockedForegroundColor),
           ),
         ),
       ],
@@ -1666,30 +1761,38 @@ class _TaskPreviewLine extends StatelessWidget {
 }
 
 class _SpaceBadge extends StatelessWidget {
-  const _SpaceBadge({required this.space});
+  const _SpaceBadge({
+    required this.taskId,
+    required this.space,
+    required this.appearance,
+  });
 
+  final String taskId;
   final TaskSpace space;
+  final TaskCardAppearance appearance;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: TaskManagementScreen.taskBadgeKey(taskId),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.twoAndHalf,
         vertical: AppSpacing.oneAndHalf,
       ),
-      decoration: BoxDecoration(
-        color: space.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadii.full),
-      ),
+      decoration: taskCardBadgeDecoration(appearance),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(TablerIcons.folder, size: 12, color: space.color),
+          Icon(
+            TablerIcons.folder,
+            size: 12,
+            color: appearance.badgeForegroundColor,
+          ),
           const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
             space.name,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: space.color,
+              color: appearance.badgeForegroundColor,
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
@@ -1869,34 +1972,38 @@ class _SpaceBadgePill extends StatelessWidget {
 }
 
 class _CategoryBadge extends StatelessWidget {
-  const _CategoryBadge({required this.category});
+  const _CategoryBadge({
+    required this.taskId,
+    required this.category,
+    required this.appearance,
+  });
 
+  final String taskId;
   final TaskCategory category;
+  final TaskCardAppearance appearance;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: TaskManagementScreen.taskBadgeKey(taskId),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.twoAndHalf,
         vertical: AppSpacing.oneAndHalf,
       ),
-      decoration: BoxDecoration(
-        color: category.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadii.full),
-      ),
+      decoration: taskCardBadgeDecoration(appearance),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             resolveTaskCategoryIcon(category.iconKey),
             size: 12,
-            color: category.color,
+            color: appearance.badgeForegroundColor,
           ),
           const SizedBox(width: AppSpacing.oneAndHalf),
           Text(
             category.name,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: category.color,
+              color: appearance.badgeForegroundColor,
               fontWeight: AppTypography.weightSemibold,
             ),
           ),

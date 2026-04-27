@@ -11,10 +11,21 @@ const customCategoryNameFieldKey = Key('custom-category-name-field');
 const customCategoryCancelButtonKey = Key('custom-category-cancel-button');
 const customCategoryCreateButtonKey = Key('custom-category-create-button');
 
+Key customCategoryColorChoiceKey(Color color) =>
+    taskCategoryColorChoiceKey('custom', color);
+
+Key customCategorySelectedColorCheckKey(Color color) =>
+    taskCategorySelectedColorCheckKey('custom', color);
+
+Key customCategoryIconTileIconKey(String iconKey) =>
+    Key('custom-category-icon-$iconKey');
+
 Future<TaskCategory?> showCustomCategorySheet({
   required BuildContext context,
   required Set<String> existingNames,
   required Uuid uuid,
+  Color? initialColor,
+  bool showColorSelection = true,
 }) {
   return showModalBottomSheet<TaskCategory>(
     context: context,
@@ -22,16 +33,28 @@ Future<TaskCategory?> showCustomCategorySheet({
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (context) {
-      return _CustomCategorySheet(existingNames: existingNames, uuid: uuid);
+      return _CustomCategorySheet(
+        existingNames: existingNames,
+        uuid: uuid,
+        initialColor: initialColor,
+        showColorSelection: showColorSelection,
+      );
     },
   );
 }
 
 class _CustomCategorySheet extends StatefulWidget {
-  const _CustomCategorySheet({required this.existingNames, required this.uuid});
+  const _CustomCategorySheet({
+    required this.existingNames,
+    required this.uuid,
+    this.initialColor,
+    required this.showColorSelection,
+  });
 
   final Set<String> existingNames;
   final Uuid uuid;
+  final Color? initialColor;
+  final bool showColorSelection;
 
   @override
   State<_CustomCategorySheet> createState() => _CustomCategorySheetState();
@@ -42,7 +65,13 @@ class _CustomCategorySheetState extends State<_CustomCategorySheet> {
   final _nameController = TextEditingController();
 
   String _selectedIconKey = taskCategoryIconOptions.first.key;
-  Color _selectedColor = taskCategoryColorOptions.first;
+  late Color _selectedColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedColor = widget.initialColor ?? taskCategoryColorOptions.first;
+  }
 
   @override
   void dispose() {
@@ -204,7 +233,9 @@ class _CustomCategorySheetState extends State<_CustomCategorySheet> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: _selectedIconKey == option.key
-                                              ? AppColors.primaryButtonFill
+                                              ? _selectedColor.withValues(
+                                                  alpha: 0.12,
+                                                )
                                               : AppColors.neutral100,
                                           borderRadius: BorderRadius.circular(
                                             AppRadii.twoXl,
@@ -212,15 +243,18 @@ class _CustomCategorySheetState extends State<_CustomCategorySheet> {
                                           border: Border.all(
                                             color:
                                                 _selectedIconKey == option.key
-                                                ? AppColors.primaryButtonFill
+                                                ? _selectedColor
                                                 : AppColors.neutral200,
                                           ),
                                         ),
                                         child: Icon(
+                                          key: customCategoryIconTileIconKey(
+                                            option.key,
+                                          ),
                                           option.icon,
                                           size: 22,
                                           color: _selectedIconKey == option.key
-                                              ? AppColors.primaryButtonText
+                                              ? _selectedColor
                                               : AppColors.neutral400,
                                         ),
                                       ),
@@ -231,25 +265,20 @@ class _CustomCategorySheetState extends State<_CustomCategorySheet> {
                           },
                         ),
                         const SizedBox(height: AppSpacing.six),
-                        const TaskFieldLabel('Color Selection'),
-                        const SizedBox(height: AppSpacing.four),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            for (final color in taskCategoryColorOptions)
-                              _ColorChoiceChip(
-                                color: color,
-                                selected:
-                                    _selectedColor.toARGB32() ==
-                                    color.toARGB32(),
-                                onTap: () {
-                                  setState(() {
-                                    _selectedColor = color;
-                                  });
-                                },
-                              ),
-                          ],
-                        ),
+                        if (widget.showColorSelection) ...[
+                          const SizedBox(height: AppSpacing.six),
+                          const TaskFieldLabel('Color Selection'),
+                          const SizedBox(height: AppSpacing.four),
+                          TaskCategoryColorSelector(
+                            scope: 'custom',
+                            selectedColor: _selectedColor,
+                            onSelected: (color) {
+                              setState(() {
+                                _selectedColor = color;
+                              });
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -293,38 +322,6 @@ class _CustomCategorySheetState extends State<_CustomCategorySheet> {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ColorChoiceChip extends StatelessWidget {
-  const _ColorChoiceChip({
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final Color color;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadii.full),
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? AppColors.blue100 : AppColors.cardFill,
-            width: 2,
           ),
         ),
       ),

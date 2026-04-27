@@ -19,6 +19,8 @@ const createSubmitButtonKey = Key('task-create-submit-button');
 const createDateRangeButtonKey = Key('task-create-date-range-button');
 const createTimeRangeButtonKey = Key('task-create-time-range-button');
 const createAddCategoryButtonKey = Key('task-create-add-category');
+const createCategoryColorSelectionKey = Key('task-create-category-color-label');
+const createCategoryCurrentIconKey = Key('task-create-category-current-icon');
 
 class TaskCreationRequest {
   const TaskCreationRequest({
@@ -73,6 +75,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   late List<TaskCategory> _categories;
   late TaskPriority _priority;
   String? _selectedCategoryId;
+  late Color _selectedCategoryColor;
   DateTime? _targetDate;
   TimeOfDay? _targetTime;
   bool _vaultEnabled = false;
@@ -91,6 +94,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     _selectedCategoryId =
         widget.lockedCategoryId ??
         (_categories.isNotEmpty ? _categories.first.id : null);
+    _selectedCategoryColor =
+        _colorForCategory(_selectedCategoryId) ??
+        taskCategoryColorOptions.first;
   }
 
   @override
@@ -222,6 +228,8 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       context: context,
       existingNames: _categories.map((item) => item.name).toSet(),
       uuid: _uuid,
+      initialColor: _selectedCategoryColor,
+      showColorSelection: true,
     );
 
     if (category == null) {
@@ -234,10 +242,11 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       _categories = [..._categories, category]
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       _selectedCategoryId = category.id;
+      _selectedCategoryColor = category.color;
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     FocusScope.of(context).unfocus();
 
     if (!_formKey.currentState!.validate()) {
@@ -270,6 +279,11 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         isError: true,
       );
       return;
+    }
+
+    final selectedCategory = _categoryById(_selectedCategoryId!);
+    if (selectedCategory != null) {
+      await widget.repository.upsertCategory(selectedCategory);
     }
 
     Navigator.of(context).pop(
@@ -413,6 +427,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                               onSelected: (value) {
                                 setState(() {
                                   _selectedCategoryId = value;
+                                  _selectedCategoryColor =
+                                      _colorForCategory(value) ??
+                                      _selectedCategoryColor;
                                 });
                               },
                               items: _categories
@@ -420,17 +437,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                                   .toList(),
                               labelBuilder: (value) =>
                                   _categoryLabel(value) ?? 'Category',
-                              leadingBuilder: (value) {
-                                final category = _categoryById(value);
-                                if (category == null) {
-                                  return null;
-                                }
-                                return Icon(
-                                  resolveTaskCategoryIcon(category.iconKey),
-                                  color: category.color,
-                                  size: 18,
-                                );
-                              },
+                              currentLeading: _buildCategoryIcon(
+                                _categoryById(_selectedCategoryId!),
+                                key: createCategoryCurrentIconKey,
+                              ),
+                              leadingBuilder: (value) =>
+                                  _buildCategoryIcon(_categoryById(value)),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.two),
@@ -480,6 +492,24 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                           ),
                         ],
                       ),
+                    if (widget.lockedCategoryId == null) ...[
+                      const SizedBox(height: AppSpacing.three),
+                      const TaskFieldLabel(
+                        'Color Selection',
+                        key: createCategoryColorSelectionKey,
+                      ),
+                      const SizedBox(height: AppSpacing.three),
+                      TaskCategoryColorSelector(
+                        scope: 'task-create',
+                        selectedColor: _selectedCategoryColor,
+                        onSelected: (color) {
+                          setState(() {
+                            _selectedCategoryColor = color;
+                            _syncSelectedCategoryColor(color);
+                          });
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -600,6 +630,40 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   }
 
   String? _categoryLabel(String id) => _categoryById(id)?.name;
+
+  Color? _colorForCategory(String? id) =>
+      id == null ? null : _categoryById(id)?.color;
+
+  Widget? _buildCategoryIcon(TaskCategory? category, {Key? key}) {
+    if (category == null) {
+      return null;
+    }
+
+    final iconColor = category.id == _selectedCategoryId
+        ? _selectedCategoryColor
+        : category.color;
+    return Icon(
+      key: key,
+      resolveTaskCategoryIcon(category.iconKey),
+      color: iconColor,
+      size: 18,
+    );
+  }
+
+  void _syncSelectedCategoryColor(Color color) {
+    final selectedCategoryId = _selectedCategoryId;
+    if (selectedCategoryId == null) {
+      return;
+    }
+
+    _categories = [
+      for (final category in _categories)
+        if (category.id == selectedCategoryId)
+          category.copyWith(colorValue: color.toARGB32())
+        else
+          category,
+    ];
+  }
 
   String _priorityLabel(TaskPriority priority) {
     return switch (priority) {

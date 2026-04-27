@@ -1521,6 +1521,9 @@ class _TaskDetailsSheetState extends State<_TaskDetailsSheet> {
           description: trimmedDescription,
           priority: _priority,
           categoryId: widget.lockedCategoryId ?? _selectedCategoryId,
+          standaloneCategoryId: widget.fixedSpaceId == null
+              ? _selectedCategoryId
+              : widget.task.standaloneCategoryId,
           spaceId: widget.fixedSpaceId ?? widget.task.spaceId,
           startDate: null,
           startMinutes: null,

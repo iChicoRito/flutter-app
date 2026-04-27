@@ -14,6 +14,7 @@ class TaskItem {
     required this.updatedAt,
     this.description,
     this.spaceId,
+    this.standaloneCategoryId,
     this.vaultConfig,
     this.archivedAt,
     this.noteDocumentJson,
@@ -30,6 +31,7 @@ class TaskItem {
   final String title;
   final String? description;
   final String? spaceId;
+  final String? standaloneCategoryId;
   final VaultConfig? vaultConfig;
   final DateTime? archivedAt;
   final String? noteDocumentJson;
@@ -112,6 +114,8 @@ class TaskItem {
     String? description,
     String? spaceId,
     bool clearSpaceId = false,
+    String? standaloneCategoryId,
+    bool clearStandaloneCategoryId = false,
     VaultConfig? vaultConfig,
     bool clearVaultConfig = false,
     DateTime? archivedAt,
@@ -139,6 +143,9 @@ class TaskItem {
       title: title ?? this.title,
       description: description ?? this.description,
       spaceId: clearSpaceId ? null : spaceId ?? this.spaceId,
+      standaloneCategoryId: clearStandaloneCategoryId
+          ? null
+          : standaloneCategoryId ?? this.standaloneCategoryId,
       vaultConfig: clearVaultConfig ? null : vaultConfig ?? this.vaultConfig,
       archivedAt: clearArchivedAt ? null : archivedAt ?? this.archivedAt,
       noteDocumentJson: noteDocumentJson ?? this.noteDocumentJson,

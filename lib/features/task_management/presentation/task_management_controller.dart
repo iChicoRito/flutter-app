@@ -97,6 +97,7 @@ class TaskManagementController extends ChangeNotifier {
       notePlainText: null,
       priority: priority,
       categoryId: lockedCategoryId ?? categoryId,
+      standaloneCategoryId: lockedCategoryId ?? categoryId,
       endDate: endDate,
       endMinutes: endMinutes,
       createdAt: now,

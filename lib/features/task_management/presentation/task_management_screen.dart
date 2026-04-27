@@ -693,10 +693,18 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
 
     try {
+      final movingIntoSpace = selectedSpaceId.isNotEmpty;
+      final leavingSpace = selectedSpaceId.isEmpty && task.spaceId != null;
+      final standaloneCategoryId = movingIntoSpace && task.spaceId == null
+          ? task.categoryId
+          : task.standaloneCategoryId;
       await _controller.saveTask(
         task.copyWith(
           spaceId: selectedSpaceId.isEmpty ? null : selectedSpaceId,
-          categoryId: selectedSpace?.categoryId ?? task.categoryId,
+          categoryId: leavingSpace
+              ? (task.standaloneCategoryId ?? task.categoryId)
+              : selectedSpace?.categoryId ?? task.categoryId,
+          standaloneCategoryId: standaloneCategoryId,
           clearSpaceId: selectedSpaceId.isEmpty,
           updatedAt: DateTime.now(),
         ),
@@ -1417,7 +1425,7 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const trailingSlotWidth = 20.0;
     final appearance = taskCardAppearanceForCategory(
-      categoryColor: category?.color ?? AppColors.blue500,
+      categoryColor: space?.color ?? category?.color ?? AppColors.blue500,
       previewProtected: previewProtected,
     );
     final scheduleLabel = _taskScheduleLabel(task);
@@ -2100,7 +2108,9 @@ class _MoveCategoryChangeDialog extends StatelessWidget {
       icon: Icons.drive_file_move_rounded,
       title: 'Move Task?',
       message:
-          'This task will be moved to another space. You can still access and edit it there.',
+          'This task will be moved to $spaceName. Its category will change from '
+          '$currentCategory to $destinationCategory to match the selected '
+          'space. You can still access and edit it there.',
       secondaryLabel: 'Cancel',
       primaryLabel: 'Yes, Move',
       onSecondaryPressed: () => Navigator.of(context).pop(false),

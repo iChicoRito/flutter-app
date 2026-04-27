@@ -911,6 +911,22 @@ void main() {
     WidgetTester tester,
   ) async {
     taskRepository = InMemoryTaskRepository(
+      categories: [
+        TaskCategory(
+          id: 'work',
+          name: 'Work',
+          iconKey: 'briefcase',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: DateTime(2026, 4, 13, 9),
+        ),
+        TaskCategory(
+          id: 'personal',
+          name: 'Personal',
+          iconKey: 'user',
+          colorValue: AppColors.amber500.toARGB32(),
+          createdAt: DateTime(2026, 4, 13, 9),
+        ),
+      ],
       tasks: [
         buildTask(
           id: 'confirm-move-task',
@@ -960,14 +976,216 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Move Task?'), findsOneWidget);
+    expect(
+      find.text(
+        'This task will be moved to Personal Space. Its category will change '
+        'from Work to Personal to match the selected space. You can still '
+        'access and edit it there.',
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Yes, Move'));
     await tester.pumpAndSettle();
 
     final tasks = await taskRepository.getTasks();
     expect(tasks.single.spaceId, 'personal-space');
+    expect(tasks.single.categoryId, 'personal');
+    expect(tasks.single.standaloneCategoryId, 'work');
     expect(find.text('Task moved successfully.'), findsOneWidget);
+
+    final movedTaskAccent = tester.widget<Container>(
+      find.byKey(TaskManagementScreen.taskAccentKey('confirm-move-task')),
+    );
+    expect(movedTaskAccent.color, AppColors.teal500);
+
+    final movedTaskBadge = tester.widget<Container>(
+      find.byKey(TaskManagementScreen.taskBadgeKey('confirm-move-task')),
+    );
+    final movedTaskBadgeDecoration =
+        movedTaskBadge.decoration! as BoxDecoration;
+    expect(movedTaskBadgeDecoration.color, AppColors.teal100);
   });
+
+  testWidgets(
+    'removing a task from space restores its original standalone category color',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        categories: [
+          TaskCategory(
+            id: 'work',
+            name: 'Work',
+            iconKey: 'briefcase',
+            colorValue: AppColors.blue500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskCategory(
+            id: 'personal',
+            name: 'Personal',
+            iconKey: 'user',
+            colorValue: AppColors.amber500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+        ],
+        tasks: [
+          buildTask(
+            id: 'restore-task',
+            title: 'Restore me',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+            standaloneCategoryId: 'work',
+          ).copyWith(spaceId: 'personal-space'),
+        ],
+        spaces: [
+          TaskSpace(
+            id: 'personal-space',
+            name: 'Personal Space',
+            description: 'Private work area',
+            categoryId: 'personal',
+            colorValue: AppColors.teal500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.taskMenuButtonKey('restore-task')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          TaskManagementScreen.taskMenuActionKey(
+            'restore-task',
+            'move-to-space',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(TaskManagementScreen.moveToSpaceNoSpaceKey));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(TaskManagementScreen.moveToSpaceConfirmButtonKey),
+      );
+      await tester.pumpAndSettle();
+
+      final tasks = await taskRepository.getTasks();
+      expect(tasks.single.spaceId, isNull);
+      expect(tasks.single.categoryId, 'work');
+      expect(tasks.single.standaloneCategoryId, 'work');
+
+      final restoredAccent = tester.widget<Container>(
+        find.byKey(TaskManagementScreen.taskAccentKey('restore-task')),
+      );
+      expect(restoredAccent.color, AppColors.blue500);
+
+      final restoredBadge = tester.widget<Container>(
+        find.byKey(TaskManagementScreen.taskBadgeKey('restore-task')),
+      );
+      final restoredBadgeDecoration =
+          restoredBadge.decoration! as BoxDecoration;
+      expect(restoredBadgeDecoration.color, AppColors.blue100);
+    },
+  );
+
+  testWidgets(
+    'moving a task between spaces keeps the original standalone category backup',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        categories: [
+          TaskCategory(
+            id: 'work',
+            name: 'Work',
+            iconKey: 'briefcase',
+            colorValue: AppColors.blue500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskCategory(
+            id: 'personal',
+            name: 'Personal',
+            iconKey: 'user',
+            colorValue: AppColors.amber500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskCategory(
+            id: 'health',
+            name: 'Health',
+            iconKey: 'heartbeat',
+            colorValue: AppColors.teal500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+          ),
+        ],
+        tasks: [
+          buildTask(
+            id: 'space-hop-task',
+            title: 'Keep my original category',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+            standaloneCategoryId: 'work',
+          ).copyWith(spaceId: 'personal-space'),
+        ],
+        spaces: [
+          TaskSpace(
+            id: 'personal-space',
+            name: 'Personal Space',
+            description: 'Private work area',
+            categoryId: 'personal',
+            colorValue: AppColors.amber500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
+          ),
+          TaskSpace(
+            id: 'health-space',
+            name: 'Health Space',
+            description: 'Wellness work area',
+            categoryId: 'health',
+            colorValue: AppColors.teal500.toARGB32(),
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.taskMenuButtonKey('space-hop-task')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          TaskManagementScreen.taskMenuActionKey(
+            'space-hop-task',
+            'move-to-space',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.moveToSpaceOptionKey('health-space')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(TaskManagementScreen.moveToSpaceConfirmButtonKey),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Yes, Move'));
+      await tester.pumpAndSettle();
+
+      final tasks = await taskRepository.getTasks();
+      expect(tasks.single.spaceId, 'health-space');
+      expect(tasks.single.categoryId, 'health');
+      expect(tasks.single.standaloneCategoryId, 'work');
+    },
+  );
 
   testWidgets('task editor archive asks for confirmation before archiving', (
     WidgetTester tester,
@@ -1355,6 +1573,133 @@ void main() {
     expect(find.text('Custom Category'), findsNothing);
     expect(find.text('Errands'), findsOneWidget);
   });
+
+  testWidgets(
+    'space creation updates the current category icon tint from the selected space color',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      final categories = [
+        TaskCategory(
+          id: 'work',
+          name: 'Work',
+          iconKey: 'briefcase',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: DateTime(2026),
+        ),
+        TaskCategory(
+          id: 'health',
+          name: 'Health',
+          iconKey: 'heartbeat',
+          colorValue: AppColors.rose500.toARGB32(),
+          createdAt: DateTime(2026),
+        ),
+      ];
+
+      await tester.pumpWidget(
+        wrapWithMaterial(SpaceFormScreen(categories: categories)),
+      );
+      await tester.pumpAndSettle();
+
+      final initialIcon = tester.widget<Icon>(
+        find.byKey(spaceFormCategoryCurrentIconKey),
+      );
+      expect(initialIcon.color, AppColors.blue500);
+
+      await tester.tap(
+        find.byKey(taskCategoryColorChoiceKey('space-form', AppColors.teal500)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          taskCategorySelectedColorCheckKey('space-form', AppColors.teal500),
+        ),
+        findsOneWidget,
+      );
+
+      final recoloredIcon = tester.widget<Icon>(
+        find.byKey(spaceFormCategoryCurrentIconKey),
+      );
+      expect(recoloredIcon.color, AppColors.teal500);
+
+      await tester.tap(find.byKey(spaceFormCategoryFieldKey));
+      await tester.pumpAndSettle();
+
+      final workMenuIcon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(const Key('space-form-category-work')).last,
+          matching: find.byIcon(TablerIcons.briefcase),
+        ),
+      );
+      expect(workMenuIcon.color, AppColors.blue500);
+
+      await tester.tap(
+        find.byKey(const Key('space-form-category-health')).last,
+      );
+      await tester.pumpAndSettle();
+
+      final selectedCategoryIcon = tester.widget<Icon>(
+        find.byKey(spaceFormCategoryCurrentIconKey),
+      );
+      expect(selectedCategoryIcon.color, AppColors.rose500);
+    },
+  );
+
+  testWidgets(
+    'space editing updates the current category icon tint from the selected space color',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      final categories = [
+        TaskCategory(
+          id: 'work',
+          name: 'Work',
+          iconKey: 'briefcase',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: DateTime(2026),
+        ),
+      ];
+      final initialSpace = TaskSpace(
+        id: 'space-1',
+        name: 'Operations',
+        description: '',
+        categoryId: 'work',
+        colorValue: AppColors.amber500.toARGB32(),
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+
+      await tester.pumpWidget(
+        wrapWithMaterial(
+          SpaceFormScreen(categories: categories, initialSpace: initialSpace),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final initialIcon = tester.widget<Icon>(
+        find.byKey(spaceFormCategoryCurrentIconKey),
+      );
+      expect(initialIcon.color, AppColors.amber500);
+
+      await tester.tap(
+        find.byKey(
+          taskCategoryColorChoiceKey('space-form', AppColors.indigo500),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          taskCategorySelectedColorCheckKey('space-form', AppColors.indigo500),
+        ),
+        findsOneWidget,
+      );
+
+      final recoloredIcon = tester.widget<Icon>(
+        find.byKey(spaceFormCategoryCurrentIconKey),
+      );
+      expect(recoloredIcon.color, AppColors.indigo500);
+    },
+  );
 
   testWidgets('task card shows the short creation description', (
     WidgetTester tester,
@@ -2298,6 +2643,7 @@ TaskItem buildTask({
   required String title,
   required TaskPriority priority,
   required String categoryId,
+  String? standaloneCategoryId,
   String? description,
   String? noteText,
   bool isCompleted = false,
@@ -2313,6 +2659,7 @@ TaskItem buildTask({
     description: description,
     priority: priority,
     categoryId: categoryId,
+    standaloneCategoryId: standaloneCategoryId ?? categoryId,
     createdAt: now,
     updatedAt: now,
     isCompleted: isCompleted,

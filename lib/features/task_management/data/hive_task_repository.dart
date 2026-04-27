@@ -365,16 +365,21 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
     final vaultConfig = reader.availableBytes > 0
         ? reader.read() as VaultConfig?
         : null;
+    final archivedAt = reader.availableBytes > 0
+        ? TaskItemAdapter._readDateValue(reader.read())
+        : null;
+    final standaloneCategoryId = reader.availableBytes > 0
+        ? reader.read() as String?
+        : null;
 
     return TaskItem(
       id: id,
       title: title,
       description: description,
       spaceId: spaceId,
+      standaloneCategoryId: standaloneCategoryId,
       vaultConfig: vaultConfig,
-      archivedAt: reader.availableBytes > 0
-          ? TaskItemAdapter._readDateValue(reader.read())
-          : null,
+      archivedAt: archivedAt,
       noteDocumentJson: noteDocumentJson,
       notePlainText: notePlainText,
       startDate: startDate,
@@ -412,7 +417,8 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(obj.notePlainText)
       ..write(obj.spaceId)
       ..write(obj.vaultConfig)
-      ..write(_writeDateValue(obj.archivedAt));
+      ..write(_writeDateValue(obj.archivedAt))
+      ..write(obj.standaloneCategoryId);
   }
 
   static DateTime? _readDateValue(dynamic value, {bool dateOnly = false}) {

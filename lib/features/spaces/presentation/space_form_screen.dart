@@ -10,6 +10,9 @@ import '../../task_management/domain/task_category.dart';
 import '../../task_management/presentation/task_management_ui.dart';
 import '../domain/task_space.dart';
 
+const spaceFormCategoryFieldKey = Key('space-form-category');
+const spaceFormCategoryCurrentIconKey = Key('space-form-category-current-icon');
+
 class SpaceFormResult {
   const SpaceFormResult({
     this.id,
@@ -256,7 +259,7 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                       children: [
                         Expanded(
                           child: TaskCompactDropdown<String>(
-                            buttonKey: const Key('space-form-category'),
+                            buttonKey: spaceFormCategoryFieldKey,
                             menuKeyBuilder: (value) =>
                                 Key('space-form-category-$value'),
                             currentValue: _selectedCategoryId,
@@ -267,14 +270,13 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                                 _categoryById(_selectedCategoryId) == null
                                 ? null
                                 : Icon(
+                                    key: spaceFormCategoryCurrentIconKey,
                                     resolveTaskCategoryIcon(
                                       _categoryById(
                                         _selectedCategoryId,
                                       )!.iconKey,
                                     ),
-                                    color: _categoryById(
-                                      _selectedCategoryId,
-                                    )!.color,
+                                    color: _selectedColor,
                                     size: 18,
                                   ),
                             onSelected: (value) {
@@ -355,6 +357,14 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
                       children: [
                         for (final color in taskCategoryColorOptions)
                           _ColorOptionChip(
+                            chipKey: taskCategoryColorChoiceKey(
+                              'space-form',
+                              color,
+                            ),
+                            selectedCheckKey: taskCategorySelectedColorCheckKey(
+                              'space-form',
+                              color,
+                            ),
                             color: color,
                             isSelected:
                                 color.toARGB32() == _selectedColor.toARGB32(),
@@ -446,11 +456,15 @@ class _SpaceFormScreenState extends State<SpaceFormScreen> {
 
 class _ColorOptionChip extends StatelessWidget {
   const _ColorOptionChip({
+    required this.chipKey,
+    required this.selectedCheckKey,
     required this.color,
     required this.isSelected,
     required this.onTap,
   });
 
+  final Key chipKey;
+  final Key selectedCheckKey;
   final Color color;
   final bool isSelected;
   final VoidCallback onTap;
@@ -458,21 +472,20 @@ class _ColorOptionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
+      key: chipKey,
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
         width: 42,
         height: 42,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? taskDarkText : Colors.transparent,
-            width: 2,
-          ),
-        ),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         child: isSelected
-            ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+            ? Icon(
+                key: selectedCheckKey,
+                Icons.check_rounded,
+                color: Colors.white,
+                size: 18,
+              )
             : null,
       ),
     );

@@ -10,18 +10,16 @@ class TaskQuickScheduleRequest {
     required this.title,
     required this.description,
     required this.categoryId,
-    required this.startDate,
+    required this.targetDate,
     required this.startMinutes,
-    required this.endDate,
     required this.endMinutes,
   });
 
   final String title;
   final String description;
   final String categoryId;
-  final DateTime startDate;
+  final DateTime targetDate;
   final int startMinutes;
-  final DateTime endDate;
   final int endMinutes;
 }
 
@@ -35,11 +33,8 @@ class TaskScheduleSheet extends StatefulWidget {
     required this.descriptionFieldKey,
     required this.categoryFieldKey,
     required this.categoryOptionKeyBuilder,
-    required this.swapButtonKey,
-    required this.startDateButtonKey,
-    required this.endDateButtonKey,
-    required this.startTimeButtonKey,
-    required this.endTimeButtonKey,
+    required this.targetDateButtonKey,
+    required this.targetTimeButtonKey,
     required this.submitButtonKey,
   });
 
@@ -50,11 +45,8 @@ class TaskScheduleSheet extends StatefulWidget {
   final Key descriptionFieldKey;
   final Key categoryFieldKey;
   final Key Function(String value) categoryOptionKeyBuilder;
-  final Key swapButtonKey;
-  final Key startDateButtonKey;
-  final Key endDateButtonKey;
-  final Key startTimeButtonKey;
-  final Key endTimeButtonKey;
+  final Key targetDateButtonKey;
+  final Key targetTimeButtonKey;
   final Key submitButtonKey;
 
   @override
@@ -67,8 +59,7 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
   final _descriptionController = TextEditingController();
 
   late String _selectedCategoryId;
-  late DateTime _startDate;
-  late DateTime _endDate;
+  late DateTime _targetDate;
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 11, minute: 0);
   String? _rangeError;
@@ -77,12 +68,11 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
   void initState() {
     super.initState();
     _selectedCategoryId = widget.categories.first.id;
-    _startDate = DateTime(
+    _targetDate = DateTime(
       widget.initialDate.year,
       widget.initialDate.month,
       widget.initialDate.day,
     );
-    _endDate = _startDate;
   }
 
   @override
@@ -92,15 +82,12 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
     super.dispose();
   }
 
-  Future<void> _pickDate({
-    required DateTime initialDate,
-    required ValueChanged<DateTime> onSelected,
-  }) async {
+  Future<void> _pickTargetDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(initialDate.year - 1),
-      lastDate: DateTime(initialDate.year + 5),
+      initialDate: _targetDate,
+      firstDate: DateTime(_targetDate.year - 1),
+      lastDate: DateTime(_targetDate.year + 5),
       builder: (context, child) {
         return Theme(
           data: buildTaskPickerTheme(Theme.of(context)),
@@ -111,16 +98,17 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
     if (picked == null) {
       return;
     }
-    onSelected(DateTime(picked.year, picked.month, picked.day));
+    setState(() {
+      _targetDate = DateTime(picked.year, picked.month, picked.day);
+    });
     _validateRange();
   }
 
-  Future<void> _pickTime({
+  Future<TimeOfDay?> _showTaskTimePicker({
     required TimeOfDay initialTime,
-    required ValueChanged<TimeOfDay> onSelected,
     required String helpText,
   }) async {
-    final picked = await showTimePicker(
+    return showTimePicker(
       context: context,
       initialTime: initialTime,
       helpText: helpText,
@@ -131,37 +119,46 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
         );
       },
     );
-    if (picked == null) {
-      return;
-    }
-    onSelected(picked);
-    _validateRange();
   }
 
-  void _swapSchedule() {
+  Future<void> _pickTimeRange() async {
+    final pickedStart = await _showTaskTimePicker(
+      initialTime: _startTime,
+      helpText: 'Start Time',
+    );
+    if (pickedStart == null || !mounted) {
+      return;
+    }
     setState(() {
-      final previousStartDate = _startDate;
-      final previousStartTime = _startTime;
-      _startDate = _endDate;
-      _startTime = _endTime;
-      _endDate = previousStartDate;
-      _endTime = previousStartTime;
+      _startTime = pickedStart;
+    });
+
+    final pickedEnd = await _showTaskTimePicker(
+      initialTime: _endTime,
+      helpText: 'End Time',
+    );
+    if (pickedEnd == null || !mounted) {
+      _validateRange();
+      return;
+    }
+    setState(() {
+      _endTime = pickedEnd;
     });
     _validateRange();
   }
 
   void _validateRange() {
     final start = DateTime(
-      _startDate.year,
-      _startDate.month,
-      _startDate.day,
+      _targetDate.year,
+      _targetDate.month,
+      _targetDate.day,
       _startTime.hour,
       _startTime.minute,
     );
     final end = DateTime(
-      _endDate.year,
-      _endDate.month,
-      _endDate.day,
+      _targetDate.year,
+      _targetDate.month,
+      _targetDate.day,
       _endTime.hour,
       _endTime.minute,
     );
@@ -186,9 +183,8 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId,
-        startDate: _startDate,
+        targetDate: _targetDate,
         startMinutes: (_startTime.hour * 60) + _startTime.minute,
-        endDate: _endDate,
         endMinutes: (_endTime.hour * 60) + _endTime.minute,
       ),
     );
@@ -271,21 +267,23 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                   TextFormField(
                     key: widget.descriptionFieldKey,
                     controller: _descriptionController,
+                    maxLines: 4,
                     decoration: taskInputDecoration(
                       context: context,
-                      hintText: 'Enter Task Title',
+                      hintText:
+                          'Add relevant notes, links, or instructions here...',
                     ),
                     validator: (value) {
                       final trimmed = value?.trim() ?? '';
-                      if (trimmed.length > 20) {
-                        return 'Description must be 20 characters or fewer.';
+                      if (trimmed.length > 100) {
+                        return 'Description must be 100 characters or fewer.';
                       }
                       return null;
                     },
                   ),
                   const SizedBox(height: AppSpacing.oneAndHalf),
                   Text(
-                    'Maximum of 20 characters',
+                    'Maximum of 100 characters',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.subHeaderText,
                     ),
@@ -320,83 +318,21 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.three),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TaskPickerButton(
-                          buttonKey: widget.startDateButtonKey,
-                          title: 'Start Date',
-                          value: _formatDate(_startDate),
-                          icon: TablerIcons.calendar_event,
-                          onTap: () => _pickDate(
-                            initialDate: _startDate,
-                            onSelected: (value) => setState(() {
-                              _startDate = value;
-                            }),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.two),
-                      IconButton(
-                        key: widget.swapButtonKey,
-                        onPressed: _swapSchedule,
-                        icon: const Icon(
-                          TablerIcons.arrows_exchange,
-                          color: AppColors.subHeaderText,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.two),
-                      Expanded(
-                        child: TaskPickerButton(
-                          buttonKey: widget.endDateButtonKey,
-                          title: 'End Date',
-                          value: _formatDate(_endDate),
-                          icon: TablerIcons.calendar_event,
-                          onTap: () => _pickDate(
-                            initialDate: _endDate,
-                            onSelected: (value) => setState(() {
-                              _endDate = value;
-                            }),
-                          ),
-                        ),
-                      ),
-                    ],
+                  TaskPickerButton(
+                    buttonKey: widget.targetDateButtonKey,
+                    title: 'Target Date',
+                    value: _formatDate(_targetDate),
+                    icon: TablerIcons.calendar_event,
+                    onTap: _pickTargetDate,
                   ),
                   const SizedBox(height: AppSpacing.three),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TaskPickerButton(
-                          buttonKey: widget.startTimeButtonKey,
-                          title: 'Start Time',
-                          value: _startTime.format(context),
-                          icon: TablerIcons.clock,
-                          onTap: () => _pickTime(
-                            initialTime: _startTime,
-                            helpText: 'Start Time',
-                            onSelected: (value) => setState(() {
-                              _startTime = value;
-                            }),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 60),
-                      Expanded(
-                        child: TaskPickerButton(
-                          buttonKey: widget.endTimeButtonKey,
-                          title: 'End Time',
-                          value: _endTime.format(context),
-                          icon: TablerIcons.clock,
-                          onTap: () => _pickTime(
-                            initialTime: _endTime,
-                            helpText: 'End Time',
-                            onSelected: (value) => setState(() {
-                              _endTime = value;
-                            }),
-                          ),
-                        ),
-                      ),
-                    ],
+                  TaskPickerButton(
+                    buttonKey: widget.targetTimeButtonKey,
+                    title: 'Target Time',
+                    value:
+                        '${_startTime.format(context)} - ${_endTime.format(context)}',
+                    icon: TablerIcons.clock,
+                    onTap: _pickTimeRange,
                   ),
                   if (_rangeError != null) ...[
                     const SizedBox(height: AppSpacing.three),

@@ -20,10 +20,11 @@ class TaskCalendarView extends StatelessWidget {
     required this.onStatusSelected,
     required this.onSchedulePressed,
     required this.onTaskTap,
-    required this.monthDropdownKey,
     required this.statusChipKeyBuilder,
     required this.dateKeyBuilder,
     required this.scheduleButtonKey,
+    required this.timelineScrollKey,
+    required this.monthHeaderKey,
   });
 
   final TaskManagementController controller;
@@ -36,10 +37,11 @@ class TaskCalendarView extends StatelessWidget {
   final ValueChanged<TaskStatusFilter> onStatusSelected;
   final VoidCallback onSchedulePressed;
   final ValueChanged<TaskItem> onTaskTap;
-  final Key monthDropdownKey;
   final Key Function(String value) statusChipKeyBuilder;
   final Key Function(String value) dateKeyBuilder;
   final Key scheduleButtonKey;
+  final Key timelineScrollKey;
+  final Key monthHeaderKey;
 
   @override
   Widget build(BuildContext context) {
@@ -66,20 +68,14 @@ class TaskCalendarView extends StatelessWidget {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     const _CalendarHeader(),
-                    const SizedBox(height: AppSpacing.six),
-                    _CalendarMonthPicker(
-                      buttonKey: monthDropdownKey,
-                      selectedMonth: selectedMonth,
-                      onSelected: onMonthChanged,
-                    ),
+                    const SizedBox(height: AppSpacing.three),
+                    segmentControl,
                     const SizedBox(height: AppSpacing.three),
                     _CalendarStatusRow(
                       selectedFilter: statusFilter,
                       onSelected: onStatusSelected,
                       chipKeyBuilder: statusChipKeyBuilder,
                     ),
-                    const SizedBox(height: AppSpacing.three),
-                    segmentControl,
                     const SizedBox(height: AppSpacing.six),
                     _TaskCalendarDateRail(
                       selectedMonth: selectedMonth,
@@ -91,13 +87,18 @@ class TaskCalendarView extends StatelessWidget {
                       dateKeyBuilder: dateKeyBuilder,
                     ),
                     const SizedBox(height: AppSpacing.six),
-                    _CalendarMonthSummary(selectedMonth: selectedMonth),
+                    _CalendarMonthSummary(
+                      selectedMonth: selectedMonth,
+                      onMonthChanged: onMonthChanged,
+                      headerKey: monthHeaderKey,
+                    ),
                     const SizedBox(height: AppSpacing.three),
                     _CalendarTimeline(
                       tasks: calendarTasks,
                       categoryFor: controller.categoryFor,
                       selectedDate: selectedDate,
                       onTaskTap: onTaskTap,
+                      scrollKey: timelineScrollKey,
                     ),
                   ]),
                 ),
@@ -158,60 +159,6 @@ class _CalendarHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CalendarMonthPicker extends StatelessWidget {
-  const _CalendarMonthPicker({
-    required this.buttonKey,
-    required this.selectedMonth,
-    required this.onSelected,
-  });
-
-  final Key buttonKey;
-  final DateTime selectedMonth;
-  final ValueChanged<DateTime> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<int>(
-      key: buttonKey,
-      initialValue: selectedMonth.month,
-      color: AppColors.cardFill,
-      surfaceTintColor: AppColors.cardFill,
-      onSelected: (value) => onSelected(DateTime(selectedMonth.year, value, 1)),
-      itemBuilder: (context) => List.generate(12, (index) {
-        final month = index + 1;
-        return PopupMenuItem<int>(value: month, child: Text(_monthName(month)));
-      }),
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.three),
-        decoration: BoxDecoration(
-          color: AppColors.cardFill,
-          borderRadius: BorderRadius.circular(AppRadii.xl),
-          border: Border.all(color: AppColors.neutral200),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _monthName(selectedMonth.month),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.titleText,
-                  fontSize: AppTypography.sizeBase,
-                ),
-              ),
-            ),
-            const Icon(
-              TablerIcons.chevron_down,
-              size: 18,
-              color: AppColors.subHeaderText,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -284,7 +231,7 @@ class _CalendarStatusRow extends StatelessWidget {
   }
 }
 
-class _TaskCalendarDateRail extends StatelessWidget {
+class _TaskCalendarDateRail extends StatefulWidget {
   const _TaskCalendarDateRail({
     required this.selectedMonth,
     required this.selectedDate,
@@ -300,23 +247,71 @@ class _TaskCalendarDateRail extends StatelessWidget {
   final Key Function(String value) dateKeyBuilder;
 
   @override
+  State<_TaskCalendarDateRail> createState() => _TaskCalendarDateRailState();
+}
+
+class _TaskCalendarDateRailState extends State<_TaskCalendarDateRail> {
+  final GlobalKey _selectedItemKey = GlobalKey();
+  String? _lastScrolledKeyValue;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleScrollToSelected();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TaskCalendarDateRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate != widget.selectedDate ||
+        oldWidget.availableDays != widget.availableDays) {
+      _scheduleScrollToSelected();
+    }
+  }
+
+  void _scheduleScrollToSelected() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final keyValue =
+          '${widget.selectedDate.year.toString().padLeft(4, '0')}-${widget.selectedDate.month.toString().padLeft(2, '0')}-${widget.selectedDate.day.toString().padLeft(2, '0')}';
+      if (_lastScrolledKeyValue == keyValue) {
+        return;
+      }
+      final selectedContext = _selectedItemKey.currentContext;
+      if (selectedContext == null) {
+        return;
+      }
+      _lastScrolledKeyValue = keyValue;
+      Scrollable.ensureVisible(
+        selectedContext,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: availableDays.map((day) {
+        children: widget.availableDays.map((day) {
           final isSelected =
-              day.year == selectedDate.year &&
-              day.month == selectedDate.month &&
-              day.day == selectedDate.day;
+              day.year == widget.selectedDate.year &&
+              day.month == widget.selectedDate.month &&
+              day.day == widget.selectedDate.day;
           final keyValue =
               '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
 
           return Padding(
+            key: isSelected ? _selectedItemKey : null,
             padding: const EdgeInsets.only(right: AppSpacing.oneAndHalf),
             child: InkWell(
-              key: dateKeyBuilder(keyValue),
-              onTap: () => onSelected(day),
+              key: widget.dateKeyBuilder(keyValue),
+              onTap: () => widget.onSelected(day),
               borderRadius: BorderRadius.circular(AppRadii.xl),
               child: Container(
                 width: 54,
@@ -377,30 +372,105 @@ class _TaskCalendarDateRail extends StatelessWidget {
   }
 }
 
-class _CalendarMonthSummary extends StatelessWidget {
-  const _CalendarMonthSummary({required this.selectedMonth});
+class _CalendarMonthSummary extends StatefulWidget {
+  const _CalendarMonthSummary({
+    required this.selectedMonth,
+    required this.onMonthChanged,
+    required this.headerKey,
+  });
 
   final DateTime selectedMonth;
+  final ValueChanged<DateTime> onMonthChanged;
+  final Key headerKey;
+
+  @override
+  State<_CalendarMonthSummary> createState() => _CalendarMonthSummaryState();
+}
+
+class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
+  bool _isMenuOpen = false;
 
   @override
   Widget build(BuildContext context) {
+    final months = List<DateTime>.generate(
+      12,
+      (index) => DateTime(widget.selectedMonth.year, index + 1, 1),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${_monthName(selectedMonth.month)} ${selectedMonth.year}',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: AppColors.titleText,
-            fontSize: AppTypography.sizeLg,
-            fontWeight: AppTypography.weightSemibold,
+        PopupMenuButton<DateTime>(
+          key: widget.headerKey,
+          tooltip: '',
+          elevation: 2,
+          color: AppColors.cardFill,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            side: const BorderSide(color: AppColors.cardBorder),
           ),
-        ),
-        const SizedBox(height: AppSpacing.one),
-        Text(
-          'Your scheduled tasks for month of ${_monthName(selectedMonth.month).toLowerCase()}',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.subHeaderText,
-            fontSize: AppTypography.sizeSm,
+          offset: const Offset(0, 8),
+          padding: EdgeInsets.zero,
+          onOpened: () {
+            if (mounted) {
+              setState(() {
+                _isMenuOpen = true;
+              });
+            }
+          },
+          onCanceled: () {
+            if (mounted) {
+              setState(() {
+                _isMenuOpen = false;
+              });
+            }
+          },
+          onSelected: (value) {
+            setState(() {
+              _isMenuOpen = false;
+            });
+            widget.onMonthChanged(value);
+          },
+          itemBuilder: (context) => months.map((month) {
+            final isSelected =
+                month.year == widget.selectedMonth.year &&
+                month.month == widget.selectedMonth.month;
+            return PopupMenuItem<DateTime>(
+              value: month,
+              child: Text(
+                _monthName(month.month),
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: isSelected
+                      ? AppColors.primaryBadgeText
+                      : AppColors.titleText,
+                  fontSize: AppTypography.sizeSm,
+                ),
+              ),
+            );
+          }).toList(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isMenuOpen
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: AppColors.titleText,
+                ),
+                const SizedBox(width: AppSpacing.one),
+                Text(
+                  '${_monthName(widget.selectedMonth.month)} ${widget.selectedMonth.year}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.titleText,
+                    fontSize: AppTypography.sizeLg,
+                    fontWeight: AppTypography.weightSemibold,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -414,16 +484,25 @@ class _CalendarTimeline extends StatelessWidget {
     required this.categoryFor,
     required this.selectedDate,
     required this.onTaskTap,
+    required this.scrollKey,
   });
 
   final List<TaskItem> tasks;
   final TaskCategory? Function(String categoryId) categoryFor;
   final DateTime selectedDate;
   final ValueChanged<TaskItem> onTaskTap;
+  final Key scrollKey;
 
   @override
   Widget build(BuildContext context) {
     final timelineHours = _buildTimelineHours(tasks);
+    final taskLayouts = _buildTaskLayouts(
+      tasks,
+      timelineHours: timelineHours,
+      rowHeight: 82,
+      timelineTopInset: 18,
+      minimumHeight: 86,
+    );
     const rowHeight = 82.0;
     const minimumCardHeight = 86.0;
     const timelineTopInset = 18.0;
@@ -452,80 +531,132 @@ class _CalendarTimeline extends StatelessWidget {
             )
           : SizedBox(
               height: timelineHeight,
-              child: Stack(
-                children: [
-                  ...List.generate(timelineHours.length, (index) {
-                    final hour = timelineHours[index];
-                    final isLongLine = hour >= 17;
-                    final top = index * rowHeight;
-                    return Positioned(
-                      left: 0,
-                      right: 0,
-                      top: top,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const laneLeft = 96.0;
+                  const columnGap = 4.0;
+                  const preferredOverlapColumnWidth = 260.0;
+                  final maximumGroupLaneWidth = taskLayouts.isEmpty
+                      ? 220.0
+                      : taskLayouts
+                            .map((layout) {
+                              if (layout.columnCount == 1) {
+                                return _calendarTaskContentWidth(layout.task);
+                              }
+                              return (preferredOverlapColumnWidth *
+                                      layout.columnCount) +
+                                  (columnGap * (layout.columnCount - 1));
+                            })
+                            .reduce((a, b) => a > b ? a : b);
+                  final canvasWidth =
+                      constraints.maxWidth > (laneLeft + maximumGroupLaneWidth)
+                      ? constraints.maxWidth
+                      : (laneLeft + maximumGroupLaneWidth);
+
+                  return SingleChildScrollView(
+                    key: scrollKey,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: canvasWidth,
+                      height: timelineHeight,
+                      child: Stack(
                         children: [
-                          SizedBox(
-                            width: 88,
-                            child: Text(
-                              _formatHour(hour),
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: AppColors.subHeaderText,
-                                    fontSize: AppTypography.sizeBase,
-                                    height: 1,
+                          ...List.generate(timelineHours.length, (index) {
+                            final hour = timelineHours[index];
+                            final isLongLine = hour >= 17;
+                            final top = index * rowHeight;
+                            return Positioned(
+                              left: 0,
+                              right: 0,
+                              top: top,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(
+                                    width: 88,
+                                    child: Text(
+                                      _formatHour(hour),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: AppColors.subHeaderText,
+                                            fontSize: AppTypography.sizeBase,
+                                            height: 1,
+                                          ),
+                                    ),
                                   ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Container(
-                              margin: const EdgeInsets.only(top: 10),
-                              height: 1,
-                              color: isLongLine
-                                  ? AppColors.neutral200
-                                  : AppColors.checkboxCardBorder,
-                            ),
-                          ),
+                                  Expanded(
+                                    child: Container(
+                                      margin: const EdgeInsets.only(top: 10),
+                                      height: 1,
+                                      color: isLongLine
+                                          ? AppColors.neutral200
+                                          : AppColors.checkboxCardBorder,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          ...taskLayouts.map((layout) {
+                            final category = categoryFor(
+                              layout.task.categoryId,
+                            );
+                            final tone = category?.color ?? AppColors.blue500;
+                            final columnCount = layout.columnCount;
+                            final totalGapWidth = columnGap * (columnCount - 1);
+                            final groupLaneWidth = columnCount == 1
+                                ? _calendarTaskContentWidth(layout.task)
+                                : (preferredOverlapColumnWidth * columnCount) +
+                                      totalGapWidth;
+                            final columnWidth =
+                                (groupLaneWidth - totalGapWidth) / columnCount;
+                            final left =
+                                laneLeft +
+                                (layout.columnIndex *
+                                    (columnWidth + columnGap));
+
+                            return Positioned(
+                              left: left,
+                              top: layout.top,
+                              width: columnWidth,
+                              child: SizedBox(
+                                height: layout.height,
+                                child: _CalendarTaskCard(
+                                  task: layout.task,
+                                  tone: tone,
+                                  category: category,
+                                  onTap: () => onTaskTap(layout.task),
+                                ),
+                              ),
+                            );
+                          }),
                         ],
                       ),
-                    );
-                  }),
-                  ...tasks.map((task) {
-                    final category = categoryFor(task.categoryId);
-                    final tone = category?.color ?? AppColors.blue500;
-                    final top = _timelineTopForTask(
-                      task,
-                      timelineHours,
-                      rowHeight,
-                      timelineTopInset,
-                    );
-                    final height = _timelineHeightForTask(
-                      task,
-                      timelineHours: timelineHours,
-                      rowHeight: rowHeight,
-                      timelineTopInset: timelineTopInset,
-                      minimumHeight: minimumCardHeight,
-                    );
-                    return Positioned(
-                      left: 96,
-                      right: 0,
-                      top: top,
-                      child: SizedBox(
-                        height: height,
-                        child: _CalendarTaskCard(
-                          task: task,
-                          tone: tone,
-                          category: category,
-                          onTap: () => onTaskTap(task),
-                        ),
-                      ),
-                    );
-                  }),
-                ],
+                    ),
+                  );
+                },
               ),
             ),
     );
   }
+}
+
+class _CalendarTaskLayout {
+  const _CalendarTaskLayout({
+    required this.task,
+    required this.top,
+    required this.height,
+    required this.columnIndex,
+    required this.columnCount,
+  });
+
+  final TaskItem task;
+  final double top;
+  final double height;
+  final int columnIndex;
+  final int columnCount;
 }
 
 class _CalendarTaskCard extends StatelessWidget {
@@ -556,81 +687,103 @@ class _CalendarTaskCard extends StatelessWidget {
             color: tone,
             borderRadius: BorderRadius.circular(AppRadii.xl),
           ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
-                    fontSize: 16,
-                    height: 1,
-                    fontWeight: AppTypography.weightSemibold,
-                  ),
-                ),
-                if ((task.description ?? '').isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    task.description!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyle?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.82),
-                      fontSize: 12,
-                      height: 1,
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final showDescription =
+                  (task.description ?? '').isNotEmpty &&
+                  constraints.maxHeight >= 100;
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.two,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: badgeBackground,
-                        borderRadius: BorderRadius.circular(AppRadii.full),
-                      ),
-                      child: Text(
-                        category?.name ?? 'Category',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textStyle?.copyWith(
-                          color: tone,
-                          fontSize: 12,
-                          height: 1,
-                          fontWeight: AppTypography.weightMedium,
-                        ),
+                    Text(
+                      _formatRange(task),
+                      maxLines: 1,
+                      style: textStyle?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontSize: 12,
+                        height: 1,
+                        fontWeight: AppTypography.weightMedium,
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.three),
-                    Expanded(
-                      child: Text(
-                        _formatRange(task),
+                    const SizedBox(height: 8),
+                    Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Colors.white,
+                        fontSize: 16,
+                        height: 1,
+                        fontWeight: AppTypography.weightSemibold,
+                      ),
+                    ),
+                    if (showDescription) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        task.description!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
                         style: textStyle?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.74),
+                          color: Colors.white.withValues(alpha: 0.82),
                           fontSize: 12,
                           height: 1,
-                          fontWeight: AppTypography.weightMedium,
                         ),
                       ),
+                    ],
+                    const Spacer(),
+                    _CalendarTaskBadge(
+                      category: category,
+                      badgeBackground: badgeBackground,
+                      tone: tone,
+                      textStyle: textStyle,
                     ),
                   ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarTaskBadge extends StatelessWidget {
+  const _CalendarTaskBadge({
+    required this.category,
+    required this.badgeBackground,
+    required this.tone,
+    required this.textStyle,
+  });
+
+  final TaskCategory? category;
+  final Color badgeBackground;
+  final Color tone;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.two,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: badgeBackground,
+        borderRadius: BorderRadius.circular(AppRadii.full),
+      ),
+      child: Text(
+        category?.name ?? 'Category',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: textStyle?.copyWith(
+          color: tone,
+          fontSize: 12,
+          height: 1,
+          fontWeight: AppTypography.weightMedium,
         ),
       ),
     );
@@ -715,6 +868,189 @@ double _timelineTopForTask(
     rowHeight: rowHeight,
     timelineTopInset: timelineTopInset,
   );
+}
+
+List<_CalendarTaskLayout> _buildTaskLayouts(
+  List<TaskItem> tasks, {
+  required List<int> timelineHours,
+  required double rowHeight,
+  required double timelineTopInset,
+  required double minimumHeight,
+}) {
+  if (tasks.isEmpty) {
+    return const [];
+  }
+
+  final sortedTasks = [...tasks]
+    ..sort((a, b) {
+      final startComparison = _effectiveStartMinutes(
+        a,
+      ).compareTo(_effectiveStartMinutes(b));
+      if (startComparison != 0) {
+        return startComparison;
+      }
+
+      final durationComparison = _effectiveDurationMinutes(
+        b,
+      ).compareTo(_effectiveDurationMinutes(a));
+      if (durationComparison != 0) {
+        return durationComparison;
+      }
+
+      final idComparison = a.id.compareTo(b.id);
+      if (idComparison != 0) {
+        return idComparison;
+      }
+
+      return a.title.compareTo(b.title);
+    });
+
+  final layouts = <_CalendarTaskLayout>[];
+  var groupTasks = <TaskItem>[];
+  var groupMaxEnd = 0;
+
+  for (final task in sortedTasks) {
+    final start = _effectiveStartMinutes(task);
+    final end = _effectiveEndMinutes(task);
+
+    if (groupTasks.isEmpty) {
+      groupTasks = [task];
+      groupMaxEnd = end;
+      continue;
+    }
+
+    if (start < groupMaxEnd) {
+      groupTasks.add(task);
+      if (end > groupMaxEnd) {
+        groupMaxEnd = end;
+      }
+      continue;
+    }
+
+    layouts.addAll(
+      _buildTaskLayoutsForGroup(
+        groupTasks,
+        timelineHours: timelineHours,
+        rowHeight: rowHeight,
+        timelineTopInset: timelineTopInset,
+        minimumHeight: minimumHeight,
+      ),
+    );
+    groupTasks = [task];
+    groupMaxEnd = end;
+  }
+
+  if (groupTasks.isNotEmpty) {
+    layouts.addAll(
+      _buildTaskLayoutsForGroup(
+        groupTasks,
+        timelineHours: timelineHours,
+        rowHeight: rowHeight,
+        timelineTopInset: timelineTopInset,
+        minimumHeight: minimumHeight,
+      ),
+    );
+  }
+
+  return layouts;
+}
+
+List<_CalendarTaskLayout> _buildTaskLayoutsForGroup(
+  List<TaskItem> tasks, {
+  required List<int> timelineHours,
+  required double rowHeight,
+  required double timelineTopInset,
+  required double minimumHeight,
+}) {
+  const stackedTaskGap = 4.0;
+  final columnEndMinutes = <int>[];
+  final assignedColumns = <TaskItem, int>{};
+  final columnTaskCounts = <int>[];
+  final assignedTopOffsets = <TaskItem, double>{};
+
+  for (final task in tasks) {
+    final start = _effectiveStartMinutes(task);
+    final end = _effectiveEndMinutes(task);
+    var assignedColumn = -1;
+
+    for (var index = 0; index < columnEndMinutes.length; index++) {
+      if (start >= columnEndMinutes[index]) {
+        assignedColumn = index;
+        columnEndMinutes[index] = end;
+        break;
+      }
+    }
+
+    if (assignedColumn == -1) {
+      assignedColumn = columnEndMinutes.length;
+      columnEndMinutes.add(end);
+      columnTaskCounts.add(0);
+    }
+
+    assignedColumns[task] = assignedColumn;
+    assignedTopOffsets[task] =
+        columnTaskCounts[assignedColumn] * stackedTaskGap;
+    columnTaskCounts[assignedColumn] = columnTaskCounts[assignedColumn] + 1;
+  }
+
+  final columnCount = columnEndMinutes.length;
+  return tasks.map((task) {
+    return _CalendarTaskLayout(
+      task: task,
+      top:
+          _timelineTopForTask(
+            task,
+            timelineHours,
+            rowHeight,
+            timelineTopInset,
+          ) +
+          assignedTopOffsets[task]!,
+      height: _timelineHeightForTask(
+        task,
+        timelineHours: timelineHours,
+        rowHeight: rowHeight,
+        timelineTopInset: timelineTopInset,
+        minimumHeight: minimumHeight,
+      ),
+      columnIndex: assignedColumns[task]!,
+      columnCount: columnCount,
+    );
+  }).toList();
+}
+
+int _effectiveStartMinutes(TaskItem task) {
+  return task.startMinutes ?? task.endMinutes ?? 8 * 60;
+}
+
+int _effectiveEndMinutes(TaskItem task) {
+  final start = _effectiveStartMinutes(task);
+  return task.endMinutes ?? (start + 30);
+}
+
+int _effectiveDurationMinutes(TaskItem task) {
+  return _effectiveEndMinutes(task) - _effectiveStartMinutes(task);
+}
+
+double _calendarTaskContentWidth(TaskItem task) {
+  final timeWidth = _formatRange(task).length * 8.0;
+  final titleWidth = task.title.length * 10.5;
+  final descriptionWidth = (task.description ?? '').length * 8.5;
+  final badgeWidth = ((task.categoryId.isEmpty ? 8 : 10) * 9.0) + 48;
+  final estimatedContentWidth = [
+    timeWidth,
+    titleWidth,
+    descriptionWidth,
+    badgeWidth,
+  ].reduce((a, b) => a > b ? a : b);
+
+  final paddedWidth = estimatedContentWidth + 28;
+  if (paddedWidth < 160) {
+    return 160;
+  }
+  if (paddedWidth > 260) {
+    return 260;
+  }
+  return paddedWidth;
 }
 
 double _timelineHeightForTask(

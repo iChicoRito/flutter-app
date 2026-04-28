@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_app/core/theme/app_design_tokens.dart';
 import 'package:flutter_app/core/services/task_data_refresh_scope.dart';
 import 'package:flutter_app/core/services/task_reminder_scope.dart';
 import 'package:flutter_app/core/services/task_reminder_service.dart';
@@ -48,7 +49,11 @@ void main() {
     await controller.load();
   });
 
-  Future<void> pumpScreen(WidgetTester tester) async {
+  Future<void> pumpScreenWithState(
+    WidgetTester tester, {
+    required InMemoryTaskRepository repository,
+    required TaskManagementController controller,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(430, 1000));
     await tester.pumpWidget(
       TaskDataRefreshScope(
@@ -76,6 +81,29 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpScreen(WidgetTester tester) async {
+    await pumpScreenWithState(
+      tester,
+      repository: repository,
+      controller: controller,
+    );
+  }
+
+  Future<void> openCalendarAndSelectDate(
+    WidgetTester tester,
+    String keyValue,
+  ) async {
+    await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
+    await tester.pumpAndSettle();
+    final dateFinder = find.byKey(
+      TaskManagementScreen.calendarDateKey(keyValue),
+    );
+    await tester.ensureVisible(dateFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(dateFinder);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('segmented switcher toggles between tasks list and calendar', (
     WidgetTester tester,
   ) async {
@@ -98,19 +126,18 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpScreen(tester);
-    await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
-    await tester.pumpAndSettle();
+    await openCalendarAndSelectDate(tester, '2026-04-20');
 
-    expect(
-      find.byKey(TaskManagementScreen.calendarMonthDropdownKey),
-      findsOneWidget,
-    );
     expect(
       find.byKey(TaskManagementScreen.calendarStatusChipKey('all')),
       findsOneWidget,
     );
     expect(
       find.byKey(TaskManagementScreen.calendarStatusChipKey('completed')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(TaskManagementScreen.calendarDateKey('2026-04-27')),
       findsOneWidget,
     );
     expect(
@@ -124,23 +151,122 @@ void main() {
       find.byKey(TaskManagementScreen.calendarScheduleButtonKey),
       findsOneWidget,
     );
+    expect(
+      find.byKey(TaskManagementScreen.calendarTimelineScrollKey),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('tapping a calendar task opens the rich editor page', (
+  testWidgets('calendar opens with today selected by default', (
     WidgetTester tester,
   ) async {
     await pumpScreen(tester);
     await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
     await tester.pumpAndSettle();
 
+    final todayCard = find.byKey(
+      TaskManagementScreen.calendarDateKey('2026-04-28'),
+    );
+    final selectedContainer = find.descendant(
+      of: todayCard,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).color == AppColors.blue100,
+      ),
+    );
+
+    expect(selectedContainer, findsOneWidget);
+    final todayRect = tester.getRect(todayCard);
+    expect(todayRect.left, greaterThanOrEqualTo(0));
+    expect(todayRect.right, lessThanOrEqualTo(430));
+  });
+
+  testWidgets('calendar month header opens dropdown picker and changes month', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(tester);
+    await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
+    await tester.pumpAndSettle();
+
+    final downArrow = find.descendant(
+      of: find.byKey(TaskManagementScreen.calendarMonthDropdownKey),
+      matching: find.byIcon(Icons.keyboard_arrow_down_rounded),
+    );
+    expect(downArrow, findsOneWidget);
+
+    await tester.tap(find.byKey(TaskManagementScreen.calendarMonthDropdownKey));
+    await tester.pumpAndSettle();
+
+    final upArrow = find.descendant(
+      of: find.byKey(TaskManagementScreen.calendarMonthDropdownKey),
+      matching: find.byIcon(Icons.keyboard_arrow_up_rounded),
+    );
+    expect(upArrow, findsOneWidget);
+    expect(find.text('Select month'), findsNothing);
+
+    await tester.tap(find.text('May'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(TaskManagementScreen.calendarMonthDropdownKey),
+        matching: find.byIcon(Icons.keyboard_arrow_down_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('May 2026'), findsOneWidget);
+    expect(find.text('Your scheduled tasks for month of may'), findsNothing);
+  });
+
+  testWidgets('tapping a calendar task opens read-only details sheet', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(tester);
+    await openCalendarAndSelectDate(tester, '2026-04-20');
+
     await tester.tap(find.text('Science Assessment'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
+    expect(
+      find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+      findsOneWidget,
+    );
+    expect(find.byKey(TaskEditorScreen.markerKey), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+        matching: find.text('Prepare for quiz'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+        matching: find.text('Category'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Apr 20, 8:00 AM - 11:00 AM'), findsOneWidget);
+    expect(
+      find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+      findsNothing,
+    );
   });
 
   testWidgets(
-    'schedule sheet validates range swap and creates a task in the calendar timeline',
+    'schedule sheet validates description and creates same-day time range',
     (WidgetTester tester) async {
       await pumpScreen(tester);
       await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
@@ -160,6 +286,28 @@ void main() {
         find.byKey(TaskManagementScreen.calendarSheetCategoryFieldKey),
         findsOneWidget,
       );
+      expect(
+        find.byKey(TaskManagementScreen.calendarSheetTargetDateButtonKey),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.calendarSheetTargetTimeButtonKey),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.calendarSheetSwapButtonKey),
+        findsNothing,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.calendarSheetStartDateButtonKey),
+        findsNothing,
+      );
+      expect(
+        find.byKey(TaskManagementScreen.calendarSheetEndDateButtonKey),
+        findsNothing,
+      );
+      expect(find.text('Target Date'), findsOneWidget);
+      expect(find.text('Target Time'), findsOneWidget);
 
       await tester.enterText(
         find.byKey(TaskManagementScreen.calendarSheetTitleFieldKey),
@@ -167,7 +315,7 @@ void main() {
       );
       await tester.enterText(
         find.byKey(TaskManagementScreen.calendarSheetDescriptionFieldKey),
-        'This description is definitely too long',
+        'This description is intentionally longer than one hundred characters so the quick schedule validator can reject it cleanly.',
       );
       await tester.tap(
         find.byKey(TaskManagementScreen.calendarSheetSubmitButtonKey),
@@ -175,7 +323,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Description must be 20 characters or fewer.'),
+        find.text('Description must be 100 characters or fewer.'),
         findsOneWidget,
       );
 
@@ -183,21 +331,6 @@ void main() {
         find.byKey(TaskManagementScreen.calendarSheetDescriptionFieldKey),
         'Launch prep',
       );
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarSheetSwapButtonKey),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarSheetSubmitButtonKey),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('End time must be after start time.'), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarSheetSwapButtonKey),
-      );
-      await tester.pumpAndSettle();
 
       await tester.tap(
         find.byKey(TaskManagementScreen.calendarSheetCategoryFieldKey),
@@ -220,9 +353,204 @@ void main() {
 
       final tasks = await repository.getTasks();
       final created = tasks.firstWhere((task) => task.title == 'Plan launch');
-      expect(created.startDateTime, DateTime(2026, 4, 20, 9));
-      expect(created.endDateTime, DateTime(2026, 4, 20, 11));
+      expect(created.startDateTime, DateTime(2026, 4, 28, 9));
+      expect(created.endDateTime, DateTime(2026, 4, 28, 11));
+      expect(created.startDate, DateTime(2026, 4, 28));
+      expect(created.endDate, DateTime(2026, 4, 28));
       expect(created.categoryId, 'personal');
+    },
+  );
+
+  testWidgets(
+    'overlapping tasks with the same time render in separate columns',
+    (WidgetTester tester) async {
+      final overlapRepository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'alpha',
+            title: 'Alpha',
+            description: 'First overlap',
+            categoryId: 'school',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 9 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 11 * 60,
+          ),
+          _buildTask(
+            id: 'beta',
+            title: 'Beta',
+            description: 'Second overlap',
+            categoryId: 'personal',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 9 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 11 * 60,
+          ),
+        ],
+        seedDefaults: true,
+      );
+      final overlapController = TaskManagementController(overlapRepository);
+      await overlapController.load();
+
+      await pumpScreenWithState(
+        tester,
+        repository: overlapRepository,
+        controller: overlapController,
+      );
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      final alphaLeft = tester.getTopLeft(find.text('Alpha')).dx;
+      final betaLeft = tester.getTopLeft(find.text('Beta')).dx;
+
+      expect(alphaLeft, isNot(equals(betaLeft)));
+      expect(find.text('09:00AM - 11:00AM'), findsNWidgets(2));
+    },
+  );
+
+  testWidgets('three overlapping tasks render across three columns', (
+    WidgetTester tester,
+  ) async {
+    final overlapRepository = InMemoryTaskRepository(
+      tasks: [
+        _buildTask(
+          id: 'alpha',
+          title: 'Alpha',
+          description: 'First overlap',
+          categoryId: 'school',
+          startDate: DateTime(2026, 4, 20),
+          startMinutes: 9 * 60,
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 11 * 60,
+        ),
+        _buildTask(
+          id: 'beta',
+          title: 'Beta',
+          description: 'Second overlap',
+          categoryId: 'personal',
+          startDate: DateTime(2026, 4, 20),
+          startMinutes: 9 * 60,
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 11 * 60,
+        ),
+        _buildTask(
+          id: 'gamma',
+          title: 'Gamma',
+          description: 'Third overlap',
+          categoryId: 'school',
+          startDate: DateTime(2026, 4, 20),
+          startMinutes: 9 * 60,
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 11 * 60,
+        ),
+      ],
+      seedDefaults: true,
+    );
+    final overlapController = TaskManagementController(overlapRepository);
+    await overlapController.load();
+
+    await pumpScreenWithState(
+      tester,
+      repository: overlapRepository,
+      controller: overlapController,
+    );
+    await openCalendarAndSelectDate(tester, '2026-04-20');
+
+    final leftPositions = <double>{
+      tester.getTopLeft(find.text('Alpha')).dx,
+      tester.getTopLeft(find.text('Beta')).dx,
+      tester.getTopLeft(find.text('Gamma')).dx,
+    };
+
+    expect(leftPositions.length, 3);
+  });
+
+  testWidgets(
+    'a short task overlapping a long task renders in a separate column',
+    (WidgetTester tester) async {
+      final overlapRepository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'long',
+            title: 'Long Task',
+            description: 'Long overlap',
+            categoryId: 'school',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 9 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 12 * 60,
+          ),
+          _buildTask(
+            id: 'short',
+            title: 'Short Task',
+            description: 'Short overlap',
+            categoryId: 'personal',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 10 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 11 * 60,
+          ),
+        ],
+        seedDefaults: true,
+      );
+      final overlapController = TaskManagementController(overlapRepository);
+      await overlapController.load();
+
+      await pumpScreenWithState(
+        tester,
+        repository: overlapRepository,
+        controller: overlapController,
+      );
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      final longLeft = tester.getTopLeft(find.text('Long Task')).dx;
+      final shortLeft = tester.getTopLeft(find.text('Short Task')).dx;
+
+      expect(longLeft, isNot(equals(shortLeft)));
+    },
+  );
+
+  testWidgets(
+    'tasks that touch end-to-start stay in the same full-width lane',
+    (WidgetTester tester) async {
+      final adjacentRepository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'first',
+            title: 'First Task',
+            description: 'Morning block',
+            categoryId: 'school',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 9 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 10 * 60,
+          ),
+          _buildTask(
+            id: 'second',
+            title: 'Second Task',
+            description: 'Next block',
+            categoryId: 'personal',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 10 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 11 * 60,
+          ),
+        ],
+        seedDefaults: true,
+      );
+      final adjacentController = TaskManagementController(adjacentRepository);
+      await adjacentController.load();
+
+      await pumpScreenWithState(
+        tester,
+        repository: adjacentRepository,
+        controller: adjacentController,
+      );
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      final firstLeft = tester.getTopLeft(find.text('First Task')).dx;
+      final secondLeft = tester.getTopLeft(find.text('Second Task')).dx;
+
+      expect(firstLeft, equals(secondLeft));
     },
   );
 }

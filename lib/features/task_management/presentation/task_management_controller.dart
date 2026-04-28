@@ -225,6 +225,10 @@ class TaskManagementController extends ChangeNotifier {
     };
     final query = searchQuery.trim().toLowerCase();
     final filtered = _visibleTasks(_tasks).where((task) {
+      if (_isCalendarRangeTask(task)) {
+        return false;
+      }
+
       final noteText = taskNotePreview(task).toLowerCase();
       final descriptionText = (task.description ?? '').toLowerCase();
       final matchesSearch =
@@ -351,6 +355,13 @@ class TaskManagementController extends ChangeNotifier {
       TaskPriority.high => 3,
       TaskPriority.urgent => 4,
     };
+  }
+
+  static bool _isCalendarRangeTask(TaskItem task) {
+    return task.startDate != null &&
+        task.startMinutes != null &&
+        task.endDate != null &&
+        task.endMinutes != null;
   }
 
   static bool _isTodayBucket(TaskItem task, DateTime now) {

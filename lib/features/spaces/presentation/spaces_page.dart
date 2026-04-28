@@ -44,7 +44,6 @@ class _SpacesPageState extends State<SpacesPage> {
     reminderService: widget.reminderService,
   )..load();
 
-  final TextEditingController _searchController = TextEditingController();
   SpacesViewMode _viewMode = SpacesViewMode.list;
   TaskDataRefreshController? _taskDataRefreshController;
 
@@ -68,7 +67,6 @@ class _SpacesPageState extends State<SpacesPage> {
   @override
   void dispose() {
     _taskDataRefreshController?.removeListener(_handleTaskDataRefresh);
-    _searchController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -486,11 +484,6 @@ class _SpacesPageState extends State<SpacesPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const _SpacesPageHeader(),
-                          const SizedBox(height: AppSpacing.six),
-                          _SpacesSearchField(
-                            controller: _searchController,
-                            onChanged: _controller.updateSearchQuery,
-                          ),
                           const SizedBox(height: AppSpacing.three),
                           _SpacesCategoryFilterRow(
                             categories: _controller.categories,
@@ -715,30 +708,6 @@ class _SpacesPageHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _SpacesSearchField extends StatelessWidget {
-  const _SpacesSearchField({required this.controller, required this.onChanged});
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      decoration: taskInputDecoration(
-        context: context,
-        hintText: 'Search spaces, descriptions, categories',
-        prefixIcon: const Icon(
-          TablerIcons.search,
-          size: 18,
-          color: taskMutedText,
-        ),
       ),
     );
   }

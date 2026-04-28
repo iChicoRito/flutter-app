@@ -7,7 +7,7 @@ import '../domain/task_item.dart';
 import 'task_management_controller.dart';
 import 'task_management_ui.dart';
 
-class TaskCalendarView extends StatelessWidget {
+class TaskCalendarView extends StatefulWidget {
   const TaskCalendarView({
     super.key,
     required this.controller,
@@ -44,10 +44,26 @@ class TaskCalendarView extends StatelessWidget {
   final Key monthHeaderKey;
 
   @override
+  State<TaskCalendarView> createState() => _TaskCalendarViewState();
+}
+
+class _TaskCalendarViewState extends State<TaskCalendarView> {
+  bool _isZoomGestureActive = false;
+
+  void _handleZoomGestureStateChanged(bool isActive) {
+    if (_isZoomGestureActive == isActive || !mounted) {
+      return;
+    }
+    setState(() {
+      _isZoomGestureActive = isActive;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final calendarTasks = controller.calendarTasksForDate(
-      selectedDate: selectedDate,
-      statusFilter: statusFilter,
+    final calendarTasks = widget.controller.calendarTasksForDate(
+      selectedDate: widget.selectedDate,
+      statusFilter: widget.statusFilter,
       now: DateTime.now(),
     );
 
@@ -55,8 +71,11 @@ class TaskCalendarView extends StatelessWidget {
       children: [
         RefreshIndicator(
           color: AppColors.blue500,
-          onRefresh: controller.load,
+          onRefresh: widget.controller.load,
           child: CustomScrollView(
+            physics: _isZoomGestureActive
+                ? const NeverScrollableScrollPhysics()
+                : const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
@@ -69,36 +88,37 @@ class TaskCalendarView extends StatelessWidget {
                   delegate: SliverChildListDelegate([
                     const _CalendarHeader(),
                     const SizedBox(height: AppSpacing.three),
-                    segmentControl,
+                    widget.segmentControl,
                     const SizedBox(height: AppSpacing.three),
                     _CalendarStatusRow(
-                      selectedFilter: statusFilter,
-                      onSelected: onStatusSelected,
-                      chipKeyBuilder: statusChipKeyBuilder,
+                      selectedFilter: widget.statusFilter,
+                      onSelected: widget.onStatusSelected,
+                      chipKeyBuilder: widget.statusChipKeyBuilder,
                     ),
                     const SizedBox(height: AppSpacing.six),
                     _TaskCalendarDateRail(
-                      selectedMonth: selectedMonth,
-                      selectedDate: selectedDate,
-                      availableDays: controller.calendarDaysForMonth(
-                        selectedMonth,
+                      selectedMonth: widget.selectedMonth,
+                      selectedDate: widget.selectedDate,
+                      availableDays: widget.controller.calendarDaysForMonth(
+                        widget.selectedMonth,
                       ),
-                      onSelected: onDateSelected,
-                      dateKeyBuilder: dateKeyBuilder,
+                      onSelected: widget.onDateSelected,
+                      dateKeyBuilder: widget.dateKeyBuilder,
                     ),
                     const SizedBox(height: AppSpacing.six),
                     _CalendarMonthSummary(
-                      selectedMonth: selectedMonth,
-                      onMonthChanged: onMonthChanged,
-                      headerKey: monthHeaderKey,
+                      selectedMonth: widget.selectedMonth,
+                      onMonthChanged: widget.onMonthChanged,
+                      headerKey: widget.monthHeaderKey,
                     ),
                     const SizedBox(height: AppSpacing.three),
                     _CalendarTimeline(
                       tasks: calendarTasks,
-                      categoryFor: controller.categoryFor,
-                      selectedDate: selectedDate,
-                      onTaskTap: onTaskTap,
-                      scrollKey: timelineScrollKey,
+                      categoryFor: widget.controller.categoryFor,
+                      selectedDate: widget.selectedDate,
+                      onTaskTap: widget.onTaskTap,
+                      scrollKey: widget.timelineScrollKey,
+                      onZoomGestureStateChanged: _handleZoomGestureStateChanged,
                     ),
                   ]),
                 ),
@@ -110,8 +130,8 @@ class TaskCalendarView extends StatelessWidget {
           right: AppSpacing.four,
           bottom: AppSpacing.four,
           child: FilledButton.icon(
-            key: scheduleButtonKey,
-            onPressed: onSchedulePressed,
+            key: widget.scheduleButtonKey,
+            onPressed: widget.onSchedulePressed,
             icon: const Icon(TablerIcons.plus, size: 18),
             label: const Text('Schedule Task'),
             style: taskButtonStyle(
@@ -478,13 +498,14 @@ class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
   }
 }
 
-class _CalendarTimeline extends StatelessWidget {
+class _CalendarTimeline extends StatefulWidget {
   const _CalendarTimeline({
     required this.tasks,
     required this.categoryFor,
     required this.selectedDate,
     required this.onTaskTap,
     required this.scrollKey,
+    required this.onZoomGestureStateChanged,
   });
 
   final List<TaskItem> tasks;
@@ -492,20 +513,45 @@ class _CalendarTimeline extends StatelessWidget {
   final DateTime selectedDate;
   final ValueChanged<TaskItem> onTaskTap;
   final Key scrollKey;
+  final ValueChanged<bool> onZoomGestureStateChanged;
+
+  @override
+  State<_CalendarTimeline> createState() => _CalendarTimelineState();
+}
+
+class _CalendarTimelineState extends State<_CalendarTimeline> {
+  static const double _minZoom = 0.75;
+  static const double _maxZoom = 1.75;
+  static const double _zoomSensitivity = 0.45;
+  static const double _zoomDeadZone = 0.03;
+
+  double _verticalZoom = 1.0;
+  double _scaleStartVerticalZoom = 1.0;
+  int _activePointers = 0;
+
+  void _updateZoomGestureState() {
+    widget.onZoomGestureStateChanged(_activePointers >= 2);
+  }
+
+  @override
+  void dispose() {
+    widget.onZoomGestureStateChanged(false);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final timelineHours = _buildTimelineHours(tasks);
-    final taskLayouts = _buildTaskLayouts(
-      tasks,
-      timelineHours: timelineHours,
-      rowHeight: 82,
-      timelineTopInset: 18,
-      minimumHeight: 86,
-    );
-    const rowHeight = 82.0;
-    const minimumCardHeight = 86.0;
+    final timelineHours = _buildTimelineHours(widget.tasks);
+    final rowHeight = 82.0 * _verticalZoom;
+    final minimumCardHeight = 86.0 * _verticalZoom;
     const timelineTopInset = 18.0;
+    final taskLayouts = _buildTaskLayouts(
+      widget.tasks,
+      timelineHours: timelineHours,
+      rowHeight: rowHeight,
+      timelineTopInset: timelineTopInset,
+      minimumHeight: minimumCardHeight,
+    );
     final timelineHeight =
         timelineTopInset + (timelineHours.length - 1) * rowHeight + 78;
 
@@ -516,12 +562,12 @@ class _CalendarTimeline extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.threeXl),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: tasks.isEmpty
+      child: widget.tasks.isEmpty
           ? SizedBox(
               height: 220,
               child: Center(
                 child: Text(
-                  'No scheduled tasks for ${_monthName(selectedDate.month)} ${selectedDate.day}.',
+                  'No scheduled tasks for ${_monthName(widget.selectedDate.month)} ${widget.selectedDate.day}.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppColors.subHeaderText,
@@ -529,114 +575,181 @@ class _CalendarTimeline extends StatelessWidget {
                 ),
               ),
             )
-          : SizedBox(
-              height: timelineHeight,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const laneLeft = 96.0;
-                  const columnGap = 4.0;
-                  const preferredOverlapColumnWidth = 260.0;
-                  final maximumGroupLaneWidth = taskLayouts.isEmpty
-                      ? 220.0
-                      : taskLayouts
-                            .map((layout) {
-                              if (layout.columnCount == 1) {
-                                return _calendarTaskContentWidth(layout.task);
-                              }
-                              return (preferredOverlapColumnWidth *
-                                      layout.columnCount) +
-                                  (columnGap * (layout.columnCount - 1));
-                            })
-                            .reduce((a, b) => a > b ? a : b);
-                  final canvasWidth =
-                      constraints.maxWidth > (laneLeft + maximumGroupLaneWidth)
-                      ? constraints.maxWidth
-                      : (laneLeft + maximumGroupLaneWidth);
-
-                  return SingleChildScrollView(
-                    key: scrollKey,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: canvasWidth,
-                      height: timelineHeight,
-                      child: Stack(
-                        children: [
-                          ...List.generate(timelineHours.length, (index) {
-                            final hour = timelineHours[index];
-                            final isLongLine = hour >= 17;
-                            final top = index * rowHeight;
-                            return Positioned(
-                              left: 0,
-                              right: 0,
-                              top: top,
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SizedBox(
-                                    width: 88,
-                                    child: Text(
-                                      _formatHour(hour),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: AppColors.subHeaderText,
-                                            fontSize: AppTypography.sizeBase,
-                                            height: 1,
-                                          ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Container(
-                                      margin: const EdgeInsets.only(top: 10),
-                                      height: 1,
-                                      color: isLongLine
-                                          ? AppColors.neutral200
-                                          : AppColors.checkboxCardBorder,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                          ...taskLayouts.map((layout) {
-                            final category = categoryFor(
-                              layout.task.categoryId,
-                            );
-                            final tone = category?.color ?? AppColors.blue500;
-                            final columnCount = layout.columnCount;
-                            final totalGapWidth = columnGap * (columnCount - 1);
-                            final groupLaneWidth = columnCount == 1
-                                ? _calendarTaskContentWidth(layout.task)
-                                : (preferredOverlapColumnWidth * columnCount) +
-                                      totalGapWidth;
-                            final columnWidth =
-                                (groupLaneWidth - totalGapWidth) / columnCount;
-                            final left =
-                                laneLeft +
-                                (layout.columnIndex *
-                                    (columnWidth + columnGap));
-
-                            return Positioned(
-                              left: left,
-                              top: layout.top,
-                              width: columnWidth,
-                              child: SizedBox(
-                                height: layout.height,
-                                child: _CalendarTaskCard(
-                                  task: layout.task,
-                                  tone: tone,
-                                  category: category,
-                                  onTap: () => onTaskTap(layout.task),
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  );
+          : Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: (event) {
+                _activePointers += 1;
+                _updateZoomGestureState();
+              },
+              onPointerUp: (event) {
+                if (_activePointers > 0) {
+                  _activePointers -= 1;
+                }
+                _updateZoomGestureState();
+              },
+              onPointerCancel: (event) {
+                if (_activePointers > 0) {
+                  _activePointers -= 1;
+                }
+                _updateZoomGestureState();
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onScaleStart: (details) {
+                  _scaleStartVerticalZoom = _verticalZoom;
                 },
+                onScaleUpdate: (details) {
+                  if (details.pointerCount < 2) {
+                    return;
+                  }
+                  final verticalScale = dampenCalendarZoomScale(
+                    details.verticalScale,
+                    sensitivity: _zoomSensitivity,
+                    deadZone: _zoomDeadZone,
+                  );
+                  final nextVerticalZoom =
+                      (_scaleStartVerticalZoom * verticalScale).clamp(
+                        _minZoom,
+                        _maxZoom,
+                      );
+                  if (nextVerticalZoom == _verticalZoom) {
+                    return;
+                  }
+                  setState(() {
+                    _verticalZoom = nextVerticalZoom;
+                  });
+                },
+                onScaleEnd: (details) {
+                  widget.onZoomGestureStateChanged(false);
+                },
+                child: SizedBox(
+                  height: timelineHeight,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const timeLabelWidth = 52.0;
+                      const timeLabelGap = 8.0;
+                      const laneLeft = timeLabelWidth + timeLabelGap;
+                      const columnGap = 4.0;
+                      final availableLaneWidth =
+                          constraints.maxWidth - laneLeft;
+                      final maximumGroupLaneWidth = taskLayouts.isEmpty
+                          ? 220.0
+                          : taskLayouts
+                                .map((layout) {
+                                  return calendarGroupLaneWidth(
+                                    columnCount: layout.columnCount,
+                                    availableLaneWidth: availableLaneWidth,
+                                    columnGap: columnGap,
+                                  );
+                                })
+                                .reduce((a, b) => a > b ? a : b);
+                      final canvasWidth =
+                          constraints.maxWidth >
+                              (laneLeft + maximumGroupLaneWidth)
+                          ? constraints.maxWidth
+                          : (laneLeft + maximumGroupLaneWidth);
+
+                      return SingleChildScrollView(
+                        key: widget.scrollKey,
+                        scrollDirection: Axis.horizontal,
+                        physics: _activePointers >= 2
+                            ? const NeverScrollableScrollPhysics()
+                            : const ClampingScrollPhysics(),
+                        child: SizedBox(
+                          key: const ValueKey('calendar_timeline_canvas'),
+                          width: canvasWidth,
+                          height: timelineHeight,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              ...List.generate(timelineHours.length, (index) {
+                                final hour = timelineHours[index];
+                                final isLongLine = hour >= 17;
+                                final top = index * rowHeight;
+                                return Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  top: top,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        width: timeLabelWidth,
+                                        child: Text(
+                                          _formatHour(hour),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: AppColors.subHeaderText,
+                                                fontSize:
+                                                    AppTypography.sizeBase,
+                                                height: 1,
+                                              ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Container(
+                                          margin: const EdgeInsets.only(
+                                            top: 10,
+                                          ),
+                                          height: 1,
+                                          color: isLongLine
+                                              ? AppColors.neutral200
+                                              : AppColors.checkboxCardBorder,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                              ...taskLayouts.map((layout) {
+                                final category = widget.categoryFor(
+                                  layout.task.categoryId,
+                                );
+                                final tone =
+                                    category?.color ?? AppColors.blue500;
+                                final columnCount = layout.columnCount;
+                                final totalGapWidth =
+                                    columnGap * (columnCount - 1);
+                                final groupLaneWidth = calendarGroupLaneWidth(
+                                  columnCount: columnCount,
+                                  availableLaneWidth: availableLaneWidth,
+                                  columnGap: columnGap,
+                                );
+                                final columnWidth =
+                                    (groupLaneWidth - totalGapWidth) /
+                                    columnCount;
+                                final left =
+                                    laneLeft +
+                                    (layout.columnIndex *
+                                        (columnWidth + columnGap));
+
+                                return Positioned(
+                                  left: left,
+                                  top: layout.top,
+                                  width: columnWidth,
+                                  child: SizedBox(
+                                    height: layout.height,
+                                    child: _CalendarTaskCard(
+                                      task: layout.task,
+                                      tone: tone,
+                                      category: category,
+                                      preferCompactLayout: columnCount > 1,
+                                      onTap: () =>
+                                          widget.onTaskTap(layout.task),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
     );
@@ -664,12 +777,14 @@ class _CalendarTaskCard extends StatelessWidget {
     required this.task,
     required this.tone,
     required this.category,
+    required this.preferCompactLayout,
     required this.onTap,
   });
 
   final TaskItem task;
   final Color tone;
   final TaskCategory? category;
+  final bool preferCompactLayout;
   final VoidCallback onTap;
 
   @override
@@ -680,6 +795,7 @@ class _CalendarTaskCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        key: ValueKey('calendar_task_${task.id}'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadii.xl),
         child: Ink(
@@ -689,6 +805,55 @@ class _CalendarTaskCard extends StatelessWidget {
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
+              final contentMode = resolveCalendarTaskContentMode(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
+                preferCompact: preferCompactLayout,
+              );
+              if (contentMode == CalendarTaskContentMode.hidden) {
+                return const SizedBox.expand();
+              }
+              if (contentMode == CalendarTaskContentMode.compact) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _formatCompactMinutes(task.startMinutes ?? 0),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textStyle?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.88),
+                          fontSize: 11,
+                          height: 1,
+                          fontWeight: AppTypography.weightMedium,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Colors.white,
+                          fontSize: 13,
+                          height: 1.1,
+                          fontWeight: AppTypography.weightSemibold,
+                        ),
+                      ),
+                      const Spacer(),
+                      _CalendarTaskBadge(
+                        category: category,
+                        badgeBackground: badgeBackground,
+                        tone: tone,
+                        textStyle: textStyle,
+                      ),
+                    ],
+                  ),
+                );
+              }
+
               final showDescription =
                   (task.description ?? '').isNotEmpty &&
                   constraints.maxHeight >= 100;
@@ -804,12 +969,13 @@ Color _lightTone(Color tone) {
 }
 
 String _formatHour(int hour24) {
-  final period = hour24 >= 12 ? 'PM' : 'AM';
-  final hour12 = switch (hour24 % 12) {
+  final normalizedHour = hour24 % 24;
+  final period = normalizedHour >= 12 ? 'PM' : 'AM';
+  final hour12 = switch (normalizedHour % 12) {
     0 => 12,
-    _ => hour24 % 12,
+    _ => normalizedHour % 12,
   };
-  return '${hour12.toString().padLeft(2, '0')}:00 $period';
+  return '$hour12$period';
 }
 
 String _formatRange(TaskItem task) {
@@ -1031,26 +1197,48 @@ int _effectiveDurationMinutes(TaskItem task) {
   return _effectiveEndMinutes(task) - _effectiveStartMinutes(task);
 }
 
-double _calendarTaskContentWidth(TaskItem task) {
-  final timeWidth = _formatRange(task).length * 8.0;
-  final titleWidth = task.title.length * 10.5;
-  final descriptionWidth = (task.description ?? '').length * 8.5;
-  final badgeWidth = ((task.categoryId.isEmpty ? 8 : 10) * 9.0) + 48;
-  final estimatedContentWidth = [
-    timeWidth,
-    titleWidth,
-    descriptionWidth,
-    badgeWidth,
-  ].reduce((a, b) => a > b ? a : b);
+enum CalendarTaskContentMode { hidden, compact, detailed }
 
-  final paddedWidth = estimatedContentWidth + 28;
-  if (paddedWidth < 160) {
-    return 160;
+CalendarTaskContentMode resolveCalendarTaskContentMode({
+  required double width,
+  required double height,
+  bool preferCompact = false,
+}) {
+  if (width < 88 || height < 72) {
+    return CalendarTaskContentMode.hidden;
   }
-  if (paddedWidth > 260) {
-    return 260;
+  if (preferCompact || width < 148 || height < 84) {
+    return CalendarTaskContentMode.compact;
   }
-  return paddedWidth;
+  return CalendarTaskContentMode.detailed;
+}
+
+double calendarGroupLaneWidth({
+  required int columnCount,
+  required double availableLaneWidth,
+  required double columnGap,
+  double preferredOverlapColumnWidth = 176.0,
+}) {
+  if (columnCount <= 1) {
+    return availableLaneWidth;
+  }
+
+  final preferredWidth =
+      (preferredOverlapColumnWidth * columnCount) +
+      (columnGap * (columnCount - 1));
+  return preferredWidth;
+}
+
+double dampenCalendarZoomScale(
+  double rawScale, {
+  double sensitivity = 0.45,
+  double deadZone = 0.03,
+}) {
+  final delta = rawScale - 1;
+  if (delta.abs() <= deadZone) {
+    return 1;
+  }
+  return 1 + (delta * sensitivity);
 }
 
 double _timelineHeightForTask(
@@ -1132,7 +1320,7 @@ List<int> _buildTimelineHours(List<TaskItem> tasks) {
   }
 
   startHour = startHour.clamp(0, 23);
-  endHour = endHour.clamp(startHour + 1, 23);
+  endHour = endHour.clamp(startHour + 1, 24);
 
   return [for (var hour = startHour; hour <= endHour; hour++) hour];
 }

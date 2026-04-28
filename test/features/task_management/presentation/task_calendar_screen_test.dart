@@ -11,6 +11,7 @@ import 'package:flutter_app/core/services/vault_service_scope.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
+import 'package:flutter_app/features/task_management/presentation/task_calendar_view.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_controller.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
@@ -147,6 +148,10 @@ void main() {
     expect(find.text('April 2026'), findsOneWidget);
     expect(find.text('Science Assessment'), findsOneWidget);
     expect(find.text('Dinner with Family'), findsOneWidget);
+    expect(find.text('8AM'), findsOneWidget);
+    expect(find.text('11AM'), findsOneWidget);
+    expect(find.text('08:00 AM'), findsNothing);
+    expect(find.text('11:00 AM'), findsNothing);
     expect(
       find.byKey(TaskManagementScreen.calendarScheduleButtonKey),
       findsOneWidget,
@@ -403,7 +408,7 @@ void main() {
       final betaLeft = tester.getTopLeft(find.text('Beta')).dx;
 
       expect(alphaLeft, isNot(equals(betaLeft)));
-      expect(find.text('09:00AM - 11:00AM'), findsNWidgets(2));
+      expect(find.text('09:00AM'), findsNWidgets(2));
     },
   );
 
@@ -456,9 +461,9 @@ void main() {
     await openCalendarAndSelectDate(tester, '2026-04-20');
 
     final leftPositions = <double>{
-      tester.getTopLeft(find.text('Alpha')).dx,
-      tester.getTopLeft(find.text('Beta')).dx,
-      tester.getTopLeft(find.text('Gamma')).dx,
+      tester.getTopLeft(find.byKey(const ValueKey('calendar_task_alpha'))).dx,
+      tester.getTopLeft(find.byKey(const ValueKey('calendar_task_beta'))).dx,
+      tester.getTopLeft(find.byKey(const ValueKey('calendar_task_gamma'))).dx,
     };
 
     expect(leftPositions.length, 3);
@@ -553,6 +558,88 @@ void main() {
       expect(firstLeft, equals(secondLeft));
     },
   );
+
+  testWidgets(
+    'calendar timeline shows exact minute ranges for scheduled tasks',
+    (WidgetTester tester) async {
+      final preciseRepository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'precise',
+            title: 'Precise Task',
+            description: 'Minute-level schedule',
+            categoryId: 'school',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: (22 * 60) + 30,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: (23 * 60) + 25,
+          ),
+        ],
+        seedDefaults: true,
+      );
+      final preciseController = TaskManagementController(preciseRepository);
+      await preciseController.load();
+
+      await pumpScreenWithState(
+        tester,
+        repository: preciseRepository,
+        controller: preciseController,
+      );
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      expect(find.text('10:30PM - 11:25PM'), findsOneWidget);
+    },
+  );
+
+  test('overlap lane width keeps compact columns and allows scrolling', () {
+    expect(
+      calendarGroupLaneWidth(
+        columnCount: 1,
+        availableLaneWidth: 320,
+        columnGap: 4,
+      ),
+      320,
+    );
+    expect(
+      calendarGroupLaneWidth(
+        columnCount: 2,
+        availableLaneWidth: 320,
+        columnGap: 4,
+      ),
+      356,
+    );
+    expect(
+      calendarGroupLaneWidth(
+        columnCount: 2,
+        availableLaneWidth: 600,
+        columnGap: 4,
+      ),
+      356,
+    );
+  });
+
+  test('calendar task content mode falls back to compact before hiding', () {
+    expect(
+      resolveCalendarTaskContentMode(width: 160, height: 100),
+      CalendarTaskContentMode.detailed,
+    );
+    expect(
+      resolveCalendarTaskContentMode(width: 120, height: 100),
+      CalendarTaskContentMode.compact,
+    );
+    expect(
+      resolveCalendarTaskContentMode(
+        width: 180,
+        height: 100,
+        preferCompact: true,
+      ),
+      CalendarTaskContentMode.compact,
+    );
+    expect(
+      resolveCalendarTaskContentMode(width: 80, height: 100),
+      CalendarTaskContentMode.hidden,
+    );
+  });
 }
 
 TaskItem _buildTask({

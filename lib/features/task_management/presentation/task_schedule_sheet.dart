@@ -9,7 +9,7 @@ class TaskQuickScheduleRequest {
   const TaskQuickScheduleRequest({
     required this.title,
     required this.description,
-    required this.categoryId,
+    required this.category,
     required this.targetDate,
     required this.startMinutes,
     required this.endMinutes,
@@ -17,7 +17,7 @@ class TaskQuickScheduleRequest {
 
   final String title;
   final String description;
-  final String categoryId;
+  final TaskCategory category;
   final DateTime targetDate;
   final int startMinutes;
   final int endMinutes;
@@ -58,16 +58,21 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
 
+  late List<TaskCategory> _categories;
   late String _selectedCategoryId;
+  late Color _selectedCategoryColor;
   late DateTime _targetDate;
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 11, minute: 0);
   String? _rangeError;
+  bool _hasManualColorSelection = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedCategoryId = widget.categories.first.id;
+    _categories = [...widget.categories];
+    _selectedCategoryId = _categories.first.id;
+    _selectedCategoryColor = _categories.first.color;
     _targetDate = DateTime(
       widget.initialDate.year,
       widget.initialDate.month,
@@ -182,7 +187,9 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
       TaskQuickScheduleRequest(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        categoryId: _selectedCategoryId,
+        category: _categories
+            .firstWhere((category) => category.id == _selectedCategoryId)
+            .copyWith(colorValue: _selectedCategoryColor.toARGB32()),
         targetDate: _targetDate,
         startMinutes: (_startTime.hour * 60) + _startTime.minute,
         endMinutes: (_endTime.hour * 60) + _endTime.minute,
@@ -295,18 +302,54 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                     buttonKey: widget.categoryFieldKey,
                     menuKeyBuilder: widget.categoryOptionKeyBuilder,
                     currentValue: _selectedCategoryId,
-                    currentLabel: widget.categories
+                    currentLabel: _categories
                         .firstWhere((item) => item.id == _selectedCategoryId)
                         .name,
                     onSelected: (value) {
+                      final categoryColor = _categories
+                          .firstWhere((item) => item.id == value)
+                          .color;
                       setState(() {
                         _selectedCategoryId = value;
+                        _selectedCategoryColor = _hasManualColorSelection
+                            ? _selectedCategoryColor
+                            : categoryColor;
+                        if (_hasManualColorSelection) {
+                          _categories = [
+                            for (final category in _categories)
+                              if (category.id == value)
+                                category.copyWith(
+                                  colorValue: _selectedCategoryColor.toARGB32(),
+                                )
+                              else
+                                category,
+                          ];
+                        }
                       });
                     },
-                    items: widget.categories.map((item) => item.id).toList(),
-                    labelBuilder: (value) => widget.categories
-                        .firstWhere((item) => item.id == value)
-                        .name,
+                    items: _categories.map((item) => item.id).toList(),
+                    labelBuilder: (value) =>
+                        _categories.firstWhere((item) => item.id == value).name,
+                  ),
+                  const SizedBox(height: AppSpacing.three),
+                  const TaskFieldLabel('Color Selection'),
+                  const SizedBox(height: AppSpacing.three),
+                  TaskCategoryColorSelector(
+                    scope: 'task-calendar-sheet',
+                    selectedColor: _selectedCategoryColor,
+                    onSelected: (color) {
+                      setState(() {
+                        _hasManualColorSelection = true;
+                        _selectedCategoryColor = color;
+                        _categories = [
+                          for (final category in _categories)
+                            if (category.id == _selectedCategoryId)
+                              category.copyWith(colorValue: color.toARGB32())
+                            else
+                              category,
+                        ];
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.five),
                   const TaskFieldLabel('Schedules'),

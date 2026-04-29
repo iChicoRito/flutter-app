@@ -15,6 +15,7 @@ import 'package:flutter_app/features/task_management/presentation/task_calendar_
 import 'package:flutter_app/features/task_management/presentation/task_management_controller.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
+import 'package:flutter_app/features/task_management/presentation/task_management_ui.dart';
 
 void main() {
   late InMemoryTaskRepository repository;
@@ -170,7 +171,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final todayCard = find.byKey(
-      TaskManagementScreen.calendarDateKey('2026-04-28'),
+      TaskManagementScreen.calendarDateKey('2026-04-29'),
     );
     final selectedContainer = find.descendant(
       of: todayCard,
@@ -258,6 +259,20 @@ void main() {
       find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
       findsOneWidget,
     );
+    expect(
+      find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+      findsOneWidget,
+    );
+    expect(find.text('Mark As Completed'), findsOneWidget);
+    final closeRect = tester.getRect(
+      find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
+    );
+    final actionRect = tester.getRect(
+      find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+    );
+    expect(closeRect.left, actionRect.left);
+    expect(closeRect.width, actionRect.width);
+    expect(actionRect.top, greaterThan(closeRect.bottom));
 
     await tester.tap(
       find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
@@ -299,6 +314,19 @@ void main() {
         find.byKey(TaskManagementScreen.calendarSheetTargetTimeButtonKey),
         findsOneWidget,
       );
+      expect(find.text('Color Selection'), findsOneWidget);
+      expect(
+        find.byKey(
+          taskCategoryColorChoiceKey('task-calendar-sheet', AppColors.blue500),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          taskCategoryColorChoiceKey('task-calendar-sheet', AppColors.rose500),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(TaskManagementScreen.calendarSheetSwapButtonKey),
         findsNothing,
@@ -322,6 +350,22 @@ void main() {
         find.byKey(TaskManagementScreen.calendarSheetDescriptionFieldKey),
         'This description is intentionally longer than one hundred characters so the quick schedule validator can reject it cleanly.',
       );
+      final roseColorFinder = find.byKey(
+        taskCategoryColorChoiceKey('task-calendar-sheet', AppColors.rose500),
+      );
+      await tester.ensureVisible(roseColorFinder);
+      await tester.tap(roseColorFinder);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          taskCategorySelectedColorCheckKey(
+            'task-calendar-sheet',
+            AppColors.rose500,
+          ),
+        ),
+        findsOneWidget,
+      );
+
       await tester.tap(
         find.byKey(TaskManagementScreen.calendarSheetSubmitButtonKey),
       );
@@ -358,11 +402,70 @@ void main() {
 
       final tasks = await repository.getTasks();
       final created = tasks.firstWhere((task) => task.title == 'Plan launch');
-      expect(created.startDateTime, DateTime(2026, 4, 28, 9));
-      expect(created.endDateTime, DateTime(2026, 4, 28, 11));
-      expect(created.startDate, DateTime(2026, 4, 28));
-      expect(created.endDate, DateTime(2026, 4, 28));
+      expect(created.startDateTime, DateTime(2026, 4, 29, 9));
+      expect(created.endDateTime, DateTime(2026, 4, 29, 11));
+      expect(created.startDate, DateTime(2026, 4, 29));
+      expect(created.endDate, DateTime(2026, 4, 29));
       expect(created.categoryId, 'personal');
+      final categories = await repository.getCategories();
+      final personal = categories.firstWhere(
+        (category) => category.id == 'personal',
+      );
+      expect(personal.color, AppColors.rose500);
+    },
+  );
+
+  testWidgets(
+    'calendar task details sheet toggles between complete and incomplete states',
+    (WidgetTester tester) async {
+      await pumpScreen(tester);
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      await tester.tap(find.text('Science Assessment'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+          matching: find.text('Completed'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Mark As Completed'), findsNothing);
+      expect(find.text('Mark as Incomplete'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+          matching: find.text('Completed'),
+        ),
+        findsNothing,
+      );
+      expect(find.text('Mark As Completed'), findsOneWidget);
+      expect(find.text('Mark as Incomplete'), findsNothing);
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
+      );
+      await tester.pumpAndSettle();
+
+      final completedTask = await repository.getTaskById('science');
+      expect(completedTask?.isCompleted, isFalse);
+
+      final titleText = tester.widget<Text>(
+        find.text('Science Assessment').first,
+      );
+      expect(titleText.style?.decoration, TextDecoration.none);
     },
   );
 
@@ -408,7 +511,7 @@ void main() {
       final betaLeft = tester.getTopLeft(find.text('Beta')).dx;
 
       expect(alphaLeft, isNot(equals(betaLeft)));
-      expect(find.text('09:00AM'), findsNWidgets(2));
+      expect(find.text('09:00AM - 11:00AM'), findsNWidgets(2));
     },
   );
 

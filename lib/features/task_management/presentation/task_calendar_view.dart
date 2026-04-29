@@ -424,12 +424,13 @@ class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
           key: widget.headerKey,
           tooltip: '',
           elevation: 2,
+          position: PopupMenuPosition.under,
           color: AppColors.cardFill,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadii.xl),
             side: const BorderSide(color: AppColors.cardBorder),
           ),
-          offset: const Offset(0, 8),
+          offset: const Offset(110, 44),
           padding: EdgeInsets.zero,
           onOpened: () {
             if (mounted) {
@@ -473,14 +474,6 @@ class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  _isMenuOpen
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  size: 20,
-                  color: AppColors.titleText,
-                ),
-                const SizedBox(width: AppSpacing.one),
                 Text(
                   '${_monthName(widget.selectedMonth.month)} ${widget.selectedMonth.year}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -488,6 +481,14 @@ class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
                     fontSize: AppTypography.sizeLg,
                     fontWeight: AppTypography.weightSemibold,
                   ),
+                ),
+                const SizedBox(width: AppSpacing.one),
+                Icon(
+                  _isMenuOpen
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: AppColors.titleText,
                 ),
               ],
             ),
@@ -820,7 +821,7 @@ class _CalendarTaskCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _formatCompactMinutes(task.startMinutes ?? 0),
+                        _formatCompactRange(task),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textStyle?.copyWith(
@@ -840,6 +841,9 @@ class _CalendarTaskCard extends StatelessWidget {
                           fontSize: 13,
                           height: 1.1,
                           fontWeight: AppTypography.weightSemibold,
+                          decoration: task.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                       const Spacer(),
@@ -883,6 +887,9 @@ class _CalendarTaskCard extends StatelessWidget {
                         fontSize: 16,
                         height: 1,
                         fontWeight: AppTypography.weightSemibold,
+                        decoration: task.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
                     if (showDescription) ...[
@@ -979,6 +986,15 @@ String _formatHour(int hour24) {
 }
 
 String _formatRange(TaskItem task) {
+  final start = task.startMinutes ?? task.endMinutes;
+  final end = task.endMinutes;
+  if (start == null || end == null) {
+    return 'Not Set Yet';
+  }
+  return '${_formatCompactMinutes(start)} - ${_formatCompactMinutes(end)}';
+}
+
+String _formatCompactRange(TaskItem task) {
   final start = task.startMinutes ?? task.endMinutes;
   final end = task.endMinutes;
   if (start == null || end == null) {

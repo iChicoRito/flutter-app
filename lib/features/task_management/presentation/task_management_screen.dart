@@ -106,6 +106,9 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key calendarDetailsCloseButtonKey = Key(
     'task-calendar-details-close',
   );
+  static const Key calendarDetailsCompleteButtonKey = Key(
+    'task-calendar-details-complete',
+  );
 
   static Key statusFilterKey(String value) => Key('task-status-filter-$value');
 
@@ -405,10 +408,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
 
     try {
+      final selectedCategory = _controller.categoryFor(request.category.id);
+      if (selectedCategory == null ||
+          selectedCategory.color.toARGB32() !=
+              request.category.color.toARGB32()) {
+        await widget.repository.upsertCategory(request.category);
+        await _controller.load();
+      }
       await _controller.createTask(
         title: request.title,
         description: request.description,
-        categoryId: request.categoryId,
+        categoryId: request.category.id,
         priority: TaskPriority.medium,
         startDate: request.targetDate,
         startMinutes: request.startMinutes,
@@ -454,6 +464,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         task: task,
         category: _controller.categoryFor(task.categoryId),
         closeButtonKey: TaskManagementScreen.calendarDetailsCloseButtonKey,
+        completeButtonKey:
+            TaskManagementScreen.calendarDetailsCompleteButtonKey,
+        onToggleCompletion: _controller.toggleTaskCompletion,
       ),
     );
   }
@@ -1224,20 +1237,73 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 }
 
-class _CalendarTaskDetailsSheet extends StatelessWidget {
+class _CalendarTaskDetailsSheet extends StatefulWidget {
   const _CalendarTaskDetailsSheet({
     super.key,
     required this.task,
     required this.category,
     required this.closeButtonKey,
+    required this.completeButtonKey,
+    required this.onToggleCompletion,
   });
 
   final TaskItem task;
   final TaskCategory? category;
   final Key closeButtonKey;
+  final Key completeButtonKey;
+  final Future<void> Function(TaskItem task)? onToggleCompletion;
+
+  @override
+  State<_CalendarTaskDetailsSheet> createState() =>
+      _CalendarTaskDetailsSheetState();
+}
+
+class _CalendarTaskDetailsSheetState extends State<_CalendarTaskDetailsSheet> {
+  late TaskItem _task;
+  bool _isCompleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _task = widget.task;
+  }
+
+  Future<void> _handleMarkCompleted() async {
+    if (_isCompleting || widget.onToggleCompletion == null) {
+      return;
+    }
+
+    setState(() {
+      _isCompleting = true;
+    });
+
+    try {
+      await widget.onToggleCompletion!(_task);
+      if (!mounted) {
+        return;
+      }
+      final now = DateTime.now();
+      setState(() {
+        _task = _task.copyWith(
+          isCompleted: !_task.isCompleted,
+          completedAt: _task.isCompleted ? null : now,
+          clearCompletedAt: _task.isCompleted,
+          updatedAt: now,
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCompleting = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final category = widget.category;
+    final task = _task;
     final categoryColor = category?.color ?? AppColors.blue500;
     final appearance = taskCardAppearanceForCategory(
       categoryColor: categoryColor,
@@ -1307,37 +1373,74 @@ class _CalendarTaskDetailsSheet extends StatelessWidget {
                                 fontSize: AppTypography.sizeBase,
                               ),
                         ),
+                        const SizedBox(height: AppSpacing.three),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.three,
+                            vertical: AppSpacing.oneAndHalf,
+                          ),
+                          decoration: taskCardBadgeDecoration(appearance),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                resolveTaskCategoryIcon(category?.iconKey ?? ''),
+                                size: 14,
+                                color: appearance.badgeForegroundColor,
+                              ),
+                              const SizedBox(width: AppSpacing.one),
+                              Text(
+                                category?.name ?? 'Category',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: appearance.badgeForegroundColor,
+                                      fontSize: AppTypography.sizeSm,
+                                      fontWeight: AppTypography.weightMedium,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(width: AppSpacing.three),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.three,
-                      vertical: AppSpacing.oneAndHalf,
-                    ),
-                    decoration: taskCardBadgeDecoration(appearance),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          TablerIcons.archive,
-                          size: 14,
-                          color: appearance.badgeForegroundColor,
+                  if (task.isCompleted)
+                    Container(
+                      margin: const EdgeInsets.only(top: AppSpacing.one),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.three,
+                        vertical: AppSpacing.oneAndHalf,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.successBadgeFill,
+                        borderRadius: BorderRadius.circular(
+                          AppRadii.full,
                         ),
-                        const SizedBox(width: AppSpacing.one),
-                        Text(
-                          category?.name ?? 'Category',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: appearance.badgeForegroundColor,
-                                fontSize: AppTypography.sizeSm,
-                                fontWeight: AppTypography.weightMedium,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            TablerIcons.check,
+                            size: 14,
+                            color: AppColors.successBadgeText,
+                          ),
+                          const SizedBox(width: AppSpacing.oneAndHalf),
+                          Text(
+                            'Completed',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: AppColors.successBadgeText,
+                                  fontSize: AppTypography.sizeSm,
+                                  fontWeight: AppTypography.weightMedium,
+                                ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    const SizedBox.shrink(),
                 ],
               ),
               const SizedBox(height: AppSpacing.six),
@@ -1373,7 +1476,7 @@ class _CalendarTaskDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.six),
               FilledButton(
-                key: closeButtonKey,
+                key: widget.closeButtonKey,
                 onPressed: () => Navigator.of(context).pop(),
                 style: taskButtonStyle(
                   context,
@@ -1382,6 +1485,24 @@ class _CalendarTaskDetailsSheet extends StatelessWidget {
                   minimumSize: const Size.fromHeight(50),
                 ),
                 child: const Text('Close'),
+              ),
+              const SizedBox(height: AppSpacing.three),
+              FilledButton(
+                key: widget.completeButtonKey,
+                onPressed: _isCompleting ? null : _handleMarkCompleted,
+                style: taskButtonStyle(
+                  context,
+                  role: TaskButtonRole.primary,
+                  size: TaskButtonSize.large,
+                  minimumSize: const Size.fromHeight(50),
+                ),
+                child: Text(
+                  _isCompleting
+                      ? 'Updating...'
+                      : task.isCompleted
+                      ? 'Mark as Incomplete'
+                      : 'Mark As Completed',
+                ),
               ),
             ],
           ),

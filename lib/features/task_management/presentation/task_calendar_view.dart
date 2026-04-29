@@ -25,6 +25,7 @@ class TaskCalendarView extends StatefulWidget {
     required this.scheduleButtonKey,
     required this.timelineScrollKey,
     required this.monthHeaderKey,
+    this.initialTimelineZoom = 1.0,
   });
 
   final TaskManagementController controller;
@@ -42,6 +43,7 @@ class TaskCalendarView extends StatefulWidget {
   final Key scheduleButtonKey;
   final Key timelineScrollKey;
   final Key monthHeaderKey;
+  final double initialTimelineZoom;
 
   @override
   State<TaskCalendarView> createState() => _TaskCalendarViewState();
@@ -118,6 +120,7 @@ class _TaskCalendarViewState extends State<TaskCalendarView> {
                       selectedDate: widget.selectedDate,
                       onTaskTap: widget.onTaskTap,
                       scrollKey: widget.timelineScrollKey,
+                      initialZoom: widget.initialTimelineZoom,
                       onZoomGestureStateChanged: _handleZoomGestureStateChanged,
                     ),
                   ]),
@@ -506,6 +509,7 @@ class _CalendarTimeline extends StatefulWidget {
     required this.selectedDate,
     required this.onTaskTap,
     required this.scrollKey,
+    required this.initialZoom,
     required this.onZoomGestureStateChanged,
   });
 
@@ -514,6 +518,7 @@ class _CalendarTimeline extends StatefulWidget {
   final DateTime selectedDate;
   final ValueChanged<TaskItem> onTaskTap;
   final Key scrollKey;
+  final double initialZoom;
   final ValueChanged<bool> onZoomGestureStateChanged;
 
   @override
@@ -526,10 +531,25 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
   static const double _zoomSensitivity = 0.45;
   static const double _zoomDeadZone = 0.03;
   static const double _taskVerticalGap = 1.0;
+  static const double _detailedTimelineZoomThreshold = 1.25;
 
-  double _verticalZoom = 1.0;
+  late double _verticalZoom;
   double _scaleStartVerticalZoom = 1.0;
   int _activePointers = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _verticalZoom = widget.initialZoom.clamp(_minZoom, _maxZoom);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CalendarTimeline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialZoom != widget.initialZoom) {
+      _verticalZoom = widget.initialZoom.clamp(_minZoom, _maxZoom);
+    }
+  }
 
   void _updateZoomGestureState() {
     widget.onZoomGestureStateChanged(_activePointers >= 2);
@@ -544,6 +564,10 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
   @override
   Widget build(BuildContext context) {
     final timelineHours = _buildTimelineHours(widget.tasks);
+    final timelineMarkers = buildTimelineMarkers(
+      timelineHours,
+      detailed: _verticalZoom >= _detailedTimelineZoomThreshold,
+    );
     final rowHeight = 82.0 * _verticalZoom;
     final verticalTaskGap = _taskVerticalGap * _verticalZoom;
     final minimumCardHeight = 76.0 * _verticalZoom;
@@ -630,9 +654,11 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
                   height: timelineHeight,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      const timeLabelWidth = 52.0;
+                      final detailedTimeline =
+                          _verticalZoom >= _detailedTimelineZoomThreshold;
+                      final timeLabelWidth = detailedTimeline ? 74.0 : 52.0;
                       const timeLabelGap = 8.0;
-                      const laneLeft = timeLabelWidth + timeLabelGap;
+                      final laneLeft = timeLabelWidth + timeLabelGap;
                       const columnGap = 4.0;
                       final availableLaneWidth =
                           constraints.maxWidth - laneLeft;
@@ -666,10 +692,15 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
                           child: Stack(
                             clipBehavior: Clip.none,
                             children: [
-                              ...List.generate(timelineHours.length, (index) {
-                                final hour = timelineHours[index];
-                                final isLongLine = hour >= 17;
-                                final top = index * rowHeight;
+                              ...timelineMarkers.map((marker) {
+                                final markerHour = marker.minutes ~/ 60;
+                                final isHourMarker = marker.isHour;
+                                final usesLongLineTone = markerHour >= 17;
+                                final top =
+                                    ((marker.minutes -
+                                                timelineMarkers.first.minutes) /
+                                            60) *
+                                        rowHeight;
                                 return Positioned(
                                   left: 0,
                                   right: 0,
@@ -680,28 +711,48 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
                                     children: [
                                       SizedBox(
                                         width: timeLabelWidth,
-                                        child: Text(
-                                          _formatHour(hour),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: AppColors.subHeaderText,
-                                                fontSize:
-                                                    AppTypography.sizeBase,
-                                                height: 1,
-                                              ),
-                                        ),
+                                        child: marker.showsLabel
+                                            ? Text(
+                                                marker.label,
+                                                maxLines: 1,
+                                                softWrap: false,
+                                                overflow: TextOverflow.clip,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: AppColors
+                                                          .subHeaderText,
+                                                      fontSize: isHourMarker
+                                                          ? (detailedTimeline
+                                                                ? AppTypography
+                                                                      .sizeSm
+                                                                : AppTypography
+                                                                      .sizeBase)
+                                                          : AppTypography
+                                                                .sizeXs,
+                                                      height: 1,
+                                                      fontWeight: isHourMarker
+                                                          ? AppTypography
+                                                                .weightNormal
+                                                          : AppTypography
+                                                                .weightMedium,
+                                                    ),
+                                              )
+                                            : const SizedBox.shrink(),
                                       ),
                                       Expanded(
                                         child: Container(
-                                          margin: const EdgeInsets.only(
-                                            top: 10,
+                                          margin: EdgeInsets.only(
+                                            top: isHourMarker ? 10 : 8,
                                           ),
                                           height: 1,
-                                          color: isLongLine
-                                              ? AppColors.neutral200
-                                              : AppColors.checkboxCardBorder,
+                                          color: isHourMarker
+                                              ? (usesLongLineTone
+                                                    ? AppColors.neutral200
+                                                    : AppColors.checkboxCardBorder)
+                                              : AppColors.checkboxCardBorder
+                                                    .withValues(alpha: 0.55),
                                         ),
                                       ),
                                     ],
@@ -774,6 +825,20 @@ class _CalendarTaskLayout {
   final double height;
   final int columnIndex;
   final int columnCount;
+}
+
+class TimelineMarker {
+  const TimelineMarker({
+    required this.minutes,
+    required this.label,
+    required this.isHour,
+    required this.showsLabel,
+  });
+
+  final int minutes;
+  final String label;
+  final bool isHour;
+  final bool showsLabel;
 }
 
 class _CalendarTaskCard extends StatelessWidget {
@@ -986,6 +1051,57 @@ String _formatHour(int hour24) {
     _ => normalizedHour % 12,
   };
   return '$hour12$period';
+}
+
+List<TimelineMarker> buildTimelineMarkers(
+  List<int> timelineHours, {
+  required bool detailed,
+}) {
+  if (timelineHours.isEmpty) {
+    return const [];
+  }
+
+  if (!detailed) {
+    return timelineHours
+        .map(
+          (hour) => TimelineMarker(
+            minutes: hour * 60,
+            label: _formatHour(hour),
+            isHour: true,
+            showsLabel: true,
+          ),
+        )
+        .toList();
+  }
+
+  final startMinutes = timelineHours.first * 60;
+  final endMinutes = timelineHours.last * 60;
+  final markers = <TimelineMarker>[];
+
+  for (var minutes = startMinutes; minutes <= endMinutes; minutes += 10) {
+    markers.add(
+      TimelineMarker(
+        minutes: minutes,
+        label: formatDetailedTimelineLabel(minutes),
+        isHour: minutes % 60 == 0,
+        showsLabel: minutes % 30 == 0,
+      ),
+    );
+  }
+
+  return markers;
+}
+
+String formatDetailedTimelineLabel(int minutes) {
+  final hour24 = (minutes ~/ 60) % 24;
+  final minute = minutes % 60;
+  final period = hour24 >= 12 ? 'PM' : 'AM';
+  final hour12 = switch (hour24 % 12) {
+    0 => 12,
+    _ => hour24 % 12,
+  };
+  final minuteLabel = minute.toString().padLeft(2, '0');
+  return '$hour12:$minuteLabel$period';
 }
 
 String _formatRange(TaskItem task) {

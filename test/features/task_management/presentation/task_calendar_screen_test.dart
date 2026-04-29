@@ -91,6 +91,38 @@ void main() {
     );
   }
 
+  Future<void> pumpCalendarView(
+    WidgetTester tester, {
+    required double initialTimelineZoom,
+  }) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TaskCalendarView(
+            controller: controller,
+            segmentControl: const SizedBox.shrink(),
+            selectedMonth: DateTime(2026, 4),
+            selectedDate: DateTime(2026, 4, 20),
+            statusFilter: TaskStatusFilter.all,
+            onMonthChanged: (_) {},
+            onDateSelected: (_) {},
+            onStatusSelected: (_) {},
+            onSchedulePressed: () {},
+            onTaskTap: (_) {},
+            statusChipKeyBuilder: ValueKey.new,
+            dateKeyBuilder: ValueKey.new,
+            scheduleButtonKey: const ValueKey('schedule_button'),
+            timelineScrollKey: TaskManagementScreen.calendarTimelineScrollKey,
+            monthHeaderKey: const ValueKey('month_header'),
+            initialTimelineZoom: initialTimelineZoom,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
   Future<void> openCalendarAndSelectDate(
     WidgetTester tester,
     String keyValue,
@@ -153,6 +185,7 @@ void main() {
     expect(find.text('11AM'), findsOneWidget);
     expect(find.text('08:00 AM'), findsNothing);
     expect(find.text('11:00 AM'), findsNothing);
+    expect(find.text('9:10AM'), findsNothing);
     expect(
       find.byKey(TaskManagementScreen.calendarScheduleButtonKey),
       findsOneWidget,
@@ -689,7 +722,7 @@ void main() {
 
       expect(firstLeft, equals(secondLeft));
       expect(secondRect.top, greaterThan(firstRect.bottom));
-      expect(verticalGap, closeTo(6.0, 0.01));
+      expect(verticalGap, closeTo(1.0, 0.01));
     },
   );
 
@@ -722,6 +755,39 @@ void main() {
       await openCalendarAndSelectDate(tester, '2026-04-20');
 
       expect(find.text('10:30PM - 11:25PM'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'calendar timeline shows selective detailed labels after zooming in',
+    (WidgetTester tester) async {
+      await pumpCalendarView(tester, initialTimelineZoom: 1.0);
+
+      expect(find.text('9:00AM'), findsNothing);
+      expect(find.text('9:10AM'), findsNothing);
+      expect(find.text('9:30AM'), findsNothing);
+      expect(find.text('9:40AM'), findsNothing);
+
+      expect(find.text('9AM'), findsOneWidget);
+
+      await pumpCalendarView(
+        tester,
+        initialTimelineZoom: 1.3,
+      );
+
+      expect(find.text('9:00AM'), findsOneWidget);
+      expect(find.text('9:10AM'), findsNothing);
+      expect(find.text('9:30AM'), findsOneWidget);
+      expect(find.text('9:40AM'), findsNothing);
+      expect(find.text('9AM'), findsNothing);
+
+      await pumpCalendarView(tester, initialTimelineZoom: 1.0);
+
+      expect(find.text('9AM'), findsOneWidget);
+      expect(find.text('9:00AM'), findsNothing);
+      expect(find.text('9:10AM'), findsNothing);
+      expect(find.text('9:30AM'), findsNothing);
+      expect(find.text('9:40AM'), findsNothing);
     },
   );
 
@@ -822,6 +888,46 @@ void main() {
       resolveCalendarTaskContentMode(width: 80, height: 100),
       CalendarTaskContentMode.hidden,
     );
+  });
+
+  test('timeline markers stay hourly in default mode', () {
+    final markers = buildTimelineMarkers(
+      const [8, 9, 10],
+      detailed: false,
+    );
+
+    expect(markers.map((marker) => marker.label), ['8AM', '9AM', '10AM']);
+    expect(markers.every((marker) => marker.isHour), isTrue);
+  });
+
+  test('timeline markers keep 10-minute positions but label only half hours', () {
+    final markers = buildTimelineMarkers(
+      const [9, 10],
+      detailed: true,
+    );
+
+    expect(
+      markers.where((marker) => marker.showsLabel).map((marker) => marker.label),
+      ['9:00AM', '9:30AM', '10:00AM'],
+    );
+    expect(markers.first.isHour, isTrue);
+    expect(markers[1].isHour, isFalse);
+    expect(markers.last.isHour, isTrue);
+    expect(markers.map((marker) => marker.minutes), [
+      540,
+      550,
+      560,
+      570,
+      580,
+      590,
+      600,
+    ]);
+  });
+
+  test('detailed time labels use h:mmAM formatting', () {
+    expect(formatDetailedTimelineLabel((9 * 60) + 30), '9:30AM');
+    expect(formatDetailedTimelineLabel((21 * 60) + 40), '9:40PM');
+    expect(formatDetailedTimelineLabel(0), '12:00AM');
   });
 }
 

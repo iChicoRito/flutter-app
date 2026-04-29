@@ -41,6 +41,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       repository: widget.repository,
       controller: _controller,
       appBarTitle: widget.space.name,
+      useInlineBackHeader: true,
       space: widget.space,
       fixedSpaceId: widget.space.id,
       lockedCategoryId: widget.space.categoryId,

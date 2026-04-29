@@ -2554,6 +2554,8 @@ void main() {
       expect(find.text('Aligned space task'), findsOneWidget);
       expect(find.text('Client Work'), findsOneWidget);
       expect(find.text('Space - Client Work'), findsOneWidget);
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.byIcon(TablerIcons.chevron_left), findsOneWidget);
     },
   );
 

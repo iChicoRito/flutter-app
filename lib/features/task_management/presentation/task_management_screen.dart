@@ -32,6 +32,7 @@ class TaskManagementScreen extends StatefulWidget {
     this.emptyTitle = 'No tasks yet',
     this.emptyMessage =
         'Create a task to start capturing notes, details, and schedules in one place.',
+    this.useInlineBackHeader = false,
   });
 
   static const Key markerKey = Key('task-management-screen');
@@ -149,6 +150,7 @@ class TaskManagementScreen extends StatefulWidget {
   final String fabLabel;
   final String emptyTitle;
   final String emptyMessage;
+  final bool useInlineBackHeader;
 
   @override
   State<TaskManagementScreen> createState() => _TaskManagementScreenState();
@@ -937,7 +939,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       child: Scaffold(
         key: TaskManagementScreen.markerKey,
         backgroundColor: AppColors.background,
-        appBar: widget.appBarTitle == null
+        appBar: widget.appBarTitle == null || widget.useInlineBackHeader
             ? null
             : AppBar(
                 title: Text(_currentSpace?.name ?? widget.appBarTitle!),
@@ -973,89 +975,117 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 ],
               ),
         body: SafeArea(
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              final filteredTasks = _controller.filteredTasks(DateTime.now());
+          child: Column(
+            children: [
+              if (widget.useInlineBackHeader && widget.appBarTitle != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.four,
+                    AppSpacing.one,
+                    AppSpacing.four,
+                    AppSpacing.zero,
+                  ),
+                  child: _InlineBackHeader(
+                    title: _currentSpace?.name ?? widget.appBarTitle!,
+                    onTap: () => Navigator.maybePop(context),
+                  ),
+                ),
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    final filteredTasks = _controller.filteredTasks(
+                      DateTime.now(),
+                    );
 
-              if (_controller.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
+                    if (_controller.isLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-              if (_controller.errorMessage != null) {
-                return _ErrorState(
-                  message: _controller.errorMessage!,
-                  onRetry: _controller.load,
-                );
-              }
+                    if (_controller.errorMessage != null) {
+                      return _ErrorState(
+                        message: _controller.errorMessage!,
+                        onRetry: _controller.load,
+                      );
+                    }
 
-              return GestureDetector(
-                behavior: HitTestBehavior.deferToChild,
-                onTap: _isSelectionMode ? _clearSelectionMode : null,
-                child: _activeTab == _TaskManagementContentTab.tasks
-                    ? _buildTasksView(filteredTasks)
-                    : KeyedSubtree(
-                        key: TaskManagementScreen.calendarViewKey,
-                        child: TaskCalendarView(
-                          controller: _controller,
-                          segmentControl: _TaskViewSegmentedControl(
-                            activeTab: _activeTab,
-                            onChanged: (value) {
-                              setState(() {
-                                _activeTab = value;
-                              });
-                            },
-                          ),
-                          selectedMonth: _selectedCalendarMonth,
-                          selectedDate: _selectedCalendarDate,
-                          statusFilter: _calendarStatusFilter,
-                          onMonthChanged: (value) {
-                            setState(() {
-                              _selectedCalendarMonth = DateTime(
-                                value.year,
-                                value.month,
-                                1,
-                              );
-                              final availableDays = _controller
-                                  .calendarDaysForMonth(_selectedCalendarMonth);
-                              final matchingDay = availableDays
-                                  .where(
-                                    (day) =>
-                                        day.day == _selectedCalendarDate.day,
-                                  )
-                                  .cast<DateTime?>()
-                                  .firstWhere(
-                                    (day) => day != null,
-                                    orElse: () => availableDays.first,
-                                  );
-                              _selectedCalendarDate = matchingDay!;
-                            });
-                          },
-                          onDateSelected: (value) {
-                            setState(() {
-                              _selectedCalendarDate = value;
-                            });
-                          },
-                          onStatusSelected: (value) {
-                            setState(() {
-                              _calendarStatusFilter = value;
-                            });
-                          },
-                          onSchedulePressed: _openCalendarScheduleSheet,
-                          onTaskTap: _openCalendarTaskDetails,
-                          statusChipKeyBuilder:
-                              TaskManagementScreen.calendarStatusChipKey,
-                          dateKeyBuilder: TaskManagementScreen.calendarDateKey,
-                          scheduleButtonKey:
-                              TaskManagementScreen.calendarScheduleButtonKey,
-                          timelineScrollKey:
-                              TaskManagementScreen.calendarTimelineScrollKey,
-                          monthHeaderKey:
-                              TaskManagementScreen.calendarMonthDropdownKey,
-                        ),
-                      ),
-              );
-            },
+                    return GestureDetector(
+                      behavior: HitTestBehavior.deferToChild,
+                      onTap: _isSelectionMode ? _clearSelectionMode : null,
+                      child: _activeTab == _TaskManagementContentTab.tasks
+                          ? _buildTasksView(filteredTasks)
+                          : KeyedSubtree(
+                              key: TaskManagementScreen.calendarViewKey,
+                              child: TaskCalendarView(
+                                controller: _controller,
+                                segmentControl: _TaskViewSegmentedControl(
+                                  activeTab: _activeTab,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _activeTab = value;
+                                    });
+                                  },
+                                ),
+                                selectedMonth: _selectedCalendarMonth,
+                                selectedDate: _selectedCalendarDate,
+                                statusFilter: _calendarStatusFilter,
+                                onMonthChanged: (value) {
+                                  setState(() {
+                                    _selectedCalendarMonth = DateTime(
+                                      value.year,
+                                      value.month,
+                                      1,
+                                    );
+                                    final availableDays = _controller
+                                        .calendarDaysForMonth(
+                                          _selectedCalendarMonth,
+                                        );
+                                    final matchingDay = availableDays
+                                        .where(
+                                          (day) =>
+                                              day.day ==
+                                              _selectedCalendarDate.day,
+                                        )
+                                        .cast<DateTime?>()
+                                        .firstWhere(
+                                          (day) => day != null,
+                                          orElse: () => availableDays.first,
+                                        );
+                                    _selectedCalendarDate = matchingDay!;
+                                  });
+                                },
+                                onDateSelected: (value) {
+                                  setState(() {
+                                    _selectedCalendarDate = value;
+                                  });
+                                },
+                                onStatusSelected: (value) {
+                                  setState(() {
+                                    _calendarStatusFilter = value;
+                                  });
+                                },
+                                onSchedulePressed: _openCalendarScheduleSheet,
+                                onTaskTap: _openCalendarTaskDetails,
+                                statusChipKeyBuilder:
+                                    TaskManagementScreen.calendarStatusChipKey,
+                                dateKeyBuilder:
+                                    TaskManagementScreen.calendarDateKey,
+                                scheduleButtonKey:
+                                    TaskManagementScreen
+                                        .calendarScheduleButtonKey,
+                                timelineScrollKey:
+                                    TaskManagementScreen
+                                        .calendarTimelineScrollKey,
+                                monthHeaderKey:
+                                    TaskManagementScreen
+                                        .calendarMonthDropdownKey,
+                              ),
+                            ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
         floatingActionButton: _activeTab == _TaskManagementContentTab.tasks
@@ -1921,6 +1951,52 @@ class _TaskPageHeader extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InlineBackHeader extends StatelessWidget {
+  const _InlineBackHeader({
+    required this.title,
+    required this.onTap,
+  });
+
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: onTap,
+          icon: const Icon(
+            TablerIcons.chevron_left,
+            color: AppColors.subHeaderText,
+            size: AppTypography.sizeLg,
+          ),
+          splashRadius: AppSpacing.five,
+          constraints: const BoxConstraints.tightFor(
+            width: AppSpacing.six,
+            height: AppSpacing.six,
+          ),
+          padding: EdgeInsets.zero,
+        ),
+        const SizedBox(width: AppSpacing.one),
+        Expanded(
+          child: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+              color: AppColors.titleText,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

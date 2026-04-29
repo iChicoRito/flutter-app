@@ -181,6 +181,18 @@ void main() {
           endMinutes: 10 * 60,
         ),
       );
+      await repository.upsertTask(
+        TaskItem(
+          id: 'due-only-task',
+          title: 'Due only task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          createdAt: DateTime(2026, 4, 20, 8),
+          updatedAt: DateTime(2026, 4, 20, 8),
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 17 * 60,
+        ),
+      );
       await controller.load();
 
       final tasks = controller.calendarTasksForDate(
@@ -192,6 +204,44 @@ void main() {
       expect(tasks.map((task) => task.id), ['earlier-task', 'later-task']);
     },
   );
+
+  test('calendarTasksForDate excludes due-only tasks without a time range', () async {
+    await repository.upsertTask(
+      TaskItem(
+        id: 'due-only-task',
+        title: 'Due only task',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 17 * 60,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'scheduled-task',
+        title: 'Scheduled task',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        startDate: DateTime(2026, 4, 20),
+        startMinutes: 16 * 60,
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 17 * 60,
+      ),
+    );
+    await controller.load();
+
+    final tasks = controller.calendarTasksForDate(
+      selectedDate: DateTime(2026, 4, 20),
+      statusFilter: TaskStatusFilter.all,
+      now: DateTime(2026, 4, 20, 7),
+    );
+
+    expect(tasks.map((task) => task.id), ['scheduled-task']);
+  });
 
   test('calendarTasksForDate applies completed status filtering', () async {
     await repository.upsertTask(

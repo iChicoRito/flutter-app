@@ -366,9 +366,12 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarSheetSubmitButtonKey),
+      final submitButton = find.byKey(
+        TaskManagementScreen.calendarSheetSubmitButtonKey,
       );
+      await tester.ensureVisible(submitButton);
+      await tester.pumpAndSettle();
+      await tester.tap(submitButton);
       await tester.pumpAndSettle();
 
       expect(
@@ -381,9 +384,12 @@ void main() {
         'Launch prep',
       );
 
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarSheetCategoryFieldKey),
+      final categoryField = find.byKey(
+        TaskManagementScreen.calendarSheetCategoryFieldKey,
       );
+      await tester.ensureVisible(categoryField);
+      await tester.pumpAndSettle();
+      await tester.tap(categoryField);
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(
@@ -392,9 +398,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarSheetSubmitButtonKey),
-      );
+      await tester.ensureVisible(submitButton);
+      await tester.pumpAndSettle();
+      await tester.tap(submitButton);
       await tester.pumpAndSettle();
 
       expect(find.byKey(TaskManagementScreen.calendarSheetKey), findsNothing);
@@ -414,6 +420,24 @@ void main() {
       expect(personal.color, AppColors.rose500);
     },
   );
+
+  testWidgets('schedule sheet stays shorter than the full screen height', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(tester);
+    await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TaskManagementScreen.calendarScheduleButtonKey));
+    await tester.pumpAndSettle();
+
+    final surfaceHeight = tester.binding.renderView.size.height;
+    final sheetHeight = tester.getRect(
+      find.byKey(TaskManagementScreen.calendarSheetKey),
+    ).height;
+
+    expect(sheetHeight, lessThan(surfaceHeight * 0.9));
+  });
 
   testWidgets(
     'calendar task details sheet toggles between complete and incomplete states',
@@ -655,10 +679,17 @@ void main() {
       );
       await openCalendarAndSelectDate(tester, '2026-04-20');
 
-      final firstLeft = tester.getTopLeft(find.text('First Task')).dx;
-      final secondLeft = tester.getTopLeft(find.text('Second Task')).dx;
+      final firstCard = find.byKey(const ValueKey('calendar_task_first'));
+      final secondCard = find.byKey(const ValueKey('calendar_task_second'));
+      final firstRect = tester.getRect(firstCard);
+      final secondRect = tester.getRect(secondCard);
+      final firstLeft = firstRect.left;
+      final secondLeft = secondRect.left;
+      final verticalGap = secondRect.top - firstRect.bottom;
 
       expect(firstLeft, equals(secondLeft));
+      expect(secondRect.top, greaterThan(firstRect.bottom));
+      expect(verticalGap, closeTo(6.0, 0.01));
     },
   );
 
@@ -691,6 +722,55 @@ void main() {
       await openCalendarAndSelectDate(tester, '2026-04-20');
 
       expect(find.text('10:30PM - 11:25PM'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'calendar timeline hides due-only tasks created outside scheduled ranges',
+    (WidgetTester tester) async {
+      final mixedRepository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'scheduled',
+            title: 'Scheduled Task',
+            description: 'Scheduled block',
+            categoryId: 'school',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 9 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 10 * 60,
+          ),
+          TaskItem(
+            id: 'due-only',
+            title: 'Due Only Task',
+            description: 'Due later today',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+            standaloneCategoryId: 'personal',
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 17 * 60,
+            noteDocumentJson: buildPlainTextNoteDocumentJson('Due later today'),
+            notePlainText: 'Due later today',
+          ),
+        ],
+        seedDefaults: true,
+      );
+      final mixedController = TaskManagementController(mixedRepository);
+      await mixedController.load();
+
+      await pumpScreenWithState(
+        tester,
+        repository: mixedRepository,
+        controller: mixedController,
+      );
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      expect(find.text('Scheduled Task'), findsOneWidget);
+      expect(find.text('Due Only Task'), findsNothing);
+      expect(find.text('09:00AM - 10:00AM'), findsOneWidget);
+      expect(find.text('05:00PM - 05:00PM'), findsNothing);
     },
   );
 

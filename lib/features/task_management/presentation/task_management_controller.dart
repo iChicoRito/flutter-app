@@ -311,7 +311,11 @@ class TaskManagementController extends ChangeNotifier {
     );
 
     final filtered = _visibleTasks(_tasks).where((task) {
-      final scheduledAt = task.startDateTime ?? task.endDateTime;
+      if (!_isCalendarRangeTask(task)) {
+        return false;
+      }
+
+      final scheduledAt = task.startDateTime;
       if (scheduledAt == null) {
         return false;
       }

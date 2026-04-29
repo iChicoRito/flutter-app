@@ -86,7 +86,7 @@ class NoopTaskReminderService implements TaskReminderService {
   ) {}
 }
 
-enum TaskReminderKind { reminder, due }
+enum TaskReminderKind { reminder, scheduledStart, scheduledEnd, due }
 
 @immutable
 class TaskReminderEntry {
@@ -160,9 +160,12 @@ class TaskReminderPlan {
 
   static const Duration firstReminderLeadTime = Duration(minutes: 10);
   static const Duration secondReminderLeadTime = Duration(minutes: 5);
+  static const Duration scheduledTaskLeadTime = Duration(minutes: 5);
 
   static bool hasSchedulingChange(TaskItem previous, TaskItem next) {
     return previous.isCompleted != next.isCompleted ||
+        previous.startDate != next.startDate ||
+        previous.startMinutes != next.startMinutes ||
         previous.endDate != next.endDate ||
         previous.endMinutes != next.endMinutes ||
         previous.title != next.title;
@@ -176,6 +179,14 @@ class TaskReminderPlan {
     return _notificationId(taskId, salt: 23);
   }
 
+  static int scheduledStartNotificationId(String taskId) {
+    return _notificationId(taskId, salt: 29);
+  }
+
+  static int scheduledEndNotificationId(String taskId) {
+    return _notificationId(taskId, salt: 37);
+  }
+
   static int dueNotificationId(String taskId) {
     return _notificationId(taskId, salt: 31);
   }
@@ -184,6 +195,8 @@ class TaskReminderPlan {
     return {
       firstReminderNotificationId(taskId),
       secondReminderNotificationId(taskId),
+      scheduledStartNotificationId(taskId),
+      scheduledEndNotificationId(taskId),
       dueNotificationId(taskId),
     };
   }
@@ -200,6 +213,14 @@ class TaskReminderPlan {
     final dueAt = task.endDateTime;
     if (dueAt == null || !dueAt.isAfter(now)) {
       return const [];
+    }
+
+    if (_isScheduledCalendarTask(task)) {
+      return _buildScheduledTaskEntries(
+        task,
+        now: now,
+        displayName: displayName,
+      );
     }
 
     final entries = <TaskReminderEntry>[];
@@ -250,6 +271,72 @@ class TaskReminderPlan {
     return entries;
   }
 
+  static List<TaskReminderEntry> _buildScheduledTaskEntries(
+    TaskItem task, {
+    required DateTime now,
+    String? displayName,
+  }) {
+    final startAt = task.startDateTime;
+    final endAt = task.endDateTime;
+    if (startAt == null || endAt == null || !endAt.isAfter(now)) {
+      return const [];
+    }
+
+    final entries = <TaskReminderEntry>[];
+    final scheduledStartAt = startAt.subtract(scheduledTaskLeadTime);
+    if (scheduledStartAt.isAfter(now)) {
+      entries.add(
+        TaskReminderEntry(
+          id: scheduledStartNotificationId(task.id),
+          kind: TaskReminderKind.scheduledStart,
+          scheduledAt: scheduledStartAt,
+          title: TaskReminderMessages.greetingTitle(displayName),
+          body: TaskReminderMessages.scheduledStartBody(
+            displayName: displayName,
+            taskTitle: task.title,
+          ),
+        ),
+      );
+    }
+
+    final scheduledEndAt = endAt.subtract(scheduledTaskLeadTime);
+    if (scheduledEndAt.isAfter(now)) {
+      entries.add(
+        TaskReminderEntry(
+          id: scheduledEndNotificationId(task.id),
+          kind: TaskReminderKind.scheduledEnd,
+          scheduledAt: scheduledEndAt,
+          title: TaskReminderMessages.greetingTitle(displayName),
+          body: TaskReminderMessages.scheduledEndBody(
+            displayName: displayName,
+            taskTitle: task.title,
+          ),
+        ),
+      );
+    }
+
+    entries.add(
+      TaskReminderEntry(
+        id: dueNotificationId(task.id),
+        kind: TaskReminderKind.due,
+        scheduledAt: endAt,
+        title: TaskReminderMessages.greetingTitle(displayName),
+        body: TaskReminderMessages.dueNowBody(
+          displayName: displayName,
+          taskTitle: task.title,
+        ),
+      ),
+    );
+    return entries;
+  }
+
+  static bool _isScheduledCalendarTask(TaskItem task) {
+    return task.startDate != null &&
+        task.startMinutes != null &&
+        task.endDate != null &&
+        task.endMinutes != null;
+  }
+
   static int _notificationId(String taskId, {required int salt}) {
     const int fnvPrime = 16777619;
     var hash = 2166136261;
@@ -287,6 +374,20 @@ class TaskReminderMessages {
     required String taskTitle,
   }) {
     return 'Your task "$taskTitle" is due in 5 minutes.';
+  }
+
+  static String scheduledStartBody({
+    required String? displayName,
+    required String taskTitle,
+  }) {
+    return 'Hello, ${_resolvedName(displayName)}, your scheduled task for $taskTitle will begin in 5mins.';
+  }
+
+  static String scheduledEndBody({
+    required String? displayName,
+    required String taskTitle,
+  }) {
+    return 'Hello, ${_resolvedName(displayName)}, your scheduled task for $taskTitle will end in 5mins.';
   }
 
   static String dueNowBody({
@@ -643,14 +744,18 @@ class LocalTaskReminderService implements TaskReminderService {
     }
 
     return switch (kind) {
-      TaskReminderKind.reminder => AndroidScheduleMode.exactAllowWhileIdle,
+      TaskReminderKind.reminder ||
+      TaskReminderKind.scheduledStart ||
+      TaskReminderKind.scheduledEnd => AndroidScheduleMode.exactAllowWhileIdle,
       TaskReminderKind.due => AndroidScheduleMode.alarmClock,
     };
   }
 
   AndroidNotificationDetails _androidDetailsFor(TaskReminderKind kind) {
     return switch (kind) {
-      TaskReminderKind.reminder => const AndroidNotificationDetails(
+      TaskReminderKind.reminder ||
+      TaskReminderKind.scheduledStart ||
+      TaskReminderKind.scheduledEnd => const AndroidNotificationDetails(
         reminderChannelId,
         'Task reminders',
         channelDescription: 'Pre-deadline reminders for upcoming tasks.',
@@ -693,7 +798,9 @@ class LocalTaskReminderService implements TaskReminderService {
 
   DarwinNotificationDetails _darwinDetailsFor(TaskReminderKind kind) {
     return switch (kind) {
-      TaskReminderKind.reminder => const DarwinNotificationDetails(
+      TaskReminderKind.reminder ||
+      TaskReminderKind.scheduledStart ||
+      TaskReminderKind.scheduledEnd => const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,

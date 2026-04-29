@@ -525,6 +525,7 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
   static const double _maxZoom = 1.75;
   static const double _zoomSensitivity = 0.45;
   static const double _zoomDeadZone = 0.03;
+  static const double _taskVerticalGap = 1.0;
 
   double _verticalZoom = 1.0;
   double _scaleStartVerticalZoom = 1.0;
@@ -544,7 +545,8 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
   Widget build(BuildContext context) {
     final timelineHours = _buildTimelineHours(widget.tasks);
     final rowHeight = 82.0 * _verticalZoom;
-    final minimumCardHeight = 86.0 * _verticalZoom;
+    final verticalTaskGap = _taskVerticalGap * _verticalZoom;
+    final minimumCardHeight = 76.0 * _verticalZoom;
     const timelineTopInset = 18.0;
     final taskLayouts = _buildTaskLayouts(
       widget.tasks,
@@ -552,6 +554,7 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
       rowHeight: rowHeight,
       timelineTopInset: timelineTopInset,
       minimumHeight: minimumCardHeight,
+      verticalTaskGap: verticalTaskGap,
     );
     final timelineHeight =
         timelineTopInset + (timelineHours.length - 1) * rowHeight + 78;
@@ -1058,6 +1061,7 @@ List<_CalendarTaskLayout> _buildTaskLayouts(
   required double rowHeight,
   required double timelineTopInset,
   required double minimumHeight,
+  required double verticalTaskGap,
 }) {
   if (tasks.isEmpty) {
     return const [];
@@ -1116,6 +1120,7 @@ List<_CalendarTaskLayout> _buildTaskLayouts(
         rowHeight: rowHeight,
         timelineTopInset: timelineTopInset,
         minimumHeight: minimumHeight,
+        verticalTaskGap: verticalTaskGap,
       ),
     );
     groupTasks = [task];
@@ -1130,6 +1135,7 @@ List<_CalendarTaskLayout> _buildTaskLayouts(
         rowHeight: rowHeight,
         timelineTopInset: timelineTopInset,
         minimumHeight: minimumHeight,
+        verticalTaskGap: verticalTaskGap,
       ),
     );
   }
@@ -1143,6 +1149,7 @@ List<_CalendarTaskLayout> _buildTaskLayoutsForGroup(
   required double rowHeight,
   required double timelineTopInset,
   required double minimumHeight,
+  required double verticalTaskGap,
 }) {
   const stackedTaskGap = 4.0;
   final columnEndMinutes = <int>[];
@@ -1193,6 +1200,7 @@ List<_CalendarTaskLayout> _buildTaskLayoutsForGroup(
         rowHeight: rowHeight,
         timelineTopInset: timelineTopInset,
         minimumHeight: minimumHeight,
+        verticalTaskGap: verticalTaskGap,
       ),
       columnIndex: assignedColumns[task]!,
       columnCount: columnCount,
@@ -1263,6 +1271,7 @@ double _timelineHeightForTask(
   required double rowHeight,
   required double timelineTopInset,
   required double minimumHeight,
+  required double verticalTaskGap,
 }) {
   final startMinutes = task.startMinutes ?? task.endMinutes;
   final endMinutes = task.endMinutes;
@@ -1282,7 +1291,7 @@ double _timelineHeightForTask(
     rowHeight: rowHeight,
     timelineTopInset: timelineTopInset,
   );
-  final durationHeight = endOffset - startOffset;
+  final durationHeight = (endOffset - startOffset) - verticalTaskGap;
   return durationHeight < minimumHeight ? minimumHeight : durationHeight;
 }
 

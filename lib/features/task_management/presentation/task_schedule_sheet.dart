@@ -3,6 +3,7 @@ import 'package:tabler_icons/tabler_icons.dart';
 
 import '../../../core/theme/app_design_tokens.dart';
 import '../domain/task_category.dart';
+import '../domain/task_item.dart';
 import 'task_management_ui.dart';
 
 class TaskQuickScheduleRequest {
@@ -13,6 +14,8 @@ class TaskQuickScheduleRequest {
     required this.targetDate,
     required this.startMinutes,
     required this.endMinutes,
+    this.taskId,
+    this.isEditMode = false,
   });
 
   final String title;
@@ -21,6 +24,8 @@ class TaskQuickScheduleRequest {
   final DateTime targetDate;
   final int startMinutes;
   final int endMinutes;
+  final String? taskId;
+  final bool isEditMode;
 }
 
 class TaskScheduleSheet extends StatefulWidget {
@@ -36,6 +41,11 @@ class TaskScheduleSheet extends StatefulWidget {
     required this.targetDateButtonKey,
     required this.targetTimeButtonKey,
     required this.submitButtonKey,
+    this.existingTask,
+    this.sheetTitle,
+    this.sheetSubtitle,
+    this.submitLabel,
+    this.onSubmittedForTest,
   });
 
   final List<TaskCategory> categories;
@@ -48,6 +58,11 @@ class TaskScheduleSheet extends StatefulWidget {
   final Key targetDateButtonKey;
   final Key targetTimeButtonKey;
   final Key submitButtonKey;
+  final TaskItem? existingTask;
+  final String? sheetTitle;
+  final String? sheetSubtitle;
+  final String? submitLabel;
+  final ValueChanged<TaskQuickScheduleRequest>? onSubmittedForTest;
 
   @override
   State<TaskScheduleSheet> createState() => _TaskScheduleSheetState();
@@ -71,13 +86,36 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
   void initState() {
     super.initState();
     _categories = [...widget.categories];
-    _selectedCategoryId = _categories.first.id;
-    _selectedCategoryColor = _categories.first.color;
+    final existingTask = widget.existingTask;
+    final initialCategoryId = existingTask?.categoryId;
+    TaskCategory? initialCategory;
+    if (initialCategoryId != null) {
+      for (final category in _categories) {
+        if (category.id == initialCategoryId) {
+          initialCategory = category;
+          break;
+        }
+      }
+    }
+    _selectedCategoryId = initialCategory?.id ?? _categories.first.id;
+    _selectedCategoryColor = initialCategory?.color ?? _categories.first.color;
+    _titleController.text = existingTask?.title ?? '';
+    _descriptionController.text = existingTask?.description ?? '';
+    final initialDate = existingTask?.startDate ?? existingTask?.endDate;
     _targetDate = DateTime(
-      widget.initialDate.year,
-      widget.initialDate.month,
-      widget.initialDate.day,
+      (initialDate ?? widget.initialDate).year,
+      (initialDate ?? widget.initialDate).month,
+      (initialDate ?? widget.initialDate).day,
     );
+    final startMinutes = existingTask?.startMinutes;
+    final endMinutes = existingTask?.endMinutes;
+    if (startMinutes != null) {
+      _startTime = _timeOfDayFromMinutes(startMinutes);
+    }
+    if (endMinutes != null) {
+      _endTime = _timeOfDayFromMinutes(endMinutes);
+    }
+    _validateRange();
   }
 
   @override
@@ -183,19 +221,35 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
       return;
     }
 
-    Navigator.of(context).pop(
-      TaskQuickScheduleRequest(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        category: _categories
-            .firstWhere((category) => category.id == _selectedCategoryId)
-            .copyWith(colorValue: _selectedCategoryColor.toARGB32()),
-        targetDate: _targetDate,
-        startMinutes: (_startTime.hour * 60) + _startTime.minute,
-        endMinutes: (_endTime.hour * 60) + _endTime.minute,
-      ),
+    final request = TaskQuickScheduleRequest(
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(),
+      category: _categories
+          .firstWhere((category) => category.id == _selectedCategoryId)
+          .copyWith(colorValue: _selectedCategoryColor.toARGB32()),
+      targetDate: _targetDate,
+      startMinutes: (_startTime.hour * 60) + _startTime.minute,
+      endMinutes: (_endTime.hour * 60) + _endTime.minute,
+      taskId: widget.existingTask?.id,
+      isEditMode: widget.existingTask != null,
     );
+    widget.onSubmittedForTest?.call(request);
+    Navigator.of(context).pop(request);
   }
+
+  bool get _isEditMode => widget.existingTask != null;
+
+  String get _sheetTitle =>
+      widget.sheetTitle ?? (_isEditMode ? 'Edit Task' : 'Schedule Task');
+
+  String get _sheetSubtitle =>
+      widget.sheetSubtitle ??
+      (_isEditMode
+          ? 'Update your scheduled task'
+          : 'Add and schedule your tasks');
+
+  String get _submitLabel =>
+      widget.submitLabel ?? (_isEditMode ? 'Save Changes' : 'Schedule Task');
 
   @override
   Widget build(BuildContext context) {
@@ -241,7 +295,7 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                     ),
                     const SizedBox(height: AppSpacing.six),
                     Text(
-                      'Schedule Task',
+                      _sheetTitle,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: AppColors.titleText,
                         fontSize: AppTypography.sizeLg,
@@ -250,7 +304,7 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                     ),
                     const SizedBox(height: AppSpacing.oneAndHalf),
                     Text(
-                      'Add and schedule your tasks',
+                      _sheetSubtitle,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.subHeaderText,
                       ),
@@ -323,8 +377,8 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                               for (final category in _categories)
                                 if (category.id == value)
                                   category.copyWith(
-                                    colorValue:
-                                        _selectedCategoryColor.toARGB32(),
+                                    colorValue: _selectedCategoryColor
+                                        .toARGB32(),
                                   )
                                 else
                                   category,
@@ -379,7 +433,7 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                       buttonKey: widget.targetTimeButtonKey,
                       title: 'Target Time',
                       value:
-                          '${_startTime.format(context)} - ${_endTime.format(context)}',
+                          '${_formatTimeOfDay(_startTime)} - ${_formatTimeOfDay(_endTime)}',
                       icon: TablerIcons.clock,
                       onTap: _pickTimeRange,
                     ),
@@ -419,7 +473,7 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                               size: TaskButtonSize.large,
                               minimumSize: const Size.fromHeight(50),
                             ),
-                            child: const Text('Schedule Task'),
+                            child: Text(_submitLabel),
                           ),
                         ),
                       ],
@@ -433,6 +487,10 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
       ),
     );
   }
+}
+
+TimeOfDay _timeOfDayFromMinutes(int minutes) {
+  return TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
 }
 
 String _formatDate(DateTime value) {
@@ -451,4 +509,13 @@ String _formatDate(DateTime value) {
     'Dec',
   ];
   return '${months[value.month - 1]} ${value.day}';
+}
+
+String _formatTimeOfDay(TimeOfDay value) {
+  final period = value.hour >= 12 ? 'PM' : 'AM';
+  final hour12 = switch (value.hour % 12) {
+    0 => 12,
+    _ => value.hour % 12,
+  };
+  return '${hour12.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')} $period';
 }

@@ -293,23 +293,46 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+      find.byKey(TaskManagementScreen.calendarDetailsEditButtonKey),
       findsOneWidget,
     );
-    expect(find.text('Mark As Completed'), findsOneWidget);
+    expect(find.text('Edit Task'), findsOneWidget);
     final closeRect = tester.getRect(
       find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
     );
     final actionRect = tester.getRect(
-      find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+      find.byKey(TaskManagementScreen.calendarDetailsEditButtonKey),
     );
-    expect(closeRect.left, actionRect.left);
+    expect(closeRect.top, actionRect.top);
     expect(closeRect.width, actionRect.width);
-    expect(actionRect.top, greaterThan(closeRect.bottom));
+    expect(actionRect.left, greaterThan(closeRect.right));
 
     await tester.tap(
       find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
     );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+      findsNothing,
+    );
+  });
+
+  testWidgets('tapping outside the calendar details sheet dismisses it', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(tester);
+    await openCalendarAndSelectDate(tester, '2026-04-20');
+
+    await tester.tap(find.text('Science Assessment'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
 
     expect(
@@ -461,19 +484,21 @@ void main() {
     await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(TaskManagementScreen.calendarScheduleButtonKey));
+    await tester.tap(
+      find.byKey(TaskManagementScreen.calendarScheduleButtonKey),
+    );
     await tester.pumpAndSettle();
 
     final surfaceHeight = tester.binding.renderView.size.height;
-    final sheetHeight = tester.getRect(
-      find.byKey(TaskManagementScreen.calendarSheetKey),
-    ).height;
+    final sheetHeight = tester
+        .getRect(find.byKey(TaskManagementScreen.calendarSheetKey))
+        .height;
 
     expect(sheetHeight, lessThan(surfaceHeight * 0.9));
   });
 
   testWidgets(
-    'calendar task details sheet toggles between complete and incomplete states',
+    'calendar task details sheet opens schedule sheet in edit mode and saves updates',
     (WidgetTester tester) async {
       await pumpScreen(tester);
       await openCalendarAndSelectDate(tester, '2026-04-20');
@@ -481,48 +506,98 @@ void main() {
       await tester.tap(find.text('Science Assessment'));
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
-      );
-      await tester.pumpAndSettle();
-
-      expect(
-        find.descendant(
-          of: find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
-          matching: find.text('Completed'),
-        ),
-        findsOneWidget,
-      );
       expect(find.text('Mark As Completed'), findsNothing);
-      expect(find.text('Mark as Incomplete'), findsOneWidget);
+      expect(find.text('Mark as Incomplete'), findsNothing);
+      expect(find.text('Edit Task'), findsOneWidget);
 
       await tester.tap(
-        find.byKey(TaskManagementScreen.calendarDetailsCompleteButtonKey),
+        find.byKey(TaskManagementScreen.calendarDetailsEditButtonKey),
       );
       await tester.pumpAndSettle();
 
+      expect(find.byKey(TaskManagementScreen.calendarSheetKey), findsOneWidget);
+      expect(find.text('Edit Task'), findsWidgets);
+      expect(find.text('Update your scheduled task'), findsOneWidget);
       expect(
-        find.descendant(
-          of: find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
-          matching: find.text('Completed'),
+        tester
+            .widget<TextFormField>(
+              find.byKey(TaskManagementScreen.calendarSheetTitleFieldKey),
+            )
+            .controller
+            ?.text,
+        'Science Assessment',
+      );
+      expect(
+        tester
+            .widget<TextFormField>(
+              find.byKey(TaskManagementScreen.calendarSheetDescriptionFieldKey),
+            )
+            .controller
+            ?.text,
+        'Prepare for quiz',
+      );
+      expect(find.text('08:00 AM - 11:00 AM'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(TaskManagementScreen.calendarSheetTitleFieldKey),
+        'Science Review',
+      );
+      await tester.enterText(
+        find.byKey(TaskManagementScreen.calendarSheetDescriptionFieldKey),
+        'Review chapters',
+      );
+
+      final categoryField = find.byKey(
+        TaskManagementScreen.calendarSheetCategoryFieldKey,
+      );
+      await tester.ensureVisible(categoryField);
+      await tester.tap(categoryField);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          TaskManagementScreen.calendarSheetCategoryOptionKey('personal'),
         ),
+      );
+      await tester.pumpAndSettle();
+
+      final roseColorFinder = find.byKey(
+        taskCategoryColorChoiceKey('task-calendar-sheet', AppColors.rose500),
+      );
+      await tester.ensureVisible(roseColorFinder);
+      await tester.tap(roseColorFinder);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(TaskManagementScreen.calendarSheetSubmitButtonKey),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(TaskManagementScreen.calendarSheetKey), findsNothing);
+      expect(
+        find.byKey(TaskManagementScreen.calendarDetailsSheetKey),
         findsNothing,
       );
-      expect(find.text('Mark As Completed'), findsOneWidget);
-      expect(find.text('Mark as Incomplete'), findsNothing);
+      expect(find.text('Science Review'), findsOneWidget);
+      expect(find.text('08:00AM - 11:00AM'), findsOneWidget);
+      expect(find.text('Personal'), findsWidgets);
 
-      await tester.tap(
-        find.byKey(TaskManagementScreen.calendarDetailsCloseButtonKey),
+      final updatedTask = await repository.getTaskById('science');
+      expect(updatedTask, isNotNull);
+      expect(updatedTask?.title, 'Science Review');
+      expect(updatedTask?.description, 'Review chapters');
+      expect(updatedTask?.startDate, DateTime(2026, 4, 20));
+      expect(updatedTask?.endDate, DateTime(2026, 4, 20));
+      expect(updatedTask?.startMinutes, 8 * 60);
+      expect(updatedTask?.endMinutes, 11 * 60);
+      expect(updatedTask?.categoryId, 'personal');
+      expect(updatedTask?.priority, TaskPriority.medium);
+      expect(updatedTask?.isCompleted, isFalse);
+
+      final categories = await repository.getCategories();
+      final personal = categories.firstWhere(
+        (category) => category.id == 'personal',
       );
-      await tester.pumpAndSettle();
-
-      final completedTask = await repository.getTaskById('science');
-      expect(completedTask?.isCompleted, isFalse);
-
-      final titleText = tester.widget<Text>(
-        find.text('Science Assessment').first,
-      );
-      expect(titleText.style?.decoration, TextDecoration.none);
+      expect(personal.color, AppColors.rose500);
     },
   );
 
@@ -770,10 +845,7 @@ void main() {
 
       expect(find.text('9AM'), findsOneWidget);
 
-      await pumpCalendarView(
-        tester,
-        initialTimelineZoom: 1.3,
-      );
+      await pumpCalendarView(tester, initialTimelineZoom: 1.3);
 
       expect(find.text('9:00AM'), findsOneWidget);
       expect(find.text('9:10AM'), findsNothing);
@@ -891,38 +963,37 @@ void main() {
   });
 
   test('timeline markers stay hourly in default mode', () {
-    final markers = buildTimelineMarkers(
-      const [8, 9, 10],
-      detailed: false,
-    );
+    final markers = buildTimelineMarkers(const [8, 9, 10], detailed: false);
 
     expect(markers.map((marker) => marker.label), ['8AM', '9AM', '10AM']);
     expect(markers.every((marker) => marker.isHour), isTrue);
   });
 
-  test('timeline markers keep 10-minute positions but label only half hours', () {
-    final markers = buildTimelineMarkers(
-      const [9, 10],
-      detailed: true,
-    );
+  test(
+    'timeline markers keep 10-minute positions but label only half hours',
+    () {
+      final markers = buildTimelineMarkers(const [9, 10], detailed: true);
 
-    expect(
-      markers.where((marker) => marker.showsLabel).map((marker) => marker.label),
-      ['9:00AM', '9:30AM', '10:00AM'],
-    );
-    expect(markers.first.isHour, isTrue);
-    expect(markers[1].isHour, isFalse);
-    expect(markers.last.isHour, isTrue);
-    expect(markers.map((marker) => marker.minutes), [
-      540,
-      550,
-      560,
-      570,
-      580,
-      590,
-      600,
-    ]);
-  });
+      expect(
+        markers
+            .where((marker) => marker.showsLabel)
+            .map((marker) => marker.label),
+        ['9:00AM', '9:30AM', '10:00AM'],
+      );
+      expect(markers.first.isHour, isTrue);
+      expect(markers[1].isHour, isFalse);
+      expect(markers.last.isHour, isTrue);
+      expect(markers.map((marker) => marker.minutes), [
+        540,
+        550,
+        560,
+        570,
+        580,
+        590,
+        600,
+      ]);
+    },
+  );
 
   test('detailed time labels use h:mmAM formatting', () {
     expect(formatDetailedTimelineLabel((9 * 60) + 30), '9:30AM');

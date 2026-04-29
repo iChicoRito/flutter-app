@@ -107,8 +107,8 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key calendarDetailsCloseButtonKey = Key(
     'task-calendar-details-close',
   );
-  static const Key calendarDetailsCompleteButtonKey = Key(
-    'task-calendar-details-complete',
+  static const Key calendarDetailsEditButtonKey = Key(
+    'task-calendar-details-edit',
   );
 
   static Key statusFilterKey(String value) => Key('task-status-filter-$value');
@@ -387,6 +387,8 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     final request = await showModalBottomSheet<TaskQuickScheduleRequest>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.transparent,
       builder: (context) => TaskScheduleSheet(
         categories: _controller.categories,
@@ -460,17 +462,107 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _CalendarTaskDetailsSheet(
         key: TaskManagementScreen.calendarDetailsSheetKey,
         task: task,
         category: _controller.categoryFor(task.categoryId),
         closeButtonKey: TaskManagementScreen.calendarDetailsCloseButtonKey,
-        completeButtonKey:
-            TaskManagementScreen.calendarDetailsCompleteButtonKey,
-        onToggleCompletion: _controller.toggleTaskCompletion,
+        editButtonKey: TaskManagementScreen.calendarDetailsEditButtonKey,
+        onEditRequested: _editScheduledCalendarTask,
       ),
     );
+  }
+
+  Future<void> _editScheduledCalendarTask(TaskItem task) async {
+    final latestTask = await widget.repository.getTaskById(task.id);
+    if (!mounted || latestTask == null) {
+      return;
+    }
+
+    final request = await showModalBottomSheet<TaskQuickScheduleRequest>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TaskScheduleSheet(
+        categories: _controller.categories,
+        initialDate:
+            latestTask.startDate ?? latestTask.endDate ?? _selectedCalendarDate,
+        existingTask: latestTask,
+        sheetKey: TaskManagementScreen.calendarSheetKey,
+        titleFieldKey: TaskManagementScreen.calendarSheetTitleFieldKey,
+        descriptionFieldKey:
+            TaskManagementScreen.calendarSheetDescriptionFieldKey,
+        categoryFieldKey: TaskManagementScreen.calendarSheetCategoryFieldKey,
+        categoryOptionKeyBuilder:
+            TaskManagementScreen.calendarSheetCategoryOptionKey,
+        targetDateButtonKey:
+            TaskManagementScreen.calendarSheetTargetDateButtonKey,
+        targetTimeButtonKey:
+            TaskManagementScreen.calendarSheetTargetTimeButtonKey,
+        submitButtonKey: TaskManagementScreen.calendarSheetSubmitButtonKey,
+      ),
+    );
+    if (request == null || !mounted) {
+      return;
+    }
+
+    try {
+      final selectedCategory = _controller.categoryFor(request.category.id);
+      if (selectedCategory == null ||
+          selectedCategory.color.toARGB32() !=
+              request.category.color.toARGB32()) {
+        await widget.repository.upsertCategory(request.category);
+        await _controller.load();
+      }
+      final now = DateTime.now();
+      final updatedTask = latestTask.copyWith(
+        title: request.title,
+        description: request.description.trim().isEmpty
+            ? null
+            : request.description.trim(),
+        categoryId: request.category.id,
+        standaloneCategoryId: latestTask.spaceId == null
+            ? request.category.id
+            : latestTask.standaloneCategoryId,
+        startDate: request.targetDate,
+        startMinutes: request.startMinutes,
+        endDate: request.targetDate,
+        endMinutes: request.endMinutes,
+        updatedAt: now,
+      );
+      await _controller.saveTask(updatedTask);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedCalendarMonth = DateTime(
+          request.targetDate.year,
+          request.targetDate.month,
+          1,
+        );
+        _selectedCalendarDate = DateTime(
+          request.targetDate.year,
+          request.targetDate.month,
+          request.targetDate.day,
+        );
+        _calendarStatusFilter = TaskStatusFilter.all;
+      });
+      showTaskToast(context, message: 'Task updated successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to update the task right now.',
+        isError: true,
+      );
+    }
   }
 
   Future<void> _openEditor(String taskId) async {
@@ -1070,15 +1162,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                     TaskManagementScreen.calendarStatusChipKey,
                                 dateKeyBuilder:
                                     TaskManagementScreen.calendarDateKey,
-                                scheduleButtonKey:
-                                    TaskManagementScreen
-                                        .calendarScheduleButtonKey,
-                                timelineScrollKey:
-                                    TaskManagementScreen
-                                        .calendarTimelineScrollKey,
-                                monthHeaderKey:
-                                    TaskManagementScreen
-                                        .calendarMonthDropdownKey,
+                                scheduleButtonKey: TaskManagementScreen
+                                    .calendarScheduleButtonKey,
+                                timelineScrollKey: TaskManagementScreen
+                                    .calendarTimelineScrollKey,
+                                monthHeaderKey: TaskManagementScreen
+                                    .calendarMonthDropdownKey,
                               ),
                             ),
                     );
@@ -1273,15 +1362,15 @@ class _CalendarTaskDetailsSheet extends StatefulWidget {
     required this.task,
     required this.category,
     required this.closeButtonKey,
-    required this.completeButtonKey,
-    required this.onToggleCompletion,
+    required this.editButtonKey,
+    required this.onEditRequested,
   });
 
   final TaskItem task;
   final TaskCategory? category;
   final Key closeButtonKey;
-  final Key completeButtonKey;
-  final Future<void> Function(TaskItem task)? onToggleCompletion;
+  final Key editButtonKey;
+  final Future<void> Function(TaskItem task)? onEditRequested;
 
   @override
   State<_CalendarTaskDetailsSheet> createState() =>
@@ -1290,44 +1379,11 @@ class _CalendarTaskDetailsSheet extends StatefulWidget {
 
 class _CalendarTaskDetailsSheetState extends State<_CalendarTaskDetailsSheet> {
   late TaskItem _task;
-  bool _isCompleting = false;
 
   @override
   void initState() {
     super.initState();
     _task = widget.task;
-  }
-
-  Future<void> _handleMarkCompleted() async {
-    if (_isCompleting || widget.onToggleCompletion == null) {
-      return;
-    }
-
-    setState(() {
-      _isCompleting = true;
-    });
-
-    try {
-      await widget.onToggleCompletion!(_task);
-      if (!mounted) {
-        return;
-      }
-      final now = DateTime.now();
-      setState(() {
-        _task = _task.copyWith(
-          isCompleted: !_task.isCompleted,
-          completedAt: _task.isCompleted ? null : now,
-          clearCompletedAt: _task.isCompleted,
-          updatedAt: now,
-        );
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCompleting = false;
-        });
-      }
-    }
   }
 
   @override
@@ -1345,197 +1401,195 @@ class _CalendarTaskDetailsSheetState extends State<_CalendarTaskDetailsSheet> {
 
     return SafeArea(
       top: false,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.four,
-            AppSpacing.four,
-            AppSpacing.four,
-            AppSpacing.five,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.four,
+          AppSpacing.four,
+          AppSpacing.four,
+          AppSpacing.five,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadii.threeXl),
           ),
-          decoration: const BoxDecoration(
-            color: AppColors.cardFill,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppRadii.threeXl),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 56,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.neutral200,
-                    borderRadius: BorderRadius.circular(AppRadii.full),
-                  ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 56,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.neutral200,
+                  borderRadius: BorderRadius.circular(AppRadii.full),
                 ),
               ),
-              const SizedBox(height: AppSpacing.six),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            const SizedBox(height: AppSpacing.six),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: AppColors.titleText,
+                          fontSize: AppTypography.sizeLg,
+                          fontWeight: AppTypography.weightSemibold,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.one),
+                      Text(
+                        _formatCalendarDetailSchedule(task),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.subHeaderText,
+                          fontSize: AppTypography.sizeBase,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.three),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.three,
+                          vertical: AppSpacing.oneAndHalf,
+                        ),
+                        decoration: taskCardBadgeDecoration(appearance),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              resolveTaskCategoryIcon(category?.iconKey ?? ''),
+                              size: 14,
+                              color: appearance.badgeForegroundColor,
+                            ),
+                            const SizedBox(width: AppSpacing.one),
+                            Text(
+                              category?.name ?? 'Category',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: appearance.badgeForegroundColor,
+                                    fontSize: AppTypography.sizeSm,
+                                    fontWeight: AppTypography.weightMedium,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.three),
+                if (task.isCompleted)
+                  Container(
+                    margin: const EdgeInsets.only(top: AppSpacing.one),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.three,
+                      vertical: AppSpacing.oneAndHalf,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.successBadgeFill,
+                      borderRadius: BorderRadius.circular(AppRadii.full),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          task.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: AppColors.titleText,
-                                fontSize: AppTypography.sizeLg,
-                                fontWeight: AppTypography.weightSemibold,
-                              ),
+                        Icon(
+                          TablerIcons.check,
+                          size: 14,
+                          color: AppColors.successBadgeText,
                         ),
-                        const SizedBox(height: AppSpacing.one),
+                        const SizedBox(width: AppSpacing.oneAndHalf),
                         Text(
-                          _formatCalendarDetailSchedule(task),
-                          style: Theme.of(context).textTheme.bodyMedium
+                          'Completed',
+                          style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(
-                                color: AppColors.subHeaderText,
-                                fontSize: AppTypography.sizeBase,
+                                color: AppColors.successBadgeText,
+                                fontSize: AppTypography.sizeSm,
+                                fontWeight: AppTypography.weightMedium,
                               ),
-                        ),
-                        const SizedBox(height: AppSpacing.three),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.three,
-                            vertical: AppSpacing.oneAndHalf,
-                          ),
-                          decoration: taskCardBadgeDecoration(appearance),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                resolveTaskCategoryIcon(category?.iconKey ?? ''),
-                                size: 14,
-                                color: appearance.badgeForegroundColor,
-                              ),
-                              const SizedBox(width: AppSpacing.one),
-                              Text(
-                                category?.name ?? 'Category',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      color: appearance.badgeForegroundColor,
-                                      fontSize: AppTypography.sizeSm,
-                                      fontWeight: AppTypography.weightMedium,
-                                    ),
-                              ),
-                            ],
-                          ),
                         ),
                       ],
                     ),
+                  )
+                else
+                  const SizedBox.shrink(),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.six),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.five),
+              decoration: BoxDecoration(
+                color: AppColors.cardFill,
+                borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Short Description',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: AppTypography.sizeBase,
+                      fontWeight: AppTypography.weightSemibold,
+                    ),
                   ),
-                  const SizedBox(width: AppSpacing.three),
-                  if (task.isCompleted)
-                    Container(
-                      margin: const EdgeInsets.only(top: AppSpacing.one),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.three,
-                        vertical: AppSpacing.oneAndHalf,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.successBadgeFill,
-                        borderRadius: BorderRadius.circular(
-                          AppRadii.full,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            TablerIcons.check,
-                            size: 14,
-                            color: AppColors.successBadgeText,
-                          ),
-                          const SizedBox(width: AppSpacing.oneAndHalf),
-                          Text(
-                            'Completed',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: AppColors.successBadgeText,
-                                  fontSize: AppTypography.sizeSm,
-                                  fontWeight: AppTypography.weightMedium,
-                                ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    const SizedBox.shrink(),
+                  const SizedBox(height: AppSpacing.two),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.subHeaderText,
+                      fontSize: AppTypography.sizeSm,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.six),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.five),
-                decoration: BoxDecoration(
-                  color: AppColors.cardFill,
-                  borderRadius: BorderRadius.circular(AppRadii.twoXl),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Short Description',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.titleText,
-                        fontSize: AppTypography.sizeBase,
-                        fontWeight: AppTypography.weightSemibold,
-                      ),
+            ),
+            const SizedBox(height: AppSpacing.six),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    key: widget.closeButtonKey,
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.secondary,
+                      size: TaskButtonSize.large,
+                      minimumSize: const Size.fromHeight(50),
                     ),
-                    const SizedBox(height: AppSpacing.two),
-                    Text(
-                      description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.subHeaderText,
-                        fontSize: AppTypography.sizeSm,
-                      ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.three),
+                Expanded(
+                  child: FilledButton(
+                    key: widget.editButtonKey,
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      widget.onEditRequested?.call(_task);
+                    },
+                    style: taskButtonStyle(
+                      context,
+                      role: TaskButtonRole.primary,
+                      size: TaskButtonSize.large,
+                      minimumSize: const Size.fromHeight(50),
                     ),
-                  ],
+                    child: const Text('Edit Task'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.six),
-              FilledButton(
-                key: widget.closeButtonKey,
-                onPressed: () => Navigator.of(context).pop(),
-                style: taskButtonStyle(
-                  context,
-                  role: TaskButtonRole.secondary,
-                  size: TaskButtonSize.large,
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                child: const Text('Close'),
-              ),
-              const SizedBox(height: AppSpacing.three),
-              FilledButton(
-                key: widget.completeButtonKey,
-                onPressed: _isCompleting ? null : _handleMarkCompleted,
-                style: taskButtonStyle(
-                  context,
-                  role: TaskButtonRole.primary,
-                  size: TaskButtonSize.large,
-                  minimumSize: const Size.fromHeight(50),
-                ),
-                child: Text(
-                  _isCompleting
-                      ? 'Updating...'
-                      : task.isCompleted
-                      ? 'Mark as Incomplete'
-                      : 'Mark As Completed',
-                ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -1956,10 +2010,7 @@ class _TaskPageHeader extends StatelessWidget {
 }
 
 class _InlineBackHeader extends StatelessWidget {
-  const _InlineBackHeader({
-    required this.title,
-    required this.onTap,
-  });
+  const _InlineBackHeader({required this.title, required this.onTap});
 
   final String title;
   final VoidCallback onTap;

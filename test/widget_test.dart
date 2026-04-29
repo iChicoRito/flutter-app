@@ -28,6 +28,7 @@ import 'package:flutter_app/features/task_management/presentation/task_creation_
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_ui.dart';
+import 'package:flutter_app/features/task_management/presentation/task_schedule_sheet.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
@@ -1438,6 +1439,180 @@ void main() {
 
     expect(find.text('Custom Category'), findsNothing);
   });
+
+  testWidgets('task schedule sheet supports edit mode copy and prefills', (
+    WidgetTester tester,
+  ) async {
+    final categories = [
+      TaskCategory(
+        id: 'school',
+        name: 'School',
+        iconKey: 'book',
+        colorValue: AppColors.blue500.toARGB32(),
+        createdAt: DateTime(2026),
+      ),
+      TaskCategory(
+        id: 'personal',
+        name: 'Personal',
+        iconKey: 'home',
+        colorValue: AppColors.rose500.toARGB32(),
+        createdAt: DateTime(2026),
+      ),
+    ];
+    final task = TaskItem(
+      id: 'scheduled-task',
+      title: 'Science Assessment',
+      description: 'Prepare for quiz',
+      priority: TaskPriority.medium,
+      categoryId: 'personal',
+      standaloneCategoryId: 'personal',
+      createdAt: DateTime(2026, 4, 20, 8),
+      updatedAt: DateTime(2026, 4, 20, 8),
+      startDate: DateTime(2026, 4, 20),
+      startMinutes: 8 * 60,
+      endDate: DateTime(2026, 4, 20),
+      endMinutes: 11 * 60,
+      noteDocumentJson: buildPlainTextNoteDocumentJson('Prepare for quiz'),
+      notePlainText: 'Prepare for quiz',
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        Scaffold(
+          body: TaskScheduleSheet(
+            categories: categories,
+            initialDate: DateTime(2026, 4, 20),
+            existingTask: task,
+            sheetKey: TaskManagementScreen.calendarSheetKey,
+            titleFieldKey: TaskManagementScreen.calendarSheetTitleFieldKey,
+            descriptionFieldKey:
+                TaskManagementScreen.calendarSheetDescriptionFieldKey,
+            categoryFieldKey:
+                TaskManagementScreen.calendarSheetCategoryFieldKey,
+            categoryOptionKeyBuilder:
+                TaskManagementScreen.calendarSheetCategoryOptionKey,
+            targetDateButtonKey:
+                TaskManagementScreen.calendarSheetTargetDateButtonKey,
+            targetTimeButtonKey:
+                TaskManagementScreen.calendarSheetTargetTimeButtonKey,
+            submitButtonKey: TaskManagementScreen.calendarSheetSubmitButtonKey,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Task'), findsOneWidget);
+    expect(find.text('Update your scheduled task'), findsOneWidget);
+    expect(find.text('Schedule Task'), findsNothing);
+    expect(find.text('Add and schedule your tasks'), findsNothing);
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(TaskManagementScreen.calendarSheetTitleFieldKey),
+          )
+          .controller
+          ?.text,
+      'Science Assessment',
+    );
+    expect(
+      tester
+          .widget<TextFormField>(
+            find.byKey(TaskManagementScreen.calendarSheetDescriptionFieldKey),
+          )
+          .controller
+          ?.text,
+      'Prepare for quiz',
+    );
+    expect(find.text('Apr 20'), findsOneWidget);
+    expect(find.text('08:00 AM - 11:00 AM'), findsOneWidget);
+    expect(find.text('Save Changes'), findsOneWidget);
+    expect(
+      find.byKey(
+        taskCategorySelectedColorCheckKey(
+          'task-calendar-sheet',
+          AppColors.rose500,
+        ),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'task schedule sheet edit mode keeps invalid time ranges blocked',
+    (WidgetTester tester) async {
+      final categories = [
+        TaskCategory(
+          id: 'school',
+          name: 'School',
+          iconKey: 'book',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: DateTime(2026),
+        ),
+      ];
+      final invalidTask = TaskItem(
+        id: 'scheduled-task',
+        title: 'Broken schedule',
+        description: 'Needs correction',
+        priority: TaskPriority.medium,
+        categoryId: 'school',
+        standaloneCategoryId: 'school',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        startDate: DateTime(2026, 4, 20),
+        startMinutes: 11 * 60,
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 9 * 60,
+        noteDocumentJson: buildPlainTextNoteDocumentJson('Needs correction'),
+        notePlainText: 'Needs correction',
+      );
+
+      TaskQuickScheduleRequest? result;
+      await tester.pumpWidget(
+        wrapWithMaterial(
+          Navigator(
+            onGenerateRoute: (_) => MaterialPageRoute<void>(
+              builder: (context) => Scaffold(
+                body: TaskScheduleSheet(
+                  categories: categories,
+                  initialDate: DateTime(2026, 4, 20),
+                  existingTask: invalidTask,
+                  onSubmittedForTest: (value) => result = value,
+                  sheetKey: TaskManagementScreen.calendarSheetKey,
+                  titleFieldKey:
+                      TaskManagementScreen.calendarSheetTitleFieldKey,
+                  descriptionFieldKey:
+                      TaskManagementScreen.calendarSheetDescriptionFieldKey,
+                  categoryFieldKey:
+                      TaskManagementScreen.calendarSheetCategoryFieldKey,
+                  categoryOptionKeyBuilder:
+                      TaskManagementScreen.calendarSheetCategoryOptionKey,
+                  targetDateButtonKey:
+                      TaskManagementScreen.calendarSheetTargetDateButtonKey,
+                  targetTimeButtonKey:
+                      TaskManagementScreen.calendarSheetTargetTimeButtonKey,
+                  submitButtonKey:
+                      TaskManagementScreen.calendarSheetSubmitButtonKey,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final submitButton = find.byKey(
+        TaskManagementScreen.calendarSheetSubmitButtonKey,
+      );
+      await tester.ensureVisible(submitButton);
+      await tester.tap(submitButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('End time must be after start time.'), findsOneWidget);
+      expect(result, isNull);
+      expect(find.byKey(TaskManagementScreen.calendarSheetKey), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'task creation category section applies the inline selected color to new custom categories',

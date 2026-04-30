@@ -2772,8 +2772,60 @@ void main() {
       expect(find.text('Space - Client Work'), findsOneWidget);
       expect(find.byType(AppBar), findsNothing);
       expect(find.byIcon(TablerIcons.chevron_left), findsOneWidget);
+      expect(find.byKey(TaskManagementScreen.tasksSegmentKey), findsNothing);
+      expect(find.byKey(TaskManagementScreen.calendarSegmentKey), findsNothing);
+      expect(find.byKey(TaskManagementScreen.calendarViewKey), findsNothing);
     },
   );
+
+  testWidgets('space detail shows its empty task state without task tabs', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime(2026, 4, 13, 9);
+    final space = TaskSpace(
+      id: 'space-empty',
+      name: 'Quiet Space',
+      description: 'No tasks yet',
+      categoryId: 'work',
+      colorValue: AppColors.blue500.toARGB32(),
+      createdAt: now,
+      updatedAt: now,
+    );
+    taskRepository = InMemoryTaskRepository(
+      categories: [
+        TaskCategory(
+          id: 'work',
+          name: 'Work',
+          iconKey: 'briefcase',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: now,
+        ),
+      ],
+      spaces: [space],
+    );
+
+    await tester.pumpWidget(
+      wrapWithMaterial(
+        SpaceDetailScreen(
+          repository: taskRepository,
+          reminderService: const NoopTaskReminderService(),
+          space: space,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No tasks in this space yet'), findsOneWidget);
+    expect(
+      find.text(
+        'Create a task inside this space to keep related work together.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(TaskManagementScreen.emptyStateKey), findsOneWidget);
+    expect(find.byKey(TaskManagementScreen.tasksSegmentKey), findsNothing);
+    expect(find.byKey(TaskManagementScreen.calendarSegmentKey), findsNothing);
+  });
 
   testWidgets('task editor opens from both tasks tab and dashboard home', (
     WidgetTester tester,
@@ -2827,6 +2879,8 @@ void main() {
 
     await tester.tap(find.byKey(DashboardScreen.taskToggleKey(task.id)));
     await tester.pumpAndSettle();
+
+    expect(find.text('Task completed successfully.'), findsOneWidget);
 
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();

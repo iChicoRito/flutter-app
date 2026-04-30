@@ -58,7 +58,15 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen> {
       return;
     }
 
-    final dueAt = widget.payload.scheduledAt;
+    TaskItem? primaryTask;
+    for (final task in allTasks) {
+      if (task.id == widget.payload.taskId && !task.isCompleted) {
+        primaryTask = task;
+        break;
+      }
+    }
+
+    final dueAt = primaryTask?.endDateTime ?? widget.payload.scheduledAt;
     final matchingTasks = <_AlarmTaskDetails>[];
 
     for (final task in allTasks) {
@@ -161,8 +169,8 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dueText = _formatDueTime(widget.payload.scheduledAt);
     final alarmTasks = _alarmTasks;
+    final dueText = _formatDueTime(_resolvedDueTime(alarmTasks));
 
     return PopScope(
       canPop: false,
@@ -319,6 +327,17 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen> {
     return 'Task reminder is scheduled for $dueText';
   }
 
+  DateTime? _resolvedDueTime(List<_AlarmTaskDetails> alarmTasks) {
+    for (final item in alarmTasks) {
+      final dueAt = item.task?.endDateTime;
+      if (dueAt != null) {
+        return dueAt;
+      }
+    }
+
+    return widget.payload.scheduledAt;
+  }
+
   String? _formatDueTime(DateTime? value) {
     if (value == null) {
       return null;
@@ -374,43 +393,35 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      task?.title ??
-                          item.fallbackTitle ??
-                          widget.payload.taskTitle,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.titleText,
-                        fontSize: AppTypography.size2xl,
-                        fontWeight: AppTypography.weightSemibold,
-                      ),
+              Text(
+                task?.title ?? item.fallbackTitle ?? widget.payload.taskTitle,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.titleText,
+                  fontSize: AppTypography.size2xl,
+                  fontWeight: AppTypography.weightSemibold,
+                ),
+              ),
+              if (category != null) ...[
+                const SizedBox(height: AppSpacing.three),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.four,
+                    vertical: AppSpacing.one,
+                  ),
+                  decoration: BoxDecoration(
+                    color: category.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(AppRadii.full),
+                  ),
+                  child: Text(
+                    category.name,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: category.color,
+                      fontSize: AppTypography.sizeXs,
+                      fontWeight: AppTypography.weightMedium,
                     ),
                   ),
-                  if (category != null)
-                    Container(
-                      margin: const EdgeInsets.only(left: AppSpacing.three),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.four,
-                        vertical: AppSpacing.one,
-                      ),
-                      decoration: BoxDecoration(
-                        color: category.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppRadii.full),
-                      ),
-                      child: Text(
-                        category.name,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: category.color,
-                          fontSize: AppTypography.sizeXs,
-                          fontWeight: AppTypography.weightMedium,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.three),
               Text(
                 _resolveTaskDetails(task),

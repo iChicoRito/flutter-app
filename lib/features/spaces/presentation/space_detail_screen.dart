@@ -49,6 +49,7 @@ class _SpaceDetailScreenState extends State<SpaceDetailScreen> {
       emptyTitle: 'No tasks in this space yet',
       emptyMessage:
           'Create a task inside this space to keep related work together.',
+      tasksOnlyMode: true,
     );
   }
 }

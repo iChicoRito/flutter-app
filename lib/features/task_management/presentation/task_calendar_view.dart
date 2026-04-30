@@ -20,6 +20,7 @@ class TaskCalendarView extends StatefulWidget {
     required this.onStatusSelected,
     required this.onSchedulePressed,
     required this.onTaskTap,
+    this.onTaskLongPress,
     required this.statusChipKeyBuilder,
     required this.dateKeyBuilder,
     required this.scheduleButtonKey,
@@ -38,6 +39,7 @@ class TaskCalendarView extends StatefulWidget {
   final ValueChanged<TaskStatusFilter> onStatusSelected;
   final VoidCallback onSchedulePressed;
   final ValueChanged<TaskItem> onTaskTap;
+  final void Function(TaskItem task, Offset globalPosition)? onTaskLongPress;
   final Key Function(String value) statusChipKeyBuilder;
   final Key Function(String value) dateKeyBuilder;
   final Key scheduleButtonKey;
@@ -119,6 +121,7 @@ class _TaskCalendarViewState extends State<TaskCalendarView> {
                       categoryFor: widget.controller.categoryFor,
                       selectedDate: widget.selectedDate,
                       onTaskTap: widget.onTaskTap,
+                      onTaskLongPress: widget.onTaskLongPress,
                       scrollKey: widget.timelineScrollKey,
                       initialZoom: widget.initialTimelineZoom,
                       onZoomGestureStateChanged: _handleZoomGestureStateChanged,
@@ -508,6 +511,7 @@ class _CalendarTimeline extends StatefulWidget {
     required this.categoryFor,
     required this.selectedDate,
     required this.onTaskTap,
+    required this.onTaskLongPress,
     required this.scrollKey,
     required this.initialZoom,
     required this.onZoomGestureStateChanged,
@@ -517,6 +521,7 @@ class _CalendarTimeline extends StatefulWidget {
   final TaskCategory? Function(String categoryId) categoryFor;
   final DateTime selectedDate;
   final ValueChanged<TaskItem> onTaskTap;
+  final void Function(TaskItem task, Offset globalPosition)? onTaskLongPress;
   final Key scrollKey;
   final double initialZoom;
   final ValueChanged<bool> onZoomGestureStateChanged;
@@ -698,9 +703,9 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
                                 final usesLongLineTone = markerHour >= 17;
                                 final top =
                                     ((marker.minutes -
-                                                timelineMarkers.first.minutes) /
-                                            60) *
-                                        rowHeight;
+                                            timelineMarkers.first.minutes) /
+                                        60) *
+                                    rowHeight;
                                 return Positioned(
                                   left: 0,
                                   right: 0,
@@ -750,7 +755,8 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
                                           color: isHourMarker
                                               ? (usesLongLineTone
                                                     ? AppColors.neutral200
-                                                    : AppColors.checkboxCardBorder)
+                                                    : AppColors
+                                                          .checkboxCardBorder)
                                               : AppColors.checkboxCardBorder
                                                     .withValues(alpha: 0.55),
                                         ),
@@ -794,6 +800,12 @@ class _CalendarTimelineState extends State<_CalendarTimeline> {
                                       preferCompactLayout: columnCount > 1,
                                       onTap: () =>
                                           widget.onTaskTap(layout.task),
+                                      onLongPressStart: (details) {
+                                        widget.onTaskLongPress?.call(
+                                          layout.task,
+                                          details.globalPosition,
+                                        );
+                                      },
                                     ),
                                   ),
                                 );
@@ -848,6 +860,7 @@ class _CalendarTaskCard extends StatelessWidget {
     required this.category,
     required this.preferCompactLayout,
     required this.onTap,
+    required this.onLongPressStart,
   });
 
   final TaskItem task;
@@ -855,6 +868,7 @@ class _CalendarTaskCard extends StatelessWidget {
   final TaskCategory? category;
   final bool preferCompactLayout;
   final VoidCallback onTap;
+  final GestureLongPressStartCallback onLongPressStart;
 
   @override
   Widget build(BuildContext context) {
@@ -863,57 +877,119 @@ class _CalendarTaskCard extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        key: ValueKey('calendar_task_${task.id}'),
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: tone,
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final contentMode = resolveCalendarTaskContentMode(
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
-                preferCompact: preferCompactLayout,
-              );
-              if (contentMode == CalendarTaskContentMode.hidden) {
-                return const SizedBox.expand();
-              }
-              if (contentMode == CalendarTaskContentMode.compact) {
+      child: GestureDetector(
+        onLongPressStart: onLongPressStart,
+        child: InkWell(
+          key: ValueKey('calendar_task_${task.id}'),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: tone,
+              borderRadius: BorderRadius.circular(AppRadii.xl),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final contentMode = resolveCalendarTaskContentMode(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  preferCompact: preferCompactLayout,
+                );
+                if (contentMode == CalendarTaskContentMode.hidden) {
+                  return const SizedBox.expand();
+                }
+                if (contentMode == CalendarTaskContentMode.compact) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _formatCompactRange(task),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyle?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.88),
+                            fontSize: 11,
+                            height: 1,
+                            fontWeight: AppTypography.weightMedium,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          task.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                color: Colors.white,
+                                fontSize: 13,
+                                height: 1.1,
+                                fontWeight: AppTypography.weightSemibold,
+                                decoration: task.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                        ),
+                        const Spacer(),
+                        _CalendarTaskBadge(
+                          category: category,
+                          badgeBackground: badgeBackground,
+                          tone: tone,
+                          textStyle: textStyle,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final showDescription =
+                    (task.description ?? '').isNotEmpty &&
+                    constraints.maxHeight >= 100;
+
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _formatCompactRange(task),
+                        _formatRange(task),
                         maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: textStyle?.copyWith(
                           color: Colors.white.withValues(alpha: 0.88),
-                          fontSize: 11,
+                          fontSize: 12,
                           height: 1,
                           fontWeight: AppTypography.weightMedium,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Text(
                         task.title,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: Colors.white,
-                          fontSize: 13,
-                          height: 1.1,
+                          fontSize: 16,
+                          height: 1,
                           fontWeight: AppTypography.weightSemibold,
                           decoration: task.isCompleted
                               ? TextDecoration.lineThrough
                               : null,
                         ),
                       ),
+                      if (showDescription) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          task.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyle?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            fontSize: 12,
+                            height: 1,
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       _CalendarTaskBadge(
                         category: category,
@@ -924,66 +1000,8 @@ class _CalendarTaskCard extends StatelessWidget {
                     ],
                   ),
                 );
-              }
-
-              final showDescription =
-                  (task.description ?? '').isNotEmpty &&
-                  constraints.maxHeight >= 100;
-
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _formatRange(task),
-                      maxLines: 1,
-                      style: textStyle?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        fontSize: 12,
-                        height: 1,
-                        fontWeight: AppTypography.weightMedium,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.white,
-                        fontSize: 16,
-                        height: 1,
-                        fontWeight: AppTypography.weightSemibold,
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
-                    ),
-                    if (showDescription) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        task.description!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: textStyle?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          fontSize: 12,
-                          height: 1,
-                        ),
-                      ),
-                    ],
-                    const Spacer(),
-                    _CalendarTaskBadge(
-                      category: category,
-                      badgeBackground: badgeBackground,
-                      tone: tone,
-                      textStyle: textStyle,
-                    ),
-                  ],
-                ),
-              );
-            },
+              },
+            ),
           ),
         ),
       ),

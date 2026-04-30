@@ -33,6 +33,7 @@ class TaskManagementScreen extends StatefulWidget {
     this.emptyMessage =
         'Create a task to start capturing notes, details, and schedules in one place.',
     this.useInlineBackHeader = false,
+    this.tasksOnlyMode = false,
   });
 
   static const Key markerKey = Key('task-management-screen');
@@ -151,6 +152,7 @@ class TaskManagementScreen extends StatefulWidget {
   final String emptyTitle;
   final String emptyMessage;
   final bool useInlineBackHeader;
+  final bool tasksOnlyMode;
 
   @override
   State<TaskManagementScreen> createState() => _TaskManagementScreenState();
@@ -224,6 +226,9 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     final liveSpace = _controller.spaceFor(widget.fixedSpaceId);
     return liveSpace ?? widget.space;
   }
+
+  bool get _isTasksTabActive =>
+      widget.tasksOnlyMode || _activeTab == _TaskManagementContentTab.tasks;
 
   String? get _effectiveLockedCategoryId =>
       _currentSpace?.categoryId ?? widget.lockedCategoryId;
@@ -727,6 +732,48 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
   }
 
+  Future<void> _showCalendarTaskContextMenu(
+    TaskItem task,
+    Offset globalPosition,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) {
+      return;
+    }
+
+    final selectedAction = await showMenu<_CalendarTaskContextAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        overlay.size.width - globalPosition.dx,
+        overlay.size.height - globalPosition.dy,
+      ),
+      color: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      items: const [
+        PopupMenuItem<_CalendarTaskContextAction>(
+          value: _CalendarTaskContextAction.delete,
+          child: TaskMenuEntry(
+            icon: TablerIcons.trash,
+            label: 'Delete',
+            color: AppColors.rose500,
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted || selectedAction == null) {
+      return;
+    }
+
+    switch (selectedAction) {
+      case _CalendarTaskContextAction.delete:
+        await _confirmDelete(task);
+    }
+  }
+
   Future<void> _archiveTask(TaskItem task) async {
     final parentSpace = _controller.spaceFor(task.spaceId);
     if (!await _confirmVaultProtectedTaskAction(
@@ -1104,7 +1151,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                     return GestureDetector(
                       behavior: HitTestBehavior.deferToChild,
                       onTap: _isSelectionMode ? _clearSelectionMode : null,
-                      child: _activeTab == _TaskManagementContentTab.tasks
+                      child: _isTasksTabActive
                           ? _buildTasksView(filteredTasks)
                           : KeyedSubtree(
                               key: TaskManagementScreen.calendarViewKey,
@@ -1158,6 +1205,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                                 },
                                 onSchedulePressed: _openCalendarScheduleSheet,
                                 onTaskTap: _openCalendarTaskDetails,
+                                onTaskLongPress: _showCalendarTaskContextMenu,
                                 statusChipKeyBuilder:
                                     TaskManagementScreen.calendarStatusChipKey,
                                 dateKeyBuilder:
@@ -1177,7 +1225,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             ],
           ),
         ),
-        floatingActionButton: _activeTab == _TaskManagementContentTab.tasks
+        floatingActionButton: _isTasksTabActive
             ? FloatingActionButton.extended(
                 key: TaskManagementScreen.addTaskFabKey,
                 heroTag: 'task-management-add-task-fab',
@@ -1226,15 +1274,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const _TaskPageHeader(),
-                    const SizedBox(height: AppSpacing.three),
-                    _TaskViewSegmentedControl(
-                      activeTab: _activeTab,
-                      onChanged: (value) {
-                        setState(() {
-                          _activeTab = value;
-                        });
-                      },
-                    ),
+                    if (!widget.tasksOnlyMode) ...[
+                      const SizedBox(height: AppSpacing.three),
+                      _TaskViewSegmentedControl(
+                        activeTab: _activeTab,
+                        onChanged: (value) {
+                          setState(() {
+                            _activeTab = value;
+                          });
+                        },
+                      ),
+                    ],
                     if (_effectiveLockedCategoryId == null) ...[
                       const SizedBox(height: AppSpacing.three),
                       _CategoryFilterRow(
@@ -1262,15 +1312,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const _TaskPageHeader(),
-                        const SizedBox(height: AppSpacing.three),
-                        _TaskViewSegmentedControl(
-                          activeTab: _activeTab,
-                          onChanged: (value) {
-                            setState(() {
-                              _activeTab = value;
-                            });
-                          },
-                        ),
+                        if (!widget.tasksOnlyMode) ...[
+                          const SizedBox(height: AppSpacing.three),
+                          _TaskViewSegmentedControl(
+                            activeTab: _activeTab,
+                            onChanged: (value) {
+                              setState(() {
+                                _activeTab = value;
+                              });
+                            },
+                          ),
+                        ],
                         if (_effectiveLockedCategoryId == null) ...[
                           const SizedBox(height: AppSpacing.three),
                           _CategoryFilterRow(
@@ -1640,6 +1692,8 @@ String _formatCalendarDetailTime(int minutes) {
 }
 
 enum _TaskMenuAction { moveToSpace, archive, delete }
+
+enum _CalendarTaskContextAction { delete }
 
 enum _TaskManagementContentTab { tasks, calendar }
 

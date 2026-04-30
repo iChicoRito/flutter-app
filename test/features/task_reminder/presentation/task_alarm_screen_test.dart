@@ -30,7 +30,7 @@ void main() {
   testWidgets(
     'alarm screen uses the redesigned hero illustration and task cards',
     (WidgetTester tester) async {
-      final dueAt = DateTime(2026, 4, 14, 17, 19);
+      final dueAt = DateTime(2026, 4, 14, 17, 10);
       final repository = InMemoryTaskRepository(
         categories: [
           TaskCategory(
@@ -69,7 +69,7 @@ void main() {
           ),
         ),
       );
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       final svg = tester.widget<SvgPicture>(find.byType(SvgPicture));
       final loader = svg.bytesLoader;
@@ -91,6 +91,101 @@ void main() {
       expect(find.text('Dismiss Alarm'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'alarm screen falls back to payload scheduled time when no matching task is found',
+    (WidgetTester tester) async {
+      final repository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'task-1',
+            title: 'Other Task',
+            categoryId: 'school',
+            endDate: DateTime(2026, 4, 14),
+            endMinutes: 17 * 60 + 19,
+          ),
+        ],
+      );
+
+      await tester.binding.setSurfaceSize(const Size(430, 1000));
+      await tester.pumpWidget(
+        buildHarness(
+          TaskAlarmScreen(
+            payload: TaskReminderPayload(
+              taskId: 'missing-task',
+              taskTitle: 'Fallback Task',
+              kind: TaskReminderKind.due,
+              scheduledAt: DateTime(2026, 4, 14, 17, 10),
+            ),
+            reminderService: const NoopTaskReminderService(),
+            taskRepository: repository,
+            displayNameStore: const _FakeDisplayNameStore(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Your tasks is scheduled for 4/14/2026 at 5:10 PM'),
+        findsOneWidget,
+      );
+      expect(find.text('Fallback Task'), findsOneWidget);
+    },
+  );
+
+  testWidgets('alarm task card places the category badge below the title', (
+    WidgetTester tester,
+  ) async {
+    final repository = InMemoryTaskRepository(
+      categories: [
+        TaskCategory(
+          id: 'school',
+          name: 'School',
+          iconKey: 'briefcase',
+          colorValue: const Color(0xFFF43F5E).toARGB32(),
+          createdAt: DateTime(2026, 4, 14, 8),
+        ),
+      ],
+      tasks: [
+        _buildTask(
+          id: 'task-1',
+          title: 'Task Title',
+          categoryId: 'school',
+          endDate: DateTime(2026, 4, 14),
+          endMinutes: 17 * 60 + 19,
+          noteText: 'Lorem ipsum dolor sit amen con',
+        ),
+      ],
+    );
+
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    await tester.pumpWidget(
+      buildHarness(
+        TaskAlarmScreen(
+          payload: TaskReminderPayload(
+            taskId: 'task-1',
+            taskTitle: 'Task Title',
+            kind: TaskReminderKind.due,
+            scheduledAt: DateTime(2026, 4, 14, 17, 10),
+          ),
+          reminderService: const NoopTaskReminderService(),
+          taskRepository: repository,
+          displayNameStore: const _FakeDisplayNameStore(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final titleBottom = tester.getBottomLeft(find.text('Task Title')).dy;
+    final badgeTop = tester.getTopLeft(find.text('School')).dy;
+    final badgeBottom = tester.getBottomLeft(find.text('School')).dy;
+    final detailsTop = tester
+        .getTopLeft(find.text('Lorem ipsum dolor sit amen con'))
+        .dy;
+
+    expect(badgeTop, greaterThan(titleBottom));
+    expect(detailsTop, greaterThan(badgeBottom));
+  });
 
   testWidgets(
     'alarm screen keeps all due tasks reachable in a scrollable list',

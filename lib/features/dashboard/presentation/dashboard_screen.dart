@@ -466,6 +466,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _taskController?.load();
   }
 
+  Future<void> _toggleHomeTaskCompletion(TaskItem task) async {
+    final controller = _taskController;
+    if (controller == null) {
+      return;
+    }
+
+    await controller.toggleTaskCompletion(task);
+    if (!mounted) {
+      return;
+    }
+
+    showTaskToast(
+      context,
+      message: task.isCompleted
+          ? 'Task marked as pending.'
+          : 'Task completed successfully.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -497,7 +516,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     isUpcomingExpanded: _isUpcomingExpanded,
                     isOverdueExpanded: _isOverdueExpanded,
                     isCompletedExpanded: _isCompletedExpanded,
-                    onTaskToggled: taskController.toggleTaskCompletion,
+                    onTaskToggled: _toggleHomeTaskCompletion,
                     onTaskOpened: (task) => _openEditor(task.id),
                     onTodayExpandedChanged: () {
                       setState(() {

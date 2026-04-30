@@ -342,6 +342,32 @@ void main() {
   });
 
   testWidgets(
+    'long pressing a calendar task opens a delete context menu and removes the task',
+    (WidgetTester tester) async {
+      await pumpScreen(tester);
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      await tester.longPress(
+        find.byKey(const ValueKey('calendar_task_science')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete'), findsOneWidget);
+
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete Task?'), findsOneWidget);
+
+      await tester.tap(find.text('Yes, Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Science Assessment'), findsNothing);
+      expect(await repository.getTaskById('science'), isNull);
+    },
+  );
+
+  testWidgets(
     'schedule sheet validates description and creates same-day time range',
     (WidgetTester tester) async {
       await pumpScreen(tester);

@@ -131,6 +131,7 @@ abstract final class AppSizes {
 }
 
 abstract final class AppOpacity {
+  static const overlay10 = 0.1;
   static const overlay20 = 0.2;
   static const overlay25 = 0.25;
   static const overlay30 = 0.3;

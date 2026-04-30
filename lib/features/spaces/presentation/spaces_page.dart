@@ -943,26 +943,25 @@ class _SpaceListCard extends StatelessWidget {
               PopupMenuButton<_SpaceAction>(
                 color: Colors.white,
                 surfaceTintColor: Colors.white,
+                elevation: taskPopupMenuElevation,
+                shadowColor: taskPopupMenuShadowColor,
+                shape: taskPopupMenuShape,
+                menuPadding: taskPopupMenuPadding,
                 onSelected: (value) => onMenuSelected(value),
                 itemBuilder: (context) => [
-                  const PopupMenuItem<_SpaceAction>(
+                  buildTaskPopupMenuItem<_SpaceAction>(
                     value: _SpaceAction.edit,
-                    child: TaskMenuEntry(icon: TablerIcons.edit, label: 'Edit'),
+                    label: 'Edit',
                   ),
-                  const PopupMenuItem<_SpaceAction>(
+                  buildTaskPopupMenuItem<_SpaceAction>(
                     value: _SpaceAction.archive,
-                    child: TaskMenuEntry(
-                      icon: TablerIcons.archive,
-                      label: 'Archive',
-                    ),
+                    label: 'Archive',
                   ),
-                  const PopupMenuItem<_SpaceAction>(
+                  buildTaskPopupMenuItem<_SpaceAction>(
                     value: _SpaceAction.delete,
-                    child: TaskMenuEntry(
-                      icon: TablerIcons.trash,
-                      label: 'Delete',
-                      color: taskDangerText,
-                    ),
+                    label: 'Delete',
+                    isDestructive: true,
+                    showDivider: true,
                   ),
                 ],
                 icon: const Icon(
@@ -1038,29 +1037,25 @@ class _SpaceGridCard extends StatelessWidget {
                       child: PopupMenuButton<_SpaceAction>(
                         color: Colors.white,
                         surfaceTintColor: Colors.white,
+                        elevation: taskPopupMenuElevation,
+                        shadowColor: taskPopupMenuShadowColor,
+                        shape: taskPopupMenuShape,
+                        menuPadding: taskPopupMenuPadding,
                         onSelected: (value) => onMenuSelected(value),
                         itemBuilder: (context) => [
-                          const PopupMenuItem<_SpaceAction>(
+                          buildTaskPopupMenuItem<_SpaceAction>(
                             value: _SpaceAction.edit,
-                            child: TaskMenuEntry(
-                              icon: TablerIcons.edit,
-                              label: 'Edit',
-                            ),
+                            label: 'Edit',
                           ),
-                          const PopupMenuItem<_SpaceAction>(
+                          buildTaskPopupMenuItem<_SpaceAction>(
                             value: _SpaceAction.archive,
-                            child: TaskMenuEntry(
-                              icon: TablerIcons.archive,
-                              label: 'Archive',
-                            ),
+                            label: 'Archive',
                           ),
-                          const PopupMenuItem<_SpaceAction>(
+                          buildTaskPopupMenuItem<_SpaceAction>(
                             value: _SpaceAction.delete,
-                            child: TaskMenuEntry(
-                              icon: TablerIcons.trash,
-                              label: 'Delete',
-                              color: taskDangerText,
-                            ),
+                            label: 'Delete',
+                            isDestructive: true,
+                            showDivider: true,
                           ),
                         ],
                         padding: EdgeInsets.zero,

@@ -735,6 +735,10 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 enabled: task != null,
                 color: AppColors.cardFill,
                 surfaceTintColor: AppColors.cardFill,
+                elevation: taskPopupMenuElevation,
+                shadowColor: taskPopupMenuShadowColor,
+                shape: taskPopupMenuShape,
+                menuPadding: taskPopupMenuPadding,
                 icon: const Icon(
                   TablerIcons.dots_vertical,
                   size: 20,
@@ -757,54 +761,37 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem<_EditorMenuAction>(
+                  buildTaskPopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.viewDetailsButtonKey,
                     value: _EditorMenuAction.viewDetails,
-                    child: TaskMenuEntry(
-                      icon: TablerIcons.eye,
-                      label: 'View Details',
-                    ),
+                    label: 'View Details',
                   ),
                   if (!_isReadMode)
-                    const PopupMenuItem<_EditorMenuAction>(
+                    buildTaskPopupMenuItem<_EditorMenuAction>(
                       value: _EditorMenuAction.readMode,
-                      child: TaskMenuEntry(
-                        icon: TablerIcons.book,
-                        label: 'Read Mode',
-                      ),
+                      label: 'Read Mode',
                     ),
                   if (_isReadMode)
-                    const PopupMenuItem<_EditorMenuAction>(
+                    buildTaskPopupMenuItem<_EditorMenuAction>(
                       value: _EditorMenuAction.editMode,
-                      child: TaskMenuEntry(
-                        icon: TablerIcons.pencil,
-                        label: 'Edit Mode',
-                      ),
+                      label: 'Edit Mode',
                     ),
-                  const PopupMenuItem<_EditorMenuAction>(
+                  buildTaskPopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.editDetailsButtonKey,
                     value: _EditorMenuAction.editDetails,
-                    child: TaskMenuEntry(
-                      icon: TablerIcons.edit,
-                      label: 'Edit Details',
-                    ),
+                    label: 'Edit Details',
                   ),
-                  const PopupMenuItem<_EditorMenuAction>(
+                  buildTaskPopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.archiveButtonKey,
                     value: _EditorMenuAction.archive,
-                    child: TaskMenuEntry(
-                      icon: TablerIcons.archive,
-                      label: 'Archive',
-                    ),
+                    label: 'Archive',
                   ),
-                  const PopupMenuItem<_EditorMenuAction>(
+                  buildTaskPopupMenuItem<_EditorMenuAction>(
                     key: TaskEditorScreen.deleteButtonKey,
                     value: _EditorMenuAction.delete,
-                    child: TaskMenuEntry(
-                      icon: TablerIcons.trash,
-                      label: 'Delete',
-                      color: taskDangerText,
-                    ),
+                    label: 'Delete',
+                    isDestructive: true,
+                    showDivider: true,
                   ),
                 ],
               ),

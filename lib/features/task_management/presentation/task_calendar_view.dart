@@ -429,13 +429,13 @@ class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
         PopupMenuButton<DateTime>(
           key: widget.headerKey,
           tooltip: '',
-          elevation: 2,
+          elevation: taskPopupMenuElevation,
+          shadowColor: taskPopupMenuShadowColor,
           position: PopupMenuPosition.under,
           color: AppColors.cardFill,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-            side: const BorderSide(color: AppColors.cardBorder),
-          ),
+          surfaceTintColor: AppColors.cardFill,
+          shape: taskPopupMenuShape,
+          menuPadding: taskPopupMenuPadding,
           offset: const Offset(110, 44),
           padding: EdgeInsets.zero,
           onOpened: () {
@@ -459,20 +459,9 @@ class _CalendarMonthSummaryState extends State<_CalendarMonthSummary> {
             widget.onMonthChanged(value);
           },
           itemBuilder: (context) => months.map((month) {
-            final isSelected =
-                month.year == widget.selectedMonth.year &&
-                month.month == widget.selectedMonth.month;
-            return PopupMenuItem<DateTime>(
+            return buildTaskPopupMenuItem<DateTime>(
               value: month,
-              child: Text(
-                _monthName(month.month),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isSelected
-                      ? AppColors.primaryBadgeText
-                      : AppColors.titleText,
-                  fontSize: AppTypography.sizeSm,
-                ),
-              ),
+              label: _monthName(month.month),
             );
           }).toList(),
           child: Padding(

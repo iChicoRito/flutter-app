@@ -133,7 +133,7 @@ void main() {
     },
   );
 
-  testWidgets('alarm task card places the category badge below the title', (
+  testWidgets('alarm task card keeps the category badge on the title row', (
     WidgetTester tester,
   ) async {
     final repository = InMemoryTaskRepository(
@@ -177,13 +177,15 @@ void main() {
     await tester.pumpAndSettle();
 
     final titleBottom = tester.getBottomLeft(find.text('Task Title')).dy;
+    final titleTop = tester.getTopLeft(find.text('Task Title')).dy;
     final badgeTop = tester.getTopLeft(find.text('School')).dy;
     final badgeBottom = tester.getBottomLeft(find.text('School')).dy;
     final detailsTop = tester
         .getTopLeft(find.text('Lorem ipsum dolor sit amen con'))
         .dy;
 
-    expect(badgeTop, greaterThan(titleBottom));
+    expect(badgeTop, lessThan(titleBottom));
+    expect(badgeBottom, greaterThan(titleTop));
     expect(detailsTop, greaterThan(badgeBottom));
   });
 

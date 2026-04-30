@@ -393,43 +393,56 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                task?.title ?? item.fallbackTitle ?? widget.payload.taskTitle,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.titleText,
-                  fontSize: AppTypography.size2xl,
-                  fontWeight: AppTypography.weightSemibold,
-                ),
-              ),
-              if (category != null) ...[
-                const SizedBox(height: AppSpacing.three),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.four,
-                    vertical: AppSpacing.one,
-                  ),
-                  decoration: BoxDecoration(
-                    color: category.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppRadii.full),
-                  ),
-                  child: Text(
-                    category.name,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: category.color,
-                      fontSize: AppTypography.sizeXs,
-                      fontWeight: AppTypography.weightMedium,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      task?.title ??
+                          item.fallbackTitle ??
+                          widget.payload.taskTitle,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.titleText,
+                        fontSize: AppTypography.sizeLg,
+                        fontWeight: AppTypography.weightMedium,
+                      ),
                     ),
                   ),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.three),
+                  if (category != null) ...[
+                    const SizedBox(width: AppSpacing.three),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.four,
+                        vertical: AppSpacing.one,
+                      ),
+                      decoration: BoxDecoration(
+                        color: category.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadii.full),
+                      ),
+                      child: Text(
+                        category.name,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: category.color,
+                          fontSize: AppTypography.sizeXs,
+                          fontWeight: AppTypography.weightMedium,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppSpacing.oneAndHalf),
               Text(
                 _resolveTaskDetails(task),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
-                ).textTheme.bodyLarge?.copyWith(color: AppColors.subHeaderText),
+                ).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.subHeaderText,
+                  fontSize: AppTypography.sizeBase,
+                  fontWeight: AppTypography.weightNormal,
+                ),
               ),
             ],
           ),

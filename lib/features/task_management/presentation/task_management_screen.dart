@@ -750,16 +750,17 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         overlay.size.width - globalPosition.dx,
         overlay.size.height - globalPosition.dy,
       ),
+      elevation: taskPopupMenuElevation,
+      shadowColor: taskPopupMenuShadowColor,
+      shape: taskPopupMenuShape,
       color: AppColors.cardFill,
       surfaceTintColor: AppColors.cardFill,
+      menuPadding: taskPopupMenuPadding,
       items: const [
         PopupMenuItem<_CalendarTaskContextAction>(
           value: _CalendarTaskContextAction.delete,
-          child: TaskMenuEntry(
-            icon: TablerIcons.trash,
-            label: 'Delete',
-            color: AppColors.rose500,
-          ),
+          padding: EdgeInsets.zero,
+          child: TaskMenuEntry(label: 'Delete', isDestructive: true),
         ),
       ],
     );
@@ -2373,45 +2374,41 @@ class _TaskCard extends StatelessWidget {
                                           ),
                                       color: AppColors.cardFill,
                                       surfaceTintColor: AppColors.cardFill,
+                                      elevation: taskPopupMenuElevation,
+                                      shadowColor: taskPopupMenuShadowColor,
+                                      shape: taskPopupMenuShape,
+                                      menuPadding: taskPopupMenuPadding,
                                       onSelected: (value) =>
                                           onMenuSelected(value),
                                       itemBuilder: (context) => [
-                                        PopupMenuItem<_TaskMenuAction>(
+                                        buildTaskPopupMenuItem<_TaskMenuAction>(
                                           key:
                                               TaskManagementScreen.taskMenuActionKey(
                                                 task.id,
                                                 'move-to-space',
                                               ),
                                           value: _TaskMenuAction.moveToSpace,
-                                          child: const TaskMenuEntry(
-                                            icon: TablerIcons.folder,
-                                            label: 'Move to Space',
-                                          ),
+                                          label: 'Move to Space',
                                         ),
-                                        PopupMenuItem<_TaskMenuAction>(
+                                        buildTaskPopupMenuItem<_TaskMenuAction>(
                                           key:
                                               TaskManagementScreen.taskMenuActionKey(
                                                 task.id,
                                                 'archive',
                                               ),
                                           value: _TaskMenuAction.archive,
-                                          child: const TaskMenuEntry(
-                                            icon: TablerIcons.archive,
-                                            label: 'Archive',
-                                          ),
+                                          label: 'Archive',
                                         ),
-                                        PopupMenuItem<_TaskMenuAction>(
+                                        buildTaskPopupMenuItem<_TaskMenuAction>(
                                           key:
                                               TaskManagementScreen.taskMenuActionKey(
                                                 task.id,
                                                 'delete',
                                               ),
                                           value: _TaskMenuAction.delete,
-                                          child: const TaskMenuEntry(
-                                            icon: TablerIcons.trash,
-                                            label: 'Delete',
-                                            color: AppColors.rose500,
-                                          ),
+                                          label: 'Delete',
+                                          isDestructive: true,
+                                          showDivider: true,
                                         ),
                                       ],
                                       padding: EdgeInsets.zero,

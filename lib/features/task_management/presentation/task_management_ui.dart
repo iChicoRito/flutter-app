@@ -683,31 +683,17 @@ class TaskCompactDropdown<T> extends StatelessWidget {
       initialValue: currentValue,
       color: AppColors.cardFill,
       surfaceTintColor: AppColors.cardFill,
+      elevation: taskPopupMenuElevation,
+      shadowColor: taskPopupMenuShadowColor,
+      shape: taskPopupMenuShape,
+      menuPadding: taskPopupMenuPadding,
       onSelected: onSelected,
       itemBuilder: (context) {
         return items.map((item) {
-          return PopupMenuItem<T>(
+          return buildTaskPopupMenuItem<T>(
             key: menuKeyBuilder(item),
             value: item,
-            child: Row(
-              children: [
-                if (leadingBuilder?.call(item) case final leading?) ...[
-                  leading,
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Text(
-                    labelBuilder(item),
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.titleText,
-                      fontSize: AppTypography.sizeBase,
-                      fontWeight: AppTypography.weightNormal,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            label: labelBuilder(item),
           );
         }).toList();
       },
@@ -752,29 +738,82 @@ class TaskCompactDropdown<T> extends StatelessWidget {
   }
 }
 
+const double taskPopupMenuElevation = 6;
+const EdgeInsets taskPopupMenuPadding = EdgeInsets.symmetric(
+  vertical: AppSpacing.two,
+);
+const Color taskPopupMenuShadowColor = Color(0x1A000000);
+
+final RoundedRectangleBorder taskPopupMenuShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.circular(AppRadii.threeXl),
+  side: const BorderSide(color: AppColors.cardBorder),
+);
+
+PopupMenuItem<T> buildTaskPopupMenuItem<T>({
+  Key? key,
+  required T value,
+  required String label,
+  bool isDestructive = false,
+  bool showDivider = false,
+}) {
+  return PopupMenuItem<T>(
+    key: key,
+    value: value,
+    padding: EdgeInsets.zero,
+    child: TaskMenuEntry(
+      label: label,
+      isDestructive: isDestructive,
+      showDivider: showDivider,
+    ),
+  );
+}
+
 class TaskMenuEntry extends StatelessWidget {
   const TaskMenuEntry({
     super.key,
-    required this.icon,
     required this.label,
-    this.color = taskDarkText,
+    this.isDestructive = false,
+    this.showDivider = false,
   });
 
-  final IconData icon;
   final String label;
-  final Color color;
+  final bool isDestructive;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final textColor = isDestructive ? AppColors.rose500 : AppColors.titleText;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
+        if (showDivider)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.four,
+              AppSpacing.one,
+              AppSpacing.four,
+              AppSpacing.two,
+            ),
+            child: Divider(
+              height: AppSizes.borderDefault,
+              thickness: AppSizes.borderDefault,
+              color: AppColors.neutral200,
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.four,
+            vertical: AppSpacing.two,
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: textColor,
+              fontSize: AppTypography.sizeBase,
+              fontWeight: AppTypography.weightNormal,
+            ),
           ),
         ),
       ],

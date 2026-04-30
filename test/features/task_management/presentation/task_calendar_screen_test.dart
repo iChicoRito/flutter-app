@@ -341,6 +341,35 @@ void main() {
     );
   });
 
+  testWidgets('calendar schedule category popup removes menu icons', (
+    WidgetTester tester,
+  ) async {
+    await pumpScreen(tester);
+    await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.calendarScheduleButtonKey),
+    );
+    await tester.pumpAndSettle();
+
+    final categoryField = find.byKey(
+      TaskManagementScreen.calendarSheetCategoryFieldKey,
+    );
+    await tester.ensureVisible(categoryField);
+    await tester.pumpAndSettle();
+    await tester.tap(categoryField);
+    await tester.pumpAndSettle();
+
+    final personalOption = find.byKey(
+      TaskManagementScreen.calendarSheetCategoryOptionKey('personal'),
+    );
+    expect(
+      find.descendant(of: personalOption, matching: find.byType(Icon)),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'long pressing a calendar task opens a delete context menu and removes the task',
     (WidgetTester tester) async {

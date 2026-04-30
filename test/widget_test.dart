@@ -813,6 +813,26 @@ void main() {
       find.byKey(TaskManagementScreen.taskMenuButtonKey('archive-task')),
     );
     await tester.pumpAndSettle();
+
+    final moveToSpaceItem = find.byKey(
+      TaskManagementScreen.taskMenuActionKey('archive-task', 'move-to-space'),
+    );
+    final deleteItem = find.byKey(
+      TaskManagementScreen.taskMenuActionKey('archive-task', 'delete'),
+    );
+    expect(
+      find.descendant(of: moveToSpaceItem, matching: find.byType(Icon)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: deleteItem, matching: find.byType(Divider)),
+      findsOneWidget,
+    );
+    final deleteLabel = tester.widget<Text>(
+      find.descendant(of: deleteItem, matching: find.text('Delete')),
+    );
+    expect(deleteLabel.style?.color, AppColors.rose500);
+
     await tester.tap(
       find.byKey(
         TaskManagementScreen.taskMenuActionKey('archive-task', 'archive'),
@@ -1330,6 +1350,53 @@ void main() {
     spaces = await taskRepository.getSpaces();
     expect(spaces.single.isArchived, isTrue);
     expect(find.text('Space archived successfully.'), findsOneWidget);
+  });
+
+  testWidgets('space overflow menu removes icons and separates delete', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime(2026, 4, 13, 9);
+    taskRepository = InMemoryTaskRepository(
+      spaces: [
+        TaskSpace(
+          id: 'menu-space',
+          name: 'Menu Space',
+          description: 'Space with menu',
+          categoryId: 'work',
+          colorValue: AppColors.blue500.toARGB32(),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Spaces'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(TablerIcons.dots_vertical).first);
+    await tester.pumpAndSettle();
+
+    final editItem = find.ancestor(
+      of: find.text('Edit').last,
+      matching: find.byWidgetPredicate((widget) => widget is PopupMenuItem),
+    );
+    final deleteItem = find.ancestor(
+      of: find.text('Delete').last,
+      matching: find.byWidgetPredicate((widget) => widget is PopupMenuItem),
+    );
+    expect(
+      find.descendant(of: editItem, matching: find.byType(Icon)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: deleteItem, matching: find.byType(Divider)),
+      findsOneWidget,
+    );
+    final deleteLabel = tester.widget<Text>(
+      find.descendant(of: deleteItem, matching: find.text('Delete')),
+    );
+    expect(deleteLabel.style?.color, AppColors.rose500);
   });
 
   testWidgets('task editor opens from a newly added task', (
@@ -2080,6 +2147,27 @@ void main() {
     expect(find.text('Archive'), findsOneWidget);
     expect(find.text('Delete'), findsOneWidget);
     expect(find.text('Edit'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(TaskEditorScreen.archiveButtonKey),
+        matching: find.byType(Icon),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(TaskEditorScreen.deleteButtonKey),
+        matching: find.byType(Divider),
+      ),
+      findsOneWidget,
+    );
+    final deleteLabel = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(TaskEditorScreen.deleteButtonKey),
+        matching: find.text('Delete'),
+      ),
+    );
+    expect(deleteLabel.style?.color, AppColors.rose500);
   });
 
   testWidgets(

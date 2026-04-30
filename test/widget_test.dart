@@ -230,11 +230,6 @@ void main() {
 
       expect(displayNameStore.displayName, 'Mark');
       expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
-      expect(find.byKey(DashboardScreen.welcomeButtonKey), findsNothing);
-
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pump(const Duration(milliseconds: 300));
-
       expect(find.byKey(DashboardScreen.welcomeButtonKey), findsOneWidget);
       await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
       await tester.pumpAndSettle();
@@ -261,9 +256,6 @@ void main() {
 
     expect(displayNameStore.displayName, 'Jamie');
     expect(find.byKey(DashboardScreen.welcomeScreenKey), findsOneWidget);
-
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(DashboardScreen.welcomeButtonKey));
     await tester.pumpAndSettle();
 
@@ -283,15 +275,13 @@ void main() {
     },
   );
 
-  testWidgets('welcome modal CTA uses a full-width rounded rectangle style', (
+  testWidgets('welcome modal uses the redesigned illustration and CTA styling', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 1000));
     await tester.pumpWidget(
       wrapWithMaterial(const WelcomeHandoffDialog(displayName: 'Mark')),
     );
-
-    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     final buttonFinder = find.byKey(DashboardScreen.welcomeButtonKey);
@@ -301,14 +291,65 @@ void main() {
     );
     final button = tester.widget<FilledButton>(buttonFinder);
     final shape = button.style?.shape?.resolve(<WidgetState>{});
+    final svg = tester.widget<SvgPicture>(find.byType(SvgPicture));
+    final loader = svg.bytesLoader;
 
+    expect(find.byType(SvgPicture), findsOneWidget);
+    expect(loader, isA<SvgAssetLoader>());
+    expect(
+      (loader as SvgAssetLoader).assetName,
+      'assets/svgs/welcome/remindly-welcome.svg',
+    );
+    expect(find.text('Welcome, Mark'), findsOneWidget);
+    expect(
+      find.text(
+        'Your RemindLy dashboard is ready with tasks, notes, and reminders to keep you on track.',
+      ),
+      findsOneWidget,
+    );
     expect(buttonSize.width, greaterThan(280));
     expect(buttonSize.width, lessThan(dialogSize.width));
     expect(shape, isA<RoundedRectangleBorder>());
     expect(
       (shape! as RoundedRectangleBorder).borderRadius,
-      BorderRadius.circular(AppRadii.lg),
+      BorderRadius.circular(AppRadii.xl),
     );
+  });
+
+  testWidgets('welcome modal illustration overlaps above the white card', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    await tester.pumpWidget(
+      wrapWithMaterial(const WelcomeHandoffDialog(displayName: 'Mark')),
+    );
+    await tester.pumpAndSettle();
+
+    final cardTop = tester
+        .getTopLeft(find.byKey(FirstRunHandoffKeys.welcomeCard))
+        .dy;
+    final svgTop = tester.getTopLeft(find.byType(SvgPicture)).dy;
+    final svgBottom = tester.getBottomLeft(find.byType(SvgPicture)).dy;
+
+    expect(svgTop, lessThan(cardTop));
+    expect(svgBottom, greaterThan(cardTop));
+    expect(cardTop - svgTop, greaterThan(80));
+  });
+
+  testWidgets('welcome modal card uses the original dialog padding', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    await tester.pumpWidget(
+      wrapWithMaterial(const WelcomeHandoffDialog(displayName: 'Mark')),
+    );
+    await tester.pumpAndSettle();
+
+    final card = tester.widget<Container>(
+      find.byKey(FirstRunHandoffKeys.welcomeCard),
+    );
+
+    expect(card.padding, const EdgeInsets.all(AppSpacing.six));
   });
 
   testWidgets('dashboard home shows live task summary content', (

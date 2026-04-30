@@ -1,13 +1,12 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/services/display_name_store.dart';
 import '../../../core/services/task_reminder_service.dart';
+import '../../../core/theme/app_design_tokens.dart';
 import '../../task_management/data/task_note_codec.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/domain/task_item.dart';
@@ -35,41 +34,21 @@ class TaskAlarmScreen extends StatefulWidget {
   State<TaskAlarmScreen> createState() => _TaskAlarmScreenState();
 }
 
-class _TaskAlarmScreenState extends State<TaskAlarmScreen>
-    with SingleTickerProviderStateMixin {
+class _TaskAlarmScreenState extends State<TaskAlarmScreen> {
   bool _isDismissing = false;
   List<_AlarmTaskDetails> _alarmTasks = const [];
-  String? _displayName;
-  late final AnimationController _iconController;
 
   @override
   void initState() {
     super.initState();
-    _iconController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2500),
-    )..repeat();
-    _loadDisplayName();
     _loadTaskDetails();
     _startAlarmEffects();
   }
 
   @override
   void dispose() {
-    _iconController.dispose();
     _stopAlarmEffects();
     super.dispose();
-  }
-
-  Future<void> _loadDisplayName() async {
-    final value = await widget.displayNameStore.readDisplayName();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _displayName = value;
-    });
   }
 
   Future<void> _loadTaskDetails() async {
@@ -184,128 +163,160 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
   Widget build(BuildContext context) {
     final dueText = _formatDueTime(widget.payload.scheduledAt);
     final alarmTasks = _alarmTasks;
-    final isMultiple = alarmTasks.length > 1;
-    final summaryText = TaskReminderMessages.dueAlarmSummary(
-      displayName: _displayName,
-      isMultiple: isMultiple,
-    );
 
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: const Color(0xFF066FD1),
+        backgroundColor: AppColors.primaryButtonFill,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(34),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x140F172A),
-                        blurRadius: 22,
-                        offset: Offset(0, 12),
-                      ),
-                    ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final maxWidth =
+                  constraints.maxWidth < AppSizes.heroDialogMaxWidth
+                  ? constraints.maxWidth - (AppSpacing.four * 2)
+                  : AppSizes.heroDialogMaxWidth;
+
+              return Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.four,
+                    vertical: AppSpacing.six,
                   ),
-                  child: Column(
-                    children: [
-                      AnimatedBuilder(
-                        animation: _iconController,
-                        builder: (context, child) => child!,
-                        child: Container(
-                          width: 74,
-                          height: 74,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE6F0FA),
-                            shape: BoxShape.circle,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppSizes.heroDialogTopInset,
                           ),
-                          child: Center(
-                            child: AnimatedBuilder(
-                              animation: _iconController,
-                              builder: (context, _) {
-                                return Transform.rotate(
-                                  angle: _shakeAngle(_iconController.value),
-                                  child: const Icon(
-                                    Icons.alarm_rounded,
-                                    size: 36,
-                                    color: Color(0xFF066FD1),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.cardFill,
+                              borderRadius: BorderRadius.circular(
+                                AppRadii.threeXl,
+                              ),
+                              border: Border.all(color: AppColors.neutral200),
+                            ),
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSizes.heroDialogCardPadding,
+                              AppSizes.heroDialogTopInset -
+                                  AppSizes.heroDialogIllustrationOverlap,
+                              AppSizes.heroDialogCardPadding,
+                              AppSpacing.eight,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  widget.payload.kind == TaskReminderKind.due
+                                      ? 'Tasks Due Now!'
+                                      : 'Task Reminder',
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        color: AppColors.primaryButtonFill,
+                                        fontSize: AppTypography.size2xl,
+                                        fontWeight:
+                                            AppTypography.weightSemibold,
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                if (dueText != null) ...[
+                                  const SizedBox(height: AppSpacing.three),
+                                  Text(
+                                    _summaryLine(dueText),
+                                    style: Theme.of(context).textTheme.bodyLarge
+                                        ?.copyWith(
+                                          color: AppColors.subHeaderText,
+                                          height: 1.2,
+                                        ),
+                                    textAlign: TextAlign.center,
                                   ),
-                                );
-                              },
+                                ],
+                                const SizedBox(height: AppSpacing.six),
+                                if (alarmTasks.length > 2)
+                                  SizedBox(
+                                    height:
+                                        AppSizes.heroDialogTaskListMaxHeight,
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        children: _buildAlarmTaskSections(
+                                          context,
+                                          alarmTasks,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Column(
+                                    children: _buildAlarmTaskSections(
+                                      context,
+                                      alarmTasks,
+                                    ),
+                                  ),
+                                const SizedBox(height: AppSpacing.five),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed: _isDismissing
+                                        ? null
+                                        : _dismissAlarm,
+                                    style: FilledButton.styleFrom(
+                                      minimumSize: const Size.fromHeight(
+                                        AppSizes.heroDialogButtonHeight,
+                                      ),
+                                      backgroundColor:
+                                          AppColors.primaryButtonFill,
+                                      foregroundColor:
+                                          AppColors.primaryButtonText,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadii.xl,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _isDismissing
+                                          ? 'Stopping Alarm...'
+                                          : 'Dismiss Alarm',
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        widget.payload.kind == TaskReminderKind.due
-                            ? 'Tasks Due Now!'
-                            : 'Task Reminder',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              color: const Color(0xFF333333),
-                              fontWeight: FontWeight.w700,
+                        Positioned(
+                          top: 0,
+                          child: SizedBox(
+                            width: AppSizes.heroDialogIllustrationWidth,
+                            height: AppSizes.heroDialogIllustrationHeight,
+                            child: SvgPicture.asset(
+                              'assets/svgs/welcome/remindly-alarm.svg',
+                              fit: BoxFit.contain,
                             ),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (dueText != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          '$summaryText Scheduled for $dueText',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: const Color(0xFF6B7280),
-                                height: 1.35,
-                              ),
-                          textAlign: TextAlign.center,
+                          ),
                         ),
                       ],
-                      const SizedBox(height: 14),
-                      const Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Color(0xFFE5E8EC),
-                      ),
-                      const SizedBox(height: 14),
-                      ..._buildAlarmTaskSections(context, alarmTasks),
-                      const SizedBox(height: 14),
-                      const Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Color(0xFFE5E8EC),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _isDismissing ? null : _dismissAlarm,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(54),
-                          backgroundColor: const Color(0xFF066FD1),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppRadii.twoXl),
-                          ),
-                        ),
-                        child: Text(
-                          _isDismissing ? 'Stopping Alarm...' : 'Dismiss Alarm',
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-                const Spacer(),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
     );
+  }
+
+  String _summaryLine(String dueText) {
+    if (widget.payload.kind == TaskReminderKind.due) {
+      return 'Your tasks is scheduled for $dueText';
+    }
+
+    return 'Task reminder is scheduled for $dueText';
   }
 
   String? _formatDueTime(DateTime? value) {
@@ -337,15 +348,6 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
     return 'No additional task details were added yet.';
   }
 
-  double _shakeAngle(double progress) {
-    if (progress >= 0.6) {
-      return 0;
-    }
-
-    final activeProgress = progress / 0.6;
-    return 0.16 * sin(activeProgress * 8 * pi) * (1 - (activeProgress * 0.12));
-  }
-
   List<Widget> _buildAlarmTaskSections(
     BuildContext context,
     List<_AlarmTaskDetails> alarmTasks,
@@ -358,72 +360,73 @@ class _TaskAlarmScreenState extends State<TaskAlarmScreen>
       final category = item.category;
 
       sections.add(
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            task?.title ?? item.fallbackTitle ?? widget.payload.taskTitle,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: const Color(0xFF333333),
-              fontWeight: FontWeight.w700,
-            ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: AppSpacing.five,
           ),
-        ),
-      );
-      sections.add(const SizedBox(height: 6));
-      sections.add(
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _resolveTaskDetails(task),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFF999999),
-              height: 1.35,
-            ),
+          decoration: BoxDecoration(
+            color: AppColors.cardFill,
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            border: Border.all(color: AppColors.cardBorder),
           ),
-        ),
-      );
-      sections.add(const SizedBox(height: 10));
-      if (category != null) {
-        sections.add(
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: category.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    resolveTaskCategoryIcon(category.iconKey),
-                    size: 13,
-                    color: category.color,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    category.name,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: category.color,
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: Text(
+                      task?.title ??
+                          item.fallbackTitle ??
+                          widget.payload.taskTitle,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.titleText,
+                        fontSize: AppTypography.size2xl,
+                        fontWeight: AppTypography.weightSemibold,
+                      ),
                     ),
                   ),
+                  if (category != null)
+                    Container(
+                      margin: const EdgeInsets.only(left: AppSpacing.three),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.four,
+                        vertical: AppSpacing.one,
+                      ),
+                      decoration: BoxDecoration(
+                        color: category.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppRadii.full),
+                      ),
+                      child: Text(
+                        category.name,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: category.color,
+                          fontSize: AppTypography.sizeXs,
+                          fontWeight: AppTypography.weightMedium,
+                        ),
+                      ),
+                    ),
                 ],
               ),
-            ),
+              const SizedBox(height: AppSpacing.three),
+              Text(
+                _resolveTaskDetails(task),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: AppColors.subHeaderText),
+              ),
+            ],
           ),
-        );
-        sections.add(const SizedBox(height: 10));
-      }
+        ),
+      );
 
       if (index != alarmTasks.length - 1) {
-        sections.add(
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E8EC)),
-        );
-        sections.add(const SizedBox(height: 14));
+        sections.add(const SizedBox(height: AppSpacing.three));
       }
     }
 

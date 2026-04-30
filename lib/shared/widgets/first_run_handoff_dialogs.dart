@@ -1,7 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:tabler_icons/tabler_icons.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/theme/app_design_tokens.dart';
 
@@ -12,6 +10,7 @@ class FirstRunHandoffKeys {
   static const Key nameField = Key('dashboard-name-field');
   static const Key nameSaveButton = Key('dashboard-name-save');
   static const Key welcomeScreen = Key('dashboard-welcome-screen');
+  static const Key welcomeCard = Key('dashboard-welcome-card');
   static const Key welcomeButton = Key('dashboard-welcome-start');
 }
 
@@ -139,86 +138,85 @@ class WelcomeHandoffDialog extends StatefulWidget {
 }
 
 class _WelcomeHandoffDialogState extends State<WelcomeHandoffDialog> {
-  bool _showButton = false;
-
-  @override
-  void initState() {
-    super.initState();
-    Timer(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _showButton = true;
-        });
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Dialog(
       key: FirstRunHandoffKeys.welcomeScreen,
-      backgroundColor: AppColors.cardFill,
-      surfaceTintColor: AppColors.cardFill,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.threeXl),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.six),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.four),
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: AppSpacing.zero,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            top: -70,
+            child: SizedBox(
+              width: AppSizes.welcomeDialogIllustrationWidth,
+              height: AppSizes.welcomeDialogIllustrationHeight,
+              child: SvgPicture.asset(
+                'assets/svgs/welcome/remindly-welcome.svg',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 60),
+            child: Container(
+              key: FirstRunHandoffKeys.welcomeCard,
               decoration: BoxDecoration(
-                color: AppColors.primaryBadgeFill,
+                color: AppColors.cardFill,
                 borderRadius: BorderRadius.circular(AppRadii.threeXl),
+                border: Border.all(color: AppColors.neutral200),
               ),
-              child: const Icon(
-                TablerIcons.sparkles,
-                color: AppColors.primaryBadgeText,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.five),
-            Text(
-              'Welcome, ${widget.displayName}',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppColors.titleText,
-                fontWeight: AppTypography.weightSemibold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.three),
-            Text(
-              'Your RemindLy dashboard is ready with tasks, notes, and reminders to keep you on track.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.subHeaderText),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.five),
-            if (_showButton)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: FirstRunHandoffKeys.welcomeButton,
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(
-                      AppSizes.onboardingButtonHeight,
+              padding: const EdgeInsets.all(AppSpacing.six),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Welcome, ${widget.displayName}',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppColors.primaryButtonFill,
+                      fontSize: AppTypography.size2xl,
+                      fontWeight: AppTypography.weightSemibold,
                     ),
-                    backgroundColor: AppColors.primaryButtonFill,
-                    foregroundColor: AppColors.primaryButtonText,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.three),
+                  Text(
+                    'Your RemindLy dashboard is ready with tasks, notes, and reminders to keep you on track.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.subHeaderText,
+                      fontSize: AppTypography.sizeBase,
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.five),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: FirstRunHandoffKeys.welcomeButton,
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(
+                          AppSizes.heroDialogButtonHeight,
+                        ),
+                        backgroundColor: AppColors.primaryButtonFill,
+                        foregroundColor: AppColors.primaryButtonText,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadii.xl),
+                        ),
+                      ),
+                      child: const Text('Let\'s Go!'),
                     ),
                   ),
-                  child: const Text('Let\'s Go'),
-                ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }

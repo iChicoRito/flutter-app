@@ -117,6 +117,17 @@ abstract final class AppSizes {
   static const onboardingIndicatorButtonGap = 24.0;
   static const progressIndicator = 20.0;
   static const progressStroke = 2.4;
+  static const heroDialogMaxWidth = 361.0;
+  static const heroDialogTopInset = 108.0;
+  static const heroDialogIllustrationHeight = 160.0;
+  static const heroDialogIllustrationWidth = 129.0;
+  static const heroDialogIllustrationOverlap = 44.0;
+  static const heroDialogCardPadding = 24.0;
+  static const heroDialogButtonHeight = 56.0;
+  static const heroDialogTaskListMaxHeight = 276.0;
+  static const welcomeDialogIllustrationWidth = 160.0;
+  static const welcomeDialogIllustrationHeight = 132.0;
+  static const welcomeDialogTopPadding = 32.0;
 }
 
 abstract final class AppOpacity {

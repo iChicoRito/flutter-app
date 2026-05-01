@@ -65,10 +65,21 @@ class _TaskCalendarViewState extends State<TaskCalendarView> {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
     final calendarTasks = widget.controller.calendarTasksForDate(
       selectedDate: widget.selectedDate,
       statusFilter: widget.statusFilter,
-      now: DateTime.now(),
+      now: now,
+    );
+    final dueTasks = widget.controller.calendarDueTasksForDate(
+      selectedDate: widget.selectedDate,
+      statusFilter: widget.statusFilter,
+      now: now,
+    );
+    final dueTaskDates = widget.controller.calendarDueTaskDates(
+      month: widget.selectedMonth,
+      statusFilter: widget.statusFilter,
+      now: now,
     );
 
     return Stack(
@@ -100,9 +111,16 @@ class _TaskCalendarViewState extends State<TaskCalendarView> {
                       chipKeyBuilder: widget.statusChipKeyBuilder,
                     ),
                     const SizedBox(height: AppSpacing.six),
+                    _CalendarMonthSummary(
+                      selectedMonth: widget.selectedMonth,
+                      onMonthChanged: widget.onMonthChanged,
+                      headerKey: widget.monthHeaderKey,
+                    ),
+                    const SizedBox(height: AppSpacing.four),
                     _TaskCalendarDateRail(
                       selectedMonth: widget.selectedMonth,
                       selectedDate: widget.selectedDate,
+                      dueTaskDates: dueTaskDates,
                       availableDays: widget.controller.calendarDaysForMonth(
                         widget.selectedMonth,
                       ),
@@ -110,11 +128,14 @@ class _TaskCalendarViewState extends State<TaskCalendarView> {
                       dateKeyBuilder: widget.dateKeyBuilder,
                     ),
                     const SizedBox(height: AppSpacing.six),
-                    _CalendarMonthSummary(
-                      selectedMonth: widget.selectedMonth,
-                      onMonthChanged: widget.onMonthChanged,
-                      headerKey: widget.monthHeaderKey,
-                    ),
+                    if (dueTasks.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.one),
+                      _CalendarDueTasksSection(
+                        tasks: dueTasks,
+                        categoryFor: widget.controller.categoryFor,
+                        onTaskTap: widget.onTaskTap,
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.three),
                     _CalendarTimeline(
                       tasks: calendarTasks,
@@ -211,47 +232,50 @@ class _CalendarStatusRow extends StatelessWidget {
       (TaskStatusFilter.overdue, 'Overdue', 'overdue'),
     ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: filters.map((filter) {
-          final isSelected = selectedFilter == filter.$1;
-          return Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.oneAndHalf),
-            child: InkWell(
-              key: chipKeyBuilder(filter.$3),
-              onTap: () => onSelected(filter.$1),
-              borderRadius: BorderRadius.circular(AppRadii.lg),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.three,
-                  vertical: AppSpacing.two,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primaryButtonFill
-                      : AppColors.cardFill,
-                  borderRadius: BorderRadius.circular(AppRadii.lg),
-                  border: Border.all(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.one),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: filters.map((filter) {
+            final isSelected = selectedFilter == filter.$1;
+            return Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.oneAndHalf),
+              child: InkWell(
+                key: chipKeyBuilder(filter.$3),
+                onTap: () => onSelected(filter.$1),
+                borderRadius: BorderRadius.circular(AppRadii.lg),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.three,
+                    vertical: AppSpacing.two,
+                  ),
+                  decoration: BoxDecoration(
                     color: isSelected
                         ? AppColors.primaryButtonFill
-                        : AppColors.neutral200,
+                        : AppColors.cardFill,
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primaryButtonFill
+                          : AppColors.neutral200,
+                    ),
                   ),
-                ),
-                child: Text(
-                  filter.$2,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: isSelected
-                        ? AppColors.primaryButtonText
-                        : AppColors.subHeaderText,
-                    fontSize: AppTypography.sizeSm,
-                    fontWeight: AppTypography.weightNormal,
+                  child: Text(
+                    filter.$2,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: isSelected
+                          ? AppColors.primaryButtonText
+                          : AppColors.subHeaderText,
+                      fontSize: AppTypography.sizeSm,
+                      fontWeight: AppTypography.weightNormal,
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -261,6 +285,7 @@ class _TaskCalendarDateRail extends StatefulWidget {
   const _TaskCalendarDateRail({
     required this.selectedMonth,
     required this.selectedDate,
+    required this.dueTaskDates,
     required this.availableDays,
     required this.onSelected,
     required this.dateKeyBuilder,
@@ -268,6 +293,7 @@ class _TaskCalendarDateRail extends StatefulWidget {
 
   final DateTime selectedMonth;
   final DateTime selectedDate;
+  final Set<DateTime> dueTaskDates;
   final List<DateTime> availableDays;
   final ValueChanged<DateTime> onSelected;
   final Key Function(String value) dateKeyBuilder;
@@ -329,6 +355,9 @@ class _TaskCalendarDateRailState extends State<_TaskCalendarDateRail> {
               day.year == widget.selectedDate.year &&
               day.month == widget.selectedDate.month &&
               day.day == widget.selectedDate.day;
+          final hasDueTask = widget.dueTaskDates.contains(
+            DateTime(day.year, day.month, day.day),
+          );
           final keyValue =
               '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
 
@@ -376,13 +405,15 @@ class _TaskCalendarDateRailState extends State<_TaskCalendarDateRail> {
                         fontSize: AppTypography.sizeSm,
                       ),
                     ),
-                    if (isSelected) ...[
+                    if (isSelected || hasDueTask) ...[
                       const SizedBox(height: 4),
                       Container(
                         width: 4,
                         height: 4,
-                        decoration: const BoxDecoration(
-                          color: AppColors.blue500,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.blue500
+                              : AppColors.subHeaderText,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -393,6 +424,145 @@ class _TaskCalendarDateRailState extends State<_TaskCalendarDateRail> {
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+class _CalendarDueTasksSection extends StatelessWidget {
+  const _CalendarDueTasksSection({
+    required this.tasks,
+    required this.categoryFor,
+    required this.onTaskTap,
+  });
+
+  final List<TaskItem> tasks;
+  final TaskCategory? Function(String categoryId) categoryFor;
+  final ValueChanged<TaskItem> onTaskTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.four),
+      decoration: BoxDecoration(
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Due Time',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.titleText,
+              fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.one),
+          Text(
+            'Reminders scheduled for the selected date',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.subHeaderText,
+              fontSize: AppTypography.sizeBase,
+              fontWeight: AppTypography.weightNormal,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.three),
+          for (final task in tasks) ...[
+            _CalendarDueTaskTile(
+              task: task,
+              category: categoryFor(task.categoryId),
+              onTap: () => onTaskTap(task),
+            ),
+            if (task != tasks.last) const SizedBox(height: AppSpacing.three),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarDueTaskTile extends StatelessWidget {
+  const _CalendarDueTaskTile({
+    required this.task,
+    required this.category,
+    required this.onTap,
+  });
+
+  final TaskItem task;
+  final TaskCategory? category;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final categoryColor = category?.color ?? AppColors.blue500;
+    final appearance = taskCardAppearanceForCategory(
+      categoryColor: categoryColor,
+      previewProtected: false,
+    );
+    final dueMinutes = task.endMinutes ?? 0;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.four,
+          vertical: AppSpacing.twoAndHalf,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              key: ValueKey('calendar_due_dot_${task.id}'),
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: appearance.accentColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.three),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: AppTypography.sizeBase,
+                      fontWeight: AppTypography.weightSemibold,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.one),
+                  Text(
+                    _formatDueTimeMinutes(dueMinutes),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.subHeaderText,
+                      fontSize: AppTypography.sizeBase,
+                      fontWeight: AppTypography.weightNormal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.two),
+            const Icon(
+              TablerIcons.chevron_right,
+              size: 18,
+              color: AppColors.subHeaderText,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1127,6 +1297,14 @@ String _formatCompactRange(TaskItem task) {
     return 'Not Set Yet';
   }
   return '${_formatCompactMinutes(start)} - ${_formatCompactMinutes(end)}';
+}
+
+String _formatDueTimeMinutes(int minutes) {
+  final compact = _formatCompactMinutes(minutes);
+  if (compact.length < 2) {
+    return compact;
+  }
+  return '${compact.substring(0, compact.length - 2)} ${compact.substring(compact.length - 2)}';
 }
 
 String _formatCompactMinutes(int minutes) {

@@ -6,6 +6,7 @@ import '../../../core/services/task_reminder_scope.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/vault/vault_access.dart';
+import '../../../core/vault/vault_models.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../spaces/domain/task_space.dart';
 import '../data/task_note_codec.dart';
@@ -14,6 +15,7 @@ import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 import 'task_calendar_view.dart';
 import 'task_creation_sheet.dart';
+import 'task_details_form_screen.dart';
 import 'task_editor_screen.dart';
 import 'task_management_controller.dart';
 import 'task_management_ui.dart';
@@ -453,6 +455,14 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
   }
 
+  Future<void> _openCalendarTaskEntry(TaskItem task) async {
+    if (task.isDueTimeTask) {
+      await _editFlexibleCalendarTask(task);
+      return;
+    }
+    await _openCalendarTaskDetails(task);
+  }
+
   Future<void> _openCalendarTaskDetails(TaskItem task) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -544,6 +554,90 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           request.targetDate.year,
           request.targetDate.month,
           request.targetDate.day,
+        );
+        _calendarStatusFilter = TaskStatusFilter.all;
+      });
+      showTaskToast(context, message: 'Task updated successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to update the task right now.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _editFlexibleCalendarTask(TaskItem task) async {
+    final latestTask = await widget.repository.getTaskById(task.id);
+    if (!mounted || latestTask == null) {
+      return;
+    }
+
+    final result = await Navigator.of(context).push<TaskDetailsResult>(
+      MaterialPageRoute<TaskDetailsResult>(
+        builder: (context) => TaskDetailsFormScreen(
+          repository: widget.repository,
+          task: latestTask,
+          categories: _controller.categories,
+          lockedCategoryId: _effectiveLockedCategoryId,
+          fixedSpaceId: widget.fixedSpaceId,
+          titleFieldKey: TaskEditorScreen.titleFieldKey,
+          descriptionFieldKey: const Key('task-editor-description-field'),
+          priorityFieldKey: TaskEditorScreen.priorityFieldKey,
+          categoryFieldKey: TaskEditorScreen.categoryFieldKey,
+          addCategoryButtonKey: TaskEditorScreen.addCategoryButtonKey,
+          categoryColorSelectionKey:
+              TaskEditorScreen.categoryColorSelectionKey,
+          categoryCurrentIconKey: TaskEditorScreen.categoryCurrentIconKey,
+          saveButtonKey: TaskEditorScreen.saveButtonKey,
+          dateButtonKey: TaskEditorScreen.dateRangeButtonKey,
+          dueTimeButtonKey: TaskEditorScreen.timeRangeButtonKey,
+          timeRangeButtonKey: TaskEditorScreen.timeRangeButtonKey,
+        ),
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    try {
+      VaultConfig? nextVaultConfig = latestTask.vaultConfig;
+      if (!result.vaultDraft.preserveExistingConfig) {
+        final vaultService = VaultServiceScope.of(context);
+        final vaultResolution = await vaultService.resolveConfig(
+          entityKey: 'task:${result.task.id}',
+          draft: result.vaultDraft,
+          existingConfig: latestTask.vaultConfig,
+        );
+        nextVaultConfig = vaultResolution.config;
+      }
+
+      final updatedTask = result.task.copyWith(
+        vaultConfig: nextVaultConfig,
+        clearVaultConfig:
+            !result.vaultDraft.preserveExistingConfig &&
+            nextVaultConfig == null,
+      );
+      await widget.repository.upsertTask(updatedTask);
+      await TaskReminderScope.of(context).syncTask(updatedTask);
+      await _controller.load();
+      if (!mounted) {
+        return;
+      }
+
+      final focusDate =
+          updatedTask.startDate ??
+          updatedTask.endDate ??
+          _selectedCalendarDate;
+      setState(() {
+        _selectedCalendarMonth = DateTime(focusDate.year, focusDate.month, 1);
+        _selectedCalendarDate = DateTime(
+          focusDate.year,
+          focusDate.month,
+          focusDate.day,
         );
         _calendarStatusFilter = TaskStatusFilter.all;
       });
@@ -1184,7 +1278,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                               });
                             },
                             onSchedulePressed: _openCalendarScheduleSheet,
-                            onTaskTap: _openCalendarTaskDetails,
+                            onTaskTap: _openCalendarTaskEntry,
                             onTaskLongPress: _showCalendarTaskContextMenu,
                             statusChipKeyBuilder:
                                 TaskManagementScreen.calendarStatusChipKey,
@@ -1688,13 +1782,8 @@ class _TaskViewSegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.oneAndHalf),
-      decoration: BoxDecoration(
-        color: AppColors.cardFill,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E8EC)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.one),
       child: Row(
         children: [
           Expanded(
@@ -1706,7 +1795,6 @@ class _TaskViewSegmentedControl extends StatelessWidget {
               onTap: () => onChanged(_TaskManagementContentTab.tasks),
             ),
           ),
-          const SizedBox(width: AppSpacing.oneAndHalf),
           Expanded(
             child: _TaskViewSegmentButton(
               buttonKey: TaskManagementScreen.calendarSegmentKey,
@@ -1739,41 +1827,56 @@ class _TaskViewSegmentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      key: buttonKey,
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.twoAndHalf,
-          vertical: AppSpacing.two,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.blue100 : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: selected ? AppColors.blue500 : AppColors.subHeaderText,
-            ),
-            const SizedBox(width: AppSpacing.oneAndHalf),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: selected ? AppColors.blue500 : AppColors.subHeaderText,
-                  fontSize: AppTypography.sizeSm,
-                  fontWeight: AppTypography.weightNormal,
+    final color = selected ? AppColors.blue500 : AppColors.subHeaderText;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: buttonKey,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.one),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.four,
+                  vertical: AppSpacing.three,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 20, color: color),
+                    const SizedBox(width: AppSpacing.two),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: color,
+                          fontSize: AppTypography.sizeBase,
+                          fontWeight: AppTypography.weightNormal,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                height: AppSizes.borderDefault,
+                margin: const EdgeInsets.only(top: AppSpacing.one),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.blue500 : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadii.full),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

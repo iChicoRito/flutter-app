@@ -4,6 +4,8 @@ enum TaskPriority { low, medium, high, urgent }
 
 enum TaskStatus { pending, completed, overdue }
 
+enum TaskScheduleType { noTime, dueTime, timeRange }
+
 class TaskItem {
   const TaskItem({
     required this.id,
@@ -48,6 +50,27 @@ class TaskItem {
   final DateTime? completedAt;
 
   bool get isArchived => archivedAt != null;
+
+  TaskScheduleType get scheduleType {
+    final hasRange =
+        startDate != null &&
+        startMinutes != null &&
+        endDate != null &&
+        endMinutes != null;
+    if (hasRange) {
+      return TaskScheduleType.timeRange;
+    }
+    if (endDate != null) {
+      return TaskScheduleType.dueTime;
+    }
+    return TaskScheduleType.noTime;
+  }
+
+  bool get isNoTimeTask => scheduleType == TaskScheduleType.noTime;
+
+  bool get isDueTimeTask => scheduleType == TaskScheduleType.dueTime;
+
+  bool get isTimeRangeTask => scheduleType == TaskScheduleType.timeRange;
 
   DateTime? get startDateTime {
     if (startDate == null) {

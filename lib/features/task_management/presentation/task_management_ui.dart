@@ -900,6 +900,252 @@ class TaskPickerButton extends StatelessWidget {
   }
 }
 
+class TaskFlexibleScheduleSection extends StatelessWidget {
+  const TaskFlexibleScheduleSection({
+    super.key,
+    required this.scheduleType,
+    required this.onScheduleTypeChanged,
+    required this.targetDateValue,
+    required this.onPickDate,
+    required this.targetTimeValue,
+    required this.onPickDueTime,
+    required this.timeRangeValue,
+    required this.onPickTimeRange,
+    this.validationMessage,
+    this.dateButtonKey,
+    this.dueTimeButtonKey,
+    this.timeRangeButtonKey,
+  });
+
+  final TaskScheduleType scheduleType;
+  final ValueChanged<TaskScheduleType> onScheduleTypeChanged;
+  final String targetDateValue;
+  final VoidCallback onPickDate;
+  final String targetTimeValue;
+  final VoidCallback onPickDueTime;
+  final String timeRangeValue;
+  final VoidCallback onPickTimeRange;
+  final String? validationMessage;
+  final Key? dateButtonKey;
+  final Key? dueTimeButtonKey;
+  final Key? timeRangeButtonKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return TaskSectionCard(
+      title: 'Schedules',
+      subtitle: 'Set the target date and time for tasks',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const TaskFieldLabel('Schedule Type'),
+          const SizedBox(height: AppSpacing.three),
+          TaskScheduleTypeSegmentedControl(
+            value: scheduleType,
+            onChanged: onScheduleTypeChanged,
+          ),
+          const SizedBox(height: AppSpacing.four),
+          if (scheduleType == TaskScheduleType.noTime)
+            const TaskScheduleInfoCard(
+              title: 'Unscheduled task',
+              message:
+                  'Tasks without a date or time won\'t appear in your calendar or trigger reminders.',
+              tone: TaskScheduleInfoTone.warning,
+            )
+          else ...[
+            TaskPickerButton(
+              buttonKey: dateButtonKey,
+              title: 'Target Date',
+              value: targetDateValue,
+              icon: TablerIcons.calendar,
+              onTap: onPickDate,
+            ),
+            const SizedBox(height: AppSpacing.three),
+            TaskPickerButton(
+              buttonKey: scheduleType == TaskScheduleType.dueTime
+                  ? dueTimeButtonKey
+                  : timeRangeButtonKey,
+              title: scheduleType == TaskScheduleType.dueTime
+                  ? 'Target Time'
+                  : 'Start & End Time',
+              value: scheduleType == TaskScheduleType.dueTime
+                  ? targetTimeValue
+                  : timeRangeValue,
+              icon: TablerIcons.clock,
+              onTap: scheduleType == TaskScheduleType.dueTime
+                  ? onPickDueTime
+                  : onPickTimeRange,
+            ),
+            if (validationMessage != null) ...[
+              const SizedBox(height: AppSpacing.three),
+              Text(
+                validationMessage!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: taskDangerText,
+                  fontSize: AppTypography.sizeSm,
+                  fontWeight: AppTypography.weightSemibold,
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.three),
+            TaskScheduleInfoCard(
+              title: scheduleType == TaskScheduleType.dueTime
+                  ? 'Due time set'
+                  : 'Scheduled task',
+              message: scheduleType == TaskScheduleType.dueTime
+                  ? 'This task will notify you at the selected time and appear in your calendar as a reminder.'
+                  : 'This task will appear in your calendar for the selected time range.',
+              tone: TaskScheduleInfoTone.info,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class TaskScheduleTypeSegmentedControl extends StatelessWidget {
+  const TaskScheduleTypeSegmentedControl({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final TaskScheduleType value;
+  final ValueChanged<TaskScheduleType> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.one),
+      decoration: BoxDecoration(
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        border: Border.all(color: AppColors.neutral200),
+      ),
+      child: Row(
+        children: [
+          for (final option in TaskScheduleType.values)
+            Expanded(
+              child: _TaskScheduleTypeOption(
+                label: switch (option) {
+                  TaskScheduleType.noTime => 'No Time',
+                  TaskScheduleType.dueTime => 'Due Time',
+                  TaskScheduleType.timeRange => 'Time Range',
+                },
+                selected: option == value,
+                onTap: () => onChanged(option),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskScheduleTypeOption extends StatelessWidget {
+  const _TaskScheduleTypeOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.two,
+          vertical: AppSpacing.three,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blue100 : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: selected ? AppColors.blue500 : AppColors.subHeaderText,
+              fontSize: AppTypography.sizeBase,
+              fontWeight: selected
+                  ? AppTypography.weightMedium
+                  : AppTypography.weightNormal,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum TaskScheduleInfoTone { info, warning }
+
+class TaskScheduleInfoCard extends StatelessWidget {
+  const TaskScheduleInfoCard({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.tone,
+  });
+
+  final String title;
+  final String message;
+  final TaskScheduleInfoTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = tone == TaskScheduleInfoTone.info
+        ? AppColors.blue50
+        : AppColors.amber50;
+    final foregroundColor = tone == TaskScheduleInfoTone.info
+        ? AppColors.blue500
+        : const Color(0xFFF08A00);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.four),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: foregroundColor,
+              fontSize: AppTypography.sizeLg,
+              fontWeight: AppTypography.weightSemibold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.two),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: foregroundColor,
+              fontSize: AppTypography.sizeBase,
+              fontWeight: AppTypography.weightNormal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 ThemeData buildTaskPickerTheme(ThemeData baseTheme) {
   final textTheme = GoogleFonts.interTextTheme(baseTheme.textTheme);
   return baseTheme.copyWith(

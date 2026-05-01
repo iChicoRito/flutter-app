@@ -28,6 +28,7 @@ class TaskCreationRequest {
     required this.description,
     required this.categoryId,
     required this.priority,
+    required this.scheduleType,
     required this.vaultDraft,
     this.spaceId,
     this.startDate,
@@ -40,6 +41,7 @@ class TaskCreationRequest {
   final String description;
   final String categoryId;
   final TaskPriority priority;
+  final TaskScheduleType scheduleType;
   final VaultDraft vaultDraft;
   final String? spaceId;
   final DateTime? startDate;
@@ -80,8 +82,12 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   late TaskPriority _priority;
   String? _selectedCategoryId;
   late Color _selectedCategoryColor;
+  late TaskScheduleType _scheduleType;
   DateTime? _targetDate;
-  TimeOfDay? _targetTime;
+  TimeOfDay? _dueTime;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  bool _showScheduleValidation = false;
   bool _vaultEnabled = false;
   VaultMethod _vaultMethod = VaultMethod.password;
   bool? _isDeviceSecurityAvailable;
@@ -101,6 +107,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     _selectedCategoryColor =
         _colorForCategory(_selectedCategoryId) ??
         taskCategoryColorOptions.first;
+    _scheduleType = TaskScheduleType.dueTime;
   }
 
   @override
@@ -142,11 +149,14 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   }
 
   String? _scheduleValidationMessage() {
-    if (_targetTime != null && _targetDate == null) {
-      return 'Choose a target date before setting the task time.';
-    }
-
-    return null;
+    return switch (_scheduleType) {
+      TaskScheduleType.noTime => null,
+      TaskScheduleType.dueTime =>
+        _targetDate == null || _dueTime == null
+            ? 'Choose a target date and time for this reminder.'
+            : null,
+      TaskScheduleType.timeRange => _timeRangeValidationMessage(),
+    };
   }
 
   Future<void> _pickDate() async {
@@ -177,6 +187,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
 
     setState(() {
       _targetDate = DateTime(picked.year, picked.month, picked.day);
+      _showScheduleValidation = false;
     });
     _parkFocus();
   }
@@ -212,7 +223,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
   Future<void> _pickTargetTime() async {
     TimeOfDay? pickedTime;
     await _pickTime(
-      initialValue: _targetTime ?? TimeOfDay.now(),
+      initialValue: _dueTime ?? TimeOfDay.now(),
       helpText: 'Target Time',
       onSelected: (value) {
         pickedTime = value;
@@ -223,7 +234,47 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
     }
 
     setState(() {
-      _targetTime = pickedTime;
+      _dueTime = pickedTime;
+      _showScheduleValidation = false;
+    });
+  }
+
+  Future<void> _pickTimeRange() async {
+    TimeOfDay? pickedStart;
+    await _pickTime(
+      initialValue: _startTime ?? const TimeOfDay(hour: 9, minute: 0),
+      helpText: 'Start Time',
+      onSelected: (value) {
+        pickedStart = value;
+      },
+    );
+    if (pickedStart == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _startTime = pickedStart;
+      _showScheduleValidation = false;
+    });
+
+    TimeOfDay? pickedEnd;
+    await _pickTime(
+      initialValue: _endTime ?? const TimeOfDay(hour: 11, minute: 0),
+      helpText: 'End Time',
+      onSelected: (value) {
+        pickedEnd = value;
+      },
+    );
+    if (pickedEnd == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _endTime = pickedEnd;
+      _showScheduleValidation = false;
     });
   }
 
@@ -259,6 +310,9 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
 
     final scheduleValidationMessage = _scheduleValidationMessage();
     if (scheduleValidationMessage != null) {
+      setState(() {
+        _showScheduleValidation = true;
+      });
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(scheduleValidationMessage)));
@@ -273,6 +327,22 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         );
       return;
     }
+
+    final scheduleFields = switch (_scheduleType) {
+      TaskScheduleType.noTime => (null, null, null, null),
+      TaskScheduleType.dueTime => (
+        null,
+        null,
+        _targetDate,
+        _dueTime == null ? null : (_dueTime!.hour * 60) + _dueTime!.minute,
+      ),
+      TaskScheduleType.timeRange => (
+        _targetDate,
+        _startTime == null ? null : (_startTime!.hour * 60) + _startTime!.minute,
+        _targetDate,
+        _endTime == null ? null : (_endTime!.hour * 60) + _endTime!.minute,
+      ),
+    };
 
     if (_vaultEnabled &&
         _vaultMethod == VaultMethod.deviceSecurity &&
@@ -296,18 +366,17 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
         description: _descriptionController.text.trim(),
         categoryId: _selectedCategoryId!,
         priority: _priority,
+        scheduleType: _scheduleType,
         vaultDraft: VaultDraft(
           isEnabled: _vaultEnabled,
           method: _vaultEnabled ? _vaultMethod : null,
           secret: _vaultSecretController.text.trim(),
         ),
         spaceId: widget.spaceId,
-        startDate: null,
-        startMinutes: null,
-        endDate: _targetDate,
-        endMinutes: _targetTime == null
-            ? null
-            : (_targetTime!.hour * 60) + _targetTime!.minute,
+        startDate: scheduleFields.$1,
+        startMinutes: scheduleFields.$2,
+        endDate: scheduleFields.$3,
+        endMinutes: scheduleFields.$4,
       ),
     );
   }
@@ -363,7 +432,7 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                       controller: _descriptionController,
                       decoration: taskInputDecoration(
                         context: context,
-                        hintText: 'Enter Task Title',
+                        hintText: 'Brief description of the task',
                       ).copyWith(counterText: ''),
                       maxLength: 20,
                       textInputAction: TextInputAction.next,
@@ -520,40 +589,25 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.four),
-              TaskSectionCard(
-                title: 'Schedules',
-                subtitle: 'Set the target date and time for tasks',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TaskPickerButton(
-                      buttonKey: createDateRangeButtonKey,
-                      title: 'Target Date',
-                      value: _formatDateValue(_targetDate),
-                      icon: TablerIcons.calendar,
-                      onTap: _pickDate,
-                    ),
-                    const SizedBox(height: AppSpacing.three),
-                    TaskPickerButton(
-                      buttonKey: createTimeRangeButtonKey,
-                      title: 'Target Time',
-                      value: _formatTimeValue(context, _targetTime),
-                      icon: TablerIcons.clock,
-                      onTap: _pickTargetTime,
-                    ),
-                    if (scheduleValidationMessage != null) ...[
-                      const SizedBox(height: AppSpacing.three),
-                      Text(
-                        scheduleValidationMessage,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: taskDangerText,
-                          fontSize: AppTypography.sizeSm,
-                          fontWeight: AppTypography.weightSemibold,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+              TaskFlexibleScheduleSection(
+                scheduleType: _scheduleType,
+                onScheduleTypeChanged: (value) {
+                  setState(() {
+                    _scheduleType = value;
+                    _showScheduleValidation = false;
+                  });
+                },
+                targetDateValue: _formatDateValue(_targetDate),
+                onPickDate: _pickDate,
+                targetTimeValue: _formatTimeValue(context, _dueTime),
+                onPickDueTime: _pickTargetTime,
+                timeRangeValue: _formatTimeRangeValue(context),
+                onPickTimeRange: _pickTimeRange,
+                validationMessage: _showScheduleValidation
+                    ? scheduleValidationMessage
+                    : null,
+                dateButtonKey: createDateRangeButtonKey,
+                dueTimeButtonKey: createTimeRangeButtonKey,
               ),
               const SizedBox(height: AppSpacing.four),
               VaultSettingsFields(
@@ -710,6 +764,31 @@ class _TaskCreationScreenState extends State<TaskCreationScreen> {
       return 'Select target time';
     }
     return value.format(context);
+  }
+
+  String _formatTimeRangeValue(BuildContext context) {
+    if (_startTime == null || _endTime == null) {
+      return 'Select target time';
+    }
+    return '${_formatCompactTime(context, _startTime!)} - ${_formatCompactTime(context, _endTime!)}';
+  }
+
+  String? _timeRangeValidationMessage() {
+    if (_targetDate == null || _startTime == null || _endTime == null) {
+      return 'Choose a target date and start/end time for this schedule.';
+    }
+
+    final startMinutes = (_startTime!.hour * 60) + _startTime!.minute;
+    final endMinutes = (_endTime!.hour * 60) + _endTime!.minute;
+    if (endMinutes <= startMinutes) {
+      return 'End time must be after start time.';
+    }
+    return null;
+  }
+
+  String _formatCompactTime(BuildContext context, TimeOfDay value) {
+    final label = value.format(context);
+    return label.replaceAll(' ', '');
   }
 }
 

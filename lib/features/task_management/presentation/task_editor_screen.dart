@@ -19,6 +19,7 @@ import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
 import '../../spaces/domain/task_space.dart';
+import 'task_details_form_screen.dart';
 import 'task_management_ui.dart';
 
 class TaskEditorScreen extends StatefulWidget {
@@ -292,14 +293,26 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       return;
     }
 
-    final result = await Navigator.of(context).push<_TaskDetailsResult>(
-      MaterialPageRoute<_TaskDetailsResult>(
-        builder: (context) => _TaskDetailsSheet(
+    final result = await Navigator.of(context).push<TaskDetailsResult>(
+      MaterialPageRoute<TaskDetailsResult>(
+        builder: (context) => TaskDetailsFormScreen(
           repository: widget.repository,
           task: task,
           categories: _categories,
           lockedCategoryId: widget.lockedCategoryId,
           fixedSpaceId: widget.fixedSpaceId,
+          titleFieldKey: TaskEditorScreen.titleFieldKey,
+          descriptionFieldKey: const Key('task-editor-description-field'),
+          priorityFieldKey: TaskEditorScreen.priorityFieldKey,
+          categoryFieldKey: TaskEditorScreen.categoryFieldKey,
+          addCategoryButtonKey: TaskEditorScreen.addCategoryButtonKey,
+          categoryColorSelectionKey:
+              TaskEditorScreen.categoryColorSelectionKey,
+          categoryCurrentIconKey: TaskEditorScreen.categoryCurrentIconKey,
+          saveButtonKey: TaskEditorScreen.saveButtonKey,
+          dateButtonKey: TaskEditorScreen.dateRangeButtonKey,
+          dueTimeButtonKey: TaskEditorScreen.timeRangeButtonKey,
+          timeRangeButtonKey: TaskEditorScreen.timeRangeButtonKey,
         ),
       ),
     );

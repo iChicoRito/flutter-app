@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:tabler_icons/tabler_icons.dart';
 import 'package:flutter_app/core/theme/app_design_tokens.dart';
 import 'package:flutter_app/core/services/task_data_refresh_scope.dart';
 import 'package:flutter_app/core/services/task_reminder_scope.dart';
@@ -129,6 +130,19 @@ void main() {
   ) async {
     await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
     await tester.pumpAndSettle();
+    final parts = keyValue.split('-');
+    final targetMonth = int.parse(parts[1]);
+    final targetMonthLabel = _monthName(targetMonth);
+    final monthHeaderFinder = find.byKey(
+      TaskManagementScreen.calendarMonthDropdownKey,
+    );
+    final targetHeaderLabel = '$targetMonthLabel ${parts[0]}';
+    if (find.descendant(of: monthHeaderFinder, matching: find.text(targetHeaderLabel)).evaluate().isEmpty) {
+      await tester.tap(monthHeaderFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(targetMonthLabel));
+      await tester.pumpAndSettle();
+    }
     final dateFinder = find.byKey(
       TaskManagementScreen.calendarDateKey(keyValue),
     );
@@ -194,6 +208,14 @@ void main() {
       find.byKey(TaskManagementScreen.calendarTimelineScrollKey),
       findsOneWidget,
     );
+
+    final monthRect = tester.getRect(
+      find.byKey(TaskManagementScreen.calendarMonthDropdownKey),
+    );
+    final selectedDateRect = tester.getRect(
+      find.byKey(TaskManagementScreen.calendarDateKey('2026-04-20')),
+    );
+    expect(monthRect.top, lessThan(selectedDateRect.top));
   });
 
   testWidgets('calendar opens with today selected by default', (
@@ -203,8 +225,12 @@ void main() {
     await tester.tap(find.byKey(TaskManagementScreen.calendarSegmentKey));
     await tester.pumpAndSettle();
 
+    final now = DateTime.now();
+    final todayKeyValue =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
     final todayCard = find.byKey(
-      TaskManagementScreen.calendarDateKey('2026-04-29'),
+      TaskManagementScreen.calendarDateKey(todayKeyValue),
     );
     final selectedContainer = find.descendant(
       of: todayCard,
@@ -519,10 +545,18 @@ void main() {
 
       final tasks = await repository.getTasks();
       final created = tasks.firstWhere((task) => task.title == 'Plan launch');
-      expect(created.startDateTime, DateTime(2026, 4, 29, 9));
-      expect(created.endDateTime, DateTime(2026, 4, 29, 11));
-      expect(created.startDate, DateTime(2026, 4, 29));
-      expect(created.endDate, DateTime(2026, 4, 29));
+      final now = DateTime.now();
+      final expectedDate = DateTime(now.year, now.month, now.day);
+      expect(
+        created.startDateTime,
+        DateTime(expectedDate.year, expectedDate.month, expectedDate.day, 9),
+      );
+      expect(
+        created.endDateTime,
+        DateTime(expectedDate.year, expectedDate.month, expectedDate.day, 11),
+      );
+      expect(created.startDate, expectedDate);
+      expect(created.endDate, expectedDate);
       expect(created.categoryId, 'personal');
       final categories = await repository.getCategories();
       final personal = categories.firstWhere(
@@ -919,7 +953,76 @@ void main() {
   );
 
   testWidgets(
-    'calendar timeline hides due-only tasks created outside scheduled ranges',
+    'calendar keeps due-only tasks outside the timeline while showing them in the reminder list',
+    (WidgetTester tester) async {
+      final mixedRepository = InMemoryTaskRepository(
+        tasks: [
+          _buildTask(
+            id: 'scheduled',
+            title: 'Scheduled Task',
+            description: 'Scheduled block',
+            categoryId: 'school',
+            startDate: DateTime(2026, 4, 20),
+            startMinutes: 9 * 60,
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 10 * 60,
+          ),
+          TaskItem(
+            id: 'due-only',
+            title: 'Due Only Task',
+            description: 'Due later today',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+            standaloneCategoryId: 'personal',
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 17 * 60,
+            noteDocumentJson: buildPlainTextNoteDocumentJson('Due later today'),
+            notePlainText: 'Due later today',
+          ),
+          TaskItem(
+            id: 'due-second',
+            title: 'Second Due Task',
+            description: 'Another reminder',
+            priority: TaskPriority.medium,
+            categoryId: 'school',
+            standaloneCategoryId: 'school',
+            createdAt: DateTime(2026, 4, 13, 10),
+            updatedAt: DateTime(2026, 4, 13, 10),
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 21 * 60 + 30,
+            noteDocumentJson: buildPlainTextNoteDocumentJson('Another reminder'),
+            notePlainText: 'Another reminder',
+          ),
+        ],
+        seedDefaults: true,
+      );
+      final mixedController = TaskManagementController(mixedRepository);
+      await mixedController.load();
+
+      await pumpScreenWithState(
+        tester,
+        repository: mixedRepository,
+        controller: mixedController,
+      );
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      expect(find.text('Scheduled Task'), findsOneWidget);
+      expect(find.text('Due Only Task'), findsOneWidget);
+      expect(find.text('Second Due Task'), findsOneWidget);
+      expect(find.text('09:00AM - 10:00AM'), findsOneWidget);
+      expect(find.text('05:00PM - 05:00PM'), findsNothing);
+      expect(find.text('Due Time'), findsOneWidget);
+      expect(find.text('Reminders scheduled for the selected date'), findsOneWidget);
+      expect(find.text('05:00 PM'), findsOneWidget);
+      expect(find.text('09:30 PM'), findsOneWidget);
+      expect(find.byIcon(TablerIcons.chevron_right), findsNWidgets(2));
+    },
+  );
+
+  testWidgets(
+    'calendar shows due-time tasks outside the timeline and opens the flexible edit form',
     (WidgetTester tester) async {
       final mixedRepository = InMemoryTaskRepository(
         tasks: [
@@ -960,10 +1063,18 @@ void main() {
       );
       await openCalendarAndSelectDate(tester, '2026-04-20');
 
+      expect(find.text('Due Only Task'), findsOneWidget);
       expect(find.text('Scheduled Task'), findsOneWidget);
-      expect(find.text('Due Only Task'), findsNothing);
-      expect(find.text('09:00AM - 10:00AM'), findsOneWidget);
       expect(find.text('05:00PM - 05:00PM'), findsNothing);
+
+      await tester.tap(find.text('Due Only Task'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Tasks'), findsOneWidget);
+      expect(find.text('Schedule Type'), findsOneWidget);
+      expect(find.text('No Time'), findsOneWidget);
+      expect(find.text('Due Time'), findsWidgets);
+      expect(find.text('Time Range'), findsOneWidget);
     },
   );
 
@@ -1055,6 +1166,24 @@ void main() {
     expect(formatDetailedTimelineLabel((21 * 60) + 40), '9:40PM');
     expect(formatDetailedTimelineLabel(0), '12:00AM');
   });
+}
+
+String _monthName(int month) {
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return monthNames[month - 1];
 }
 
 TaskItem _buildTask({

@@ -243,6 +243,113 @@ void main() {
     expect(tasks.map((task) => task.id), ['scheduled-task']);
   });
 
+  test('calendarDueTasksForDate returns due-time tasks for the selected day only', () async {
+    await repository.upsertTask(
+      TaskItem(
+        id: 'due-first',
+        title: 'Submit report',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 17 * 60,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'due-second',
+        title: 'Reply to email',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 18 * 60,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'range-task',
+        title: 'Scheduled event',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        startDate: DateTime(2026, 4, 20),
+        startMinutes: 9 * 60,
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 10 * 60,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'other-day-due',
+        title: 'Tomorrow item',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        endDate: DateTime(2026, 4, 21),
+        endMinutes: 8 * 60,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'no-time',
+        title: 'Inbox task',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+      ),
+    );
+    await controller.load();
+
+    final tasks = controller.calendarDueTasksForDate(
+      selectedDate: DateTime(2026, 4, 20),
+      statusFilter: TaskStatusFilter.all,
+      now: DateTime(2026, 4, 20, 7),
+    );
+
+    expect(tasks.map((task) => task.id), ['due-first', 'due-second']);
+  });
+
+  test('calendar day markers ignore no-time tasks and include due-time tasks', () async {
+    await repository.upsertTask(
+      TaskItem(
+        id: 'due-only-task',
+        title: 'Due today',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        endDate: DateTime(2026, 4, 20),
+        endMinutes: 17 * 60,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'no-time',
+        title: 'Inbox task',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+      ),
+    );
+    await controller.load();
+
+    final markedDates = controller.calendarDueTaskDates(
+      month: DateTime(2026, 4, 1),
+      statusFilter: TaskStatusFilter.all,
+      now: DateTime(2026, 4, 20, 7),
+    );
+
+    expect(markedDates, contains(DateTime(2026, 4, 20)));
+    expect(markedDates, isNot(contains(DateTime(2026, 4, 21))));
+  });
+
   test('calendarTasksForDate applies completed status filtering', () async {
     await repository.upsertTask(
       TaskItem(

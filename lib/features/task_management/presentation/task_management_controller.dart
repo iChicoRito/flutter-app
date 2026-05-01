@@ -225,7 +225,7 @@ class TaskManagementController extends ChangeNotifier {
     };
     final query = searchQuery.trim().toLowerCase();
     final filtered = _visibleTasks(_tasks).where((task) {
-      if (_isCalendarRangeTask(task)) {
+      if (task.isTimeRangeTask) {
         return false;
       }
 
@@ -311,7 +311,7 @@ class TaskManagementController extends ChangeNotifier {
     );
 
     final filtered = _visibleTasks(_tasks).where((task) {
-      if (!_isCalendarRangeTask(task)) {
+      if (!task.isTimeRangeTask) {
         return false;
       }
 
@@ -352,6 +352,87 @@ class TaskManagementController extends ChangeNotifier {
     return filtered;
   }
 
+  List<TaskItem> calendarDueTasksForDate({
+    required DateTime selectedDate,
+    required TaskStatusFilter statusFilter,
+    required DateTime now,
+  }) {
+    final targetDate = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+
+    final filtered = _visibleTasks(_tasks).where((task) {
+      if (!task.isDueTimeTask) {
+        return false;
+      }
+
+      final dueAt = task.endDateTime;
+      if (dueAt == null) {
+        return false;
+      }
+
+      final dueDate = DateTime(dueAt.year, dueAt.month, dueAt.day);
+      if (dueDate != targetDate) {
+        return false;
+      }
+
+      return switch (statusFilter) {
+        TaskStatusFilter.all => true,
+        TaskStatusFilter.completed => task.isCompleted,
+        TaskStatusFilter.today => _isTodayBucket(task, now),
+        TaskStatusFilter.upcoming => _isUpcomingBucket(task, now),
+        TaskStatusFilter.overdue =>
+          !task.isCompleted && task.statusAt(now) == TaskStatus.overdue,
+      };
+    }).toList();
+
+    filtered.sort((left, right) {
+      final leftMinutes = left.endMinutes ?? 0;
+      final rightMinutes = right.endMinutes ?? 0;
+      final timeComparison = leftMinutes.compareTo(rightMinutes);
+      if (timeComparison != 0) {
+        return timeComparison;
+      }
+      return left.updatedAt.compareTo(right.updatedAt);
+    });
+
+    return filtered;
+  }
+
+  Set<DateTime> calendarDueTaskDates({
+    required DateTime month,
+    required TaskStatusFilter statusFilter,
+    required DateTime now,
+  }) {
+    final dates = <DateTime>{};
+    for (final task in _visibleTasks(_tasks)) {
+      if (!task.isDueTimeTask) {
+        continue;
+      }
+      final dueAt = task.endDateTime;
+      if (dueAt == null ||
+          dueAt.year != month.year ||
+          dueAt.month != month.month) {
+        continue;
+      }
+      final matchesStatus = switch (statusFilter) {
+        TaskStatusFilter.all => true,
+        TaskStatusFilter.completed => task.isCompleted,
+        TaskStatusFilter.today => _isTodayBucket(task, now),
+        TaskStatusFilter.upcoming => _isUpcomingBucket(task, now),
+        TaskStatusFilter.overdue =>
+          !task.isCompleted && task.statusAt(now) == TaskStatus.overdue,
+      };
+      if (!matchesStatus) {
+        continue;
+      }
+      dates.add(DateTime(dueAt.year, dueAt.month, dueAt.day));
+    }
+    return dates;
+  }
+
   static int _priorityWeight(TaskPriority priority) {
     return switch (priority) {
       TaskPriority.low => 1,
@@ -359,13 +440,6 @@ class TaskManagementController extends ChangeNotifier {
       TaskPriority.high => 3,
       TaskPriority.urgent => 4,
     };
-  }
-
-  static bool _isCalendarRangeTask(TaskItem task) {
-    return task.startDate != null &&
-        task.startMinutes != null &&
-        task.endDate != null &&
-        task.endMinutes != null;
   }
 
   static bool _isTodayBucket(TaskItem task, DateTime now) {

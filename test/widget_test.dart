@@ -9,6 +9,9 @@ import 'package:flutter_app/core/services/display_name_store.dart';
 import 'package:flutter_app/core/services/onboarding_status_store.dart';
 import 'package:flutter_app/core/services/task_data_refresh_scope.dart';
 import 'package:flutter_app/core/services/task_reminder_service.dart';
+import 'package:flutter_app/core/services/task_reminder_scope.dart';
+import 'package:flutter_app/core/services/vault_service.dart';
+import 'package:flutter_app/core/services/vault_service_scope.dart';
 import 'package:flutter_app/core/theme/app_design_tokens.dart';
 import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/archive/presentation/archives_screen.dart';
@@ -24,6 +27,7 @@ import 'package:flutter_app/features/task_management/data/hive_task_repository.d
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
 import 'package:flutter_app/features/task_management/domain/task_category.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
+import 'package:flutter_app/features/task_management/presentation/task_management_controller.dart';
 import 'package:flutter_app/features/task_management/presentation/task_creation_sheet.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
@@ -68,6 +72,44 @@ void main() {
     onboardingStatusStore.completed = true;
     displayNameStore.displayName = 'Mark';
     await pumpApp(tester, clock: clock);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpTaskManagementScreen(
+    WidgetTester tester, {
+    required List<TaskItem> tasks,
+  }) async {
+    final repository = InMemoryTaskRepository(
+      tasks: tasks,
+      seedDefaults: false,
+    );
+    taskRepository = repository;
+    final controller = TaskManagementController(repository);
+    await controller.load();
+    await tester.binding.setSurfaceSize(const Size(430, 1000));
+    await tester.pumpWidget(
+      TaskDataRefreshScope(
+        controller: TaskDataRefreshController(),
+        child: TaskReminderScope(
+          reminderService: const NoopTaskReminderService(),
+          child: VaultServiceScope(
+            vaultService: const NoopVaultService(),
+            child: MaterialApp(
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                FlutterQuillLocalizations.delegate,
+              ],
+              home: TaskManagementScreen(
+                repository: repository,
+                controller: controller,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -352,28 +394,61 @@ void main() {
     expect(card.padding, const EdgeInsets.all(AppSpacing.six));
   });
 
-  testWidgets('dashboard home shows live task summary content', (
+  testWidgets('dashboard home shows redesigned task status content', (
     WidgetTester tester,
   ) async {
     taskRepository = InMemoryTaskRepository(
       tasks: [
         buildTask(
-          id: 'work-task',
+          id: 'today-task',
           title: 'Submit project brief',
           priority: TaskPriority.high,
           categoryId: 'work',
           noteText: 'Scope and milestones',
+        ),
+        buildTask(
+          id: 'upcoming-task',
+          title: 'Review next sprint',
+          priority: TaskPriority.medium,
+          categoryId: 'personal',
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 11 * 60,
+        ),
+        buildTask(
+          id: 'overdue-task',
+          title: 'Pay supplier invoice',
+          priority: TaskPriority.urgent,
+          categoryId: 'finance',
+          endDate: DateTime(2026, 4, 12),
+          endMinutes: 8 * 60,
+        ),
+        buildTask(
+          id: 'completed-task',
+          title: 'Send weekly recap',
+          priority: TaskPriority.low,
+          categoryId: 'work',
+          isCompleted: true,
         ),
       ],
     );
 
     await openDashboard(tester);
 
-    expect(find.text('Total'), findsOneWidget);
-    expect(find.text('Pending'), findsOneWidget);
-    expect(find.text('Completed'), findsOneWidget);
-    expect(find.text('Overdue'), findsOneWidget);
+    expect(find.text('Tasks Status'), findsNWidgets(2));
+    expect(find.text('April 13, 2026'), findsOneWidget);
+    expect(find.text('Total Tasks'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('Today'), findsWidgets);
+    expect(find.text('Upcoming'), findsWidgets);
+    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('Overdue'), findsWidgets);
     expect(find.text('Submit project brief'), findsOneWidget);
+    expect(find.text('Work'), findsWidgets);
+    expect(find.text('April 13'), findsWidgets);
+    expect(find.text('Today\'s Tasks'), findsNothing);
+    expect(find.text('Upcoming Tasks'), findsNothing);
+    expect(find.text('Overdue Tasks'), findsNothing);
+    expect(find.text('Completed Tasks'), findsNothing);
 
     final progressTitle = tester.widget<Text>(find.text('Today\'s Progress'));
     expect(progressTitle.style?.fontSize, AppTypography.sizeLg);
@@ -393,6 +468,269 @@ void main() {
       progressDecoration.borderRadius,
       BorderRadius.circular(AppRadii.threeXl),
     );
+  });
+
+  testWidgets('dashboard chart filter and segment selection update legend', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'today-task',
+          title: 'Today task',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+        ),
+        buildTask(
+          id: 'next-week-task',
+          title: 'Next week task',
+          priority: TaskPriority.medium,
+          categoryId: 'personal',
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 9 * 60,
+        ),
+        buildTask(
+          id: 'completed-task',
+          title: 'Completed task',
+          priority: TaskPriority.low,
+          categoryId: 'finance',
+          isCompleted: true,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+
+    await tester.tap(find.byKey(DashboardScreen.chartMenuButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.chartMenuItemKey('today')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('Next week task'), findsOneWidget);
+
+    final chartCenter = tester.getCenter(
+      find.byKey(DashboardScreen.chartCanvasKey),
+    );
+    await tester.tapAt(chartCenter + const Offset(56, -56));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartLegendKey),
+        matching: find.text('Completed'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartLegendKey),
+        matching: find.text('Upcoming'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartLegendKey),
+        matching: find.text('Overdue'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('dashboard chart tap follows the actual painted segment', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'completed-1',
+          title: 'Completed 1',
+          priority: TaskPriority.low,
+          categoryId: 'work',
+          isCompleted: true,
+        ),
+        buildTask(
+          id: 'completed-2',
+          title: 'Completed 2',
+          priority: TaskPriority.low,
+          categoryId: 'work',
+          isCompleted: true,
+        ),
+        buildTask(
+          id: 'upcoming-task',
+          title: 'Upcoming task',
+          priority: TaskPriority.medium,
+          categoryId: 'personal',
+          endDate: DateTime(2026, 4, 20),
+          endMinutes: 9 * 60,
+        ),
+        for (var index = 0; index < 4; index++)
+          buildTask(
+            id: 'overdue-$index',
+            title: 'Overdue $index',
+            priority: TaskPriority.urgent,
+            categoryId: 'finance',
+            endDate: DateTime(2026, 4, 12),
+            endMinutes: 9 * 60,
+          ),
+      ],
+    );
+
+    await openDashboard(tester);
+
+    final chartCenter = tester.getCenter(
+      find.byKey(DashboardScreen.chartCanvasKey),
+    );
+    await tester.tapAt(chartCenter + const Offset(56, 56));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartLegendKey),
+        matching: find.text('Upcoming'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartLegendKey),
+        matching: find.text('Overdue'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'dashboard chart card centers chart and keeps legend in one row',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'today-task',
+            title: 'Today task',
+            priority: TaskPriority.high,
+            categoryId: 'work',
+          ),
+          buildTask(
+            id: 'upcoming-task',
+            title: 'Upcoming task',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+            endDate: DateTime(2026, 4, 20),
+            endMinutes: 9 * 60,
+          ),
+          buildTask(
+            id: 'overdue-task',
+            title: 'Overdue task',
+            priority: TaskPriority.urgent,
+            categoryId: 'finance',
+            endDate: DateTime(2026, 4, 12),
+            endMinutes: 9 * 60,
+          ),
+          buildTask(
+            id: 'completed-task',
+            title: 'Completed task',
+            priority: TaskPriority.low,
+            categoryId: 'work',
+            isCompleted: true,
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      final cardFinder = find.byKey(DashboardScreen.chartStatusCardKey);
+      final chartCenter = tester.getCenter(
+        find.byKey(DashboardScreen.chartCanvasKey),
+      );
+      final cardCenter = tester.getCenter(cardFinder);
+
+      expect((chartCenter.dx - cardCenter.dx).abs(), lessThan(1));
+
+      final legendTop = tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byKey(DashboardScreen.chartLegendKey),
+              matching: find.text('Completed'),
+            ),
+          )
+          .dy;
+
+      for (final label in ['Today', 'Upcoming', 'Overdue']) {
+        final top = tester
+            .getTopLeft(
+              find.descendant(
+                of: find.byKey(DashboardScreen.chartLegendKey),
+                matching: find.text(label),
+              ),
+            )
+            .dy;
+        expect((top - legendTop).abs(), lessThan(1));
+      }
+    },
+  );
+
+  testWidgets('dashboard task status list filters rows from its menu', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'today-task',
+          title: 'Web Development',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+        ),
+        buildTask(
+          id: 'upcoming-task',
+          title: 'Written Exam',
+          priority: TaskPriority.medium,
+          categoryId: 'study',
+          endDate: DateTime(2026, 4, 30),
+          endMinutes: 10 * 60,
+        ),
+        buildTask(
+          id: 'overdue-task',
+          title: 'Play with Friends',
+          priority: TaskPriority.low,
+          categoryId: 'personal',
+          endDate: DateTime(2026, 4, 12),
+          endMinutes: 12 * 60,
+        ),
+        buildTask(
+          id: 'completed-task',
+          title: 'Tuition Fee',
+          priority: TaskPriority.medium,
+          categoryId: 'finance',
+          isCompleted: true,
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+
+    expect(find.text('Web Development'), findsOneWidget);
+    expect(find.text('Written Exam'), findsOneWidget);
+    expect(find.text('Play with Friends'), findsOneWidget);
+    expect(find.text('Tuition Fee'), findsOneWidget);
+    expect(find.text('Study'), findsOneWidget);
+    expect(find.text('April 30'), findsOneWidget);
+
+    await tester.tap(find.byKey(DashboardScreen.taskStatusMenuButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(DashboardScreen.taskStatusMenuItemKey('overdue')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Overdue'), findsWidgets);
+    expect(find.text('Play with Friends'), findsOneWidget);
+    expect(find.text('Web Development'), findsNothing);
+    expect(find.text('Written Exam'), findsNothing);
+    expect(find.text('Tuition Fee'), findsNothing);
   });
 
   testWidgets('dashboard home header removes the trailing top action slot', (
@@ -2946,7 +3284,7 @@ void main() {
     expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
   });
 
-  testWidgets('dashboard completion toggles stay in sync with tasks tab', (
+  testWidgets('long press no longer reveals task selection controls', (
     WidgetTester tester,
   ) async {
     final task = buildTask(
@@ -2961,93 +3299,70 @@ void main() {
       priority: TaskPriority.low,
       categoryId: 'work',
     );
-    taskRepository = InMemoryTaskRepository(tasks: [task, secondTask]);
-
-    await openDashboard(tester);
-
-    await tester.tap(find.byKey(DashboardScreen.taskToggleKey(task.id)));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Task completed successfully.'), findsOneWidget);
-
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
-
-    await tester.longPress(
-      find.byKey(TaskManagementScreen.taskTileKey(task.id)),
-    );
-    await tester.pumpAndSettle();
+    await pumpTaskManagementScreen(tester, tasks: [task, secondTask]);
 
     expect(
-      find.byKey(TaskManagementScreen.taskToggleKey(secondTask.id)),
-      findsOneWidget,
-    );
-
-    final checkbox = tester.widget<Checkbox>(
       find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
+      findsNothing,
     );
-    expect(checkbox.value, isTrue);
+    expect(find.text('Review analytics dashboard'), findsOneWidget);
   });
 
-  testWidgets('selection mode clears on outside tap and back press', (
+  testWidgets('task card context menu completes tasks without selection mode', (
     WidgetTester tester,
   ) async {
     final task = buildTask(
-      id: 'selection-task',
+      id: 'completion-task',
       title: 'Finalize budget proposal',
       priority: TaskPriority.medium,
       categoryId: 'work',
     );
     final secondTask = buildTask(
-      id: 'selection-task-2',
+      id: 'completion-task-2',
       title: 'Confirm rollout timeline',
       priority: TaskPriority.high,
       categoryId: 'work',
     );
-    taskRepository = InMemoryTaskRepository(tasks: [task, secondTask]);
-
-    await openDashboard(tester);
-    await tester.tap(find.text('Tasks'));
-    await tester.pumpAndSettle();
-
-    await tester.longPress(
-      find.byKey(TaskManagementScreen.taskTileKey(task.id)),
-    );
-    await tester.pumpAndSettle();
+    await pumpTaskManagementScreen(tester, tasks: [task, secondTask]);
 
     expect(
       find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(TaskManagementScreen.taskToggleKey(secondTask.id)),
-      findsOneWidget,
-    );
-
-    await tester.tapAt(
-      tester.getBottomRight(find.byKey(TaskManagementScreen.markerKey)) -
-          const Offset(12, 160),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
       findsNothing,
     );
 
-    await tester.longPress(
-      find.byKey(TaskManagementScreen.taskTileKey(task.id)),
+    final taskCard = find.byKey(TaskManagementScreen.taskTileKey(task.id));
+    final menuIcon = find.descendant(
+      of: taskCard,
+      matching: find.byIcon(TablerIcons.dots_vertical),
     );
+    expect(menuIcon, findsOneWidget);
+    await tester.tap(menuIcon);
     await tester.pumpAndSettle();
 
-    await tester.binding.handlePopRoute();
+    expect(find.text('Mark as Complete'), findsOneWidget);
+
+    await tester.tap(find.text('Mark as Complete'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(TaskManagementScreen.markerKey), findsOneWidget);
-    expect(
-      find.byKey(TaskManagementScreen.taskToggleKey(task.id)),
-      findsNothing,
-    );
+    final completedTask = await taskRepository.getTaskById(task.id);
+    expect(completedTask?.isCompleted, isTrue);
+    expect(find.text('Task completed successfully.'), findsOneWidget);
+
+    await tester.tap(menuIcon);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark as Incomplete'), findsOneWidget);
+
+    await tester.tap(find.text('Mark as Incomplete'));
+    await tester.pumpAndSettle();
+
+    final pendingTask = await taskRepository.getTaskById(task.id);
+    expect(pendingTask?.isCompleted, isFalse);
+    expect(find.text('Task marked as pending.'), findsOneWidget);
   });
 
   testWidgets(

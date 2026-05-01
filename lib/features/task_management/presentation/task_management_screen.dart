@@ -160,7 +160,6 @@ class TaskManagementScreen extends StatefulWidget {
 
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
-  bool _isSelectionMode = false;
   TaskDataRefreshController? _taskDataRefreshController;
   _TaskManagementContentTab _activeTab = _TaskManagementContentTab.tasks;
   DateTime _selectedCalendarMonth = DateTime.now();
@@ -211,15 +210,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     final today = DateTime.now();
     _selectedCalendarMonth = DateTime(today.year, today.month, 1);
     _selectedCalendarDate = DateTime(today.year, today.month, today.day);
-  }
-
-  void _clearSelectionMode() {
-    if (!_isSelectionMode) {
-      return;
-    }
-    setState(() {
-      _isSelectionMode = false;
-    });
   }
 
   TaskSpace? get _currentSpace {
@@ -1069,190 +1059,177 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !_isSelectionMode,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _isSelectionMode) {
-          _clearSelectionMode();
-        }
-      },
-      child: Scaffold(
-        key: TaskManagementScreen.markerKey,
-        backgroundColor: AppColors.background,
-        appBar: widget.appBarTitle == null || widget.useInlineBackHeader
-            ? null
-            : AppBar(
-                title: Text(_currentSpace?.name ?? widget.appBarTitle!),
-                backgroundColor: AppColors.cardFill,
-                surfaceTintColor: AppColors.cardFill,
-                actions: [
-                  if (_currentSpace?.vaultConfig?.isEnabled == true)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Material(
-                        color: _isCurrentSpaceUnlocked
-                            ? AppColors.blue100
-                            : AppColors.rose100,
+    return Scaffold(
+      key: TaskManagementScreen.markerKey,
+      backgroundColor: AppColors.background,
+      appBar: widget.appBarTitle == null || widget.useInlineBackHeader
+          ? null
+          : AppBar(
+              title: Text(_currentSpace?.name ?? widget.appBarTitle!),
+              backgroundColor: AppColors.cardFill,
+              surfaceTintColor: AppColors.cardFill,
+              actions: [
+                if (_currentSpace?.vaultConfig?.isEnabled == true)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Material(
+                      color: _isCurrentSpaceUnlocked
+                          ? AppColors.blue100
+                          : AppColors.rose100,
+                      borderRadius: BorderRadius.circular(AppRadii.xl),
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(AppRadii.xl),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(AppRadii.xl),
-                          onTap: _toggleCurrentSpaceVault,
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Icon(
-                              _isCurrentSpaceUnlocked
-                                  ? TablerIcons.lock_open
-                                  : TablerIcons.lock,
-                              size: 18,
-                              color: _isCurrentSpaceUnlocked
-                                  ? AppColors.blue500
-                                  : AppColors.rose500,
-                            ),
+                        onTap: _toggleCurrentSpaceVault,
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Icon(
+                            _isCurrentSpaceUnlocked
+                                ? TablerIcons.lock_open
+                                : TablerIcons.lock,
+                            size: 18,
+                            color: _isCurrentSpaceUnlocked
+                                ? AppColors.blue500
+                                : AppColors.rose500,
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              if (widget.useInlineBackHeader && widget.appBarTitle != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.four,
-                    AppSpacing.one,
-                    AppSpacing.four,
-                    AppSpacing.zero,
                   ),
-                  child: _InlineBackHeader(
-                    title: _currentSpace?.name ?? widget.appBarTitle!,
-                    onTap: () => Navigator.maybePop(context),
-                  ),
+              ],
+            ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            if (widget.useInlineBackHeader && widget.appBarTitle != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.four,
+                  AppSpacing.one,
+                  AppSpacing.four,
+                  AppSpacing.zero,
                 ),
-              Expanded(
-                child: AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, _) {
-                    final filteredTasks = _controller.filteredTasks(
-                      DateTime.now(),
+                child: _InlineBackHeader(
+                  title: _currentSpace?.name ?? widget.appBarTitle!,
+                  onTap: () => Navigator.maybePop(context),
+                ),
+              ),
+            Expanded(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  final filteredTasks = _controller.filteredTasks(
+                    DateTime.now(),
+                  );
+
+                  if (_controller.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (_controller.errorMessage != null) {
+                    return _ErrorState(
+                      message: _controller.errorMessage!,
+                      onRetry: _controller.load,
                     );
+                  }
 
-                    if (_controller.isLoading) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (_controller.errorMessage != null) {
-                      return _ErrorState(
-                        message: _controller.errorMessage!,
-                        onRetry: _controller.load,
-                      );
-                    }
-
-                    return GestureDetector(
-                      behavior: HitTestBehavior.deferToChild,
-                      onTap: _isSelectionMode ? _clearSelectionMode : null,
-                      child: _isTasksTabActive
-                          ? _buildTasksView(filteredTasks)
-                          : KeyedSubtree(
-                              key: TaskManagementScreen.calendarViewKey,
-                              child: TaskCalendarView(
-                                controller: _controller,
-                                segmentControl: _TaskViewSegmentedControl(
-                                  activeTab: _activeTab,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _activeTab = value;
-                                    });
-                                  },
-                                ),
-                                selectedMonth: _selectedCalendarMonth,
-                                selectedDate: _selectedCalendarDate,
-                                statusFilter: _calendarStatusFilter,
-                                onMonthChanged: (value) {
-                                  setState(() {
-                                    _selectedCalendarMonth = DateTime(
-                                      value.year,
-                                      value.month,
-                                      1,
-                                    );
-                                    final availableDays = _controller
-                                        .calendarDaysForMonth(
-                                          _selectedCalendarMonth,
-                                        );
-                                    final matchingDay = availableDays
-                                        .where(
-                                          (day) =>
-                                              day.day ==
-                                              _selectedCalendarDate.day,
-                                        )
-                                        .cast<DateTime?>()
-                                        .firstWhere(
-                                          (day) => day != null,
-                                          orElse: () => availableDays.first,
-                                        );
-                                    _selectedCalendarDate = matchingDay!;
-                                  });
-                                },
-                                onDateSelected: (value) {
-                                  setState(() {
-                                    _selectedCalendarDate = value;
-                                  });
-                                },
-                                onStatusSelected: (value) {
-                                  setState(() {
-                                    _calendarStatusFilter = value;
-                                  });
-                                },
-                                onSchedulePressed: _openCalendarScheduleSheet,
-                                onTaskTap: _openCalendarTaskDetails,
-                                onTaskLongPress: _showCalendarTaskContextMenu,
-                                statusChipKeyBuilder:
-                                    TaskManagementScreen.calendarStatusChipKey,
-                                dateKeyBuilder:
-                                    TaskManagementScreen.calendarDateKey,
-                                scheduleButtonKey: TaskManagementScreen
-                                    .calendarScheduleButtonKey,
-                                timelineScrollKey: TaskManagementScreen
-                                    .calendarTimelineScrollKey,
-                                monthHeaderKey: TaskManagementScreen
-                                    .calendarMonthDropdownKey,
-                              ),
+                  return _isTasksTabActive
+                      ? _buildTasksView(filteredTasks)
+                      : KeyedSubtree(
+                          key: TaskManagementScreen.calendarViewKey,
+                          child: TaskCalendarView(
+                            controller: _controller,
+                            segmentControl: _TaskViewSegmentedControl(
+                              activeTab: _activeTab,
+                              onChanged: (value) {
+                                setState(() {
+                                  _activeTab = value;
+                                });
+                              },
                             ),
-                    );
-                  },
+                            selectedMonth: _selectedCalendarMonth,
+                            selectedDate: _selectedCalendarDate,
+                            statusFilter: _calendarStatusFilter,
+                            onMonthChanged: (value) {
+                              setState(() {
+                                _selectedCalendarMonth = DateTime(
+                                  value.year,
+                                  value.month,
+                                  1,
+                                );
+                                final availableDays = _controller
+                                    .calendarDaysForMonth(
+                                      _selectedCalendarMonth,
+                                    );
+                                final matchingDay = availableDays
+                                    .where(
+                                      (day) =>
+                                          day.day == _selectedCalendarDate.day,
+                                    )
+                                    .cast<DateTime?>()
+                                    .firstWhere(
+                                      (day) => day != null,
+                                      orElse: () => availableDays.first,
+                                    );
+                                _selectedCalendarDate = matchingDay!;
+                              });
+                            },
+                            onDateSelected: (value) {
+                              setState(() {
+                                _selectedCalendarDate = value;
+                              });
+                            },
+                            onStatusSelected: (value) {
+                              setState(() {
+                                _calendarStatusFilter = value;
+                              });
+                            },
+                            onSchedulePressed: _openCalendarScheduleSheet,
+                            onTaskTap: _openCalendarTaskDetails,
+                            onTaskLongPress: _showCalendarTaskContextMenu,
+                            statusChipKeyBuilder:
+                                TaskManagementScreen.calendarStatusChipKey,
+                            dateKeyBuilder:
+                                TaskManagementScreen.calendarDateKey,
+                            scheduleButtonKey:
+                                TaskManagementScreen.calendarScheduleButtonKey,
+                            timelineScrollKey:
+                                TaskManagementScreen.calendarTimelineScrollKey,
+                            monthHeaderKey:
+                                TaskManagementScreen.calendarMonthDropdownKey,
+                          ),
+                        );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: _isTasksTabActive
+          ? FloatingActionButton.extended(
+              key: TaskManagementScreen.addTaskFabKey,
+              heroTag: 'task-management-add-task-fab',
+              onPressed: _controller.isSaving ? null : _openCreateFlow,
+              backgroundColor: AppColors.primaryButtonFill,
+              foregroundColor: AppColors.primaryButtonText,
+              elevation: 0,
+              focusElevation: 0,
+              hoverElevation: 0,
+              highlightElevation: 0,
+              disabledElevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  taskButtonRadius(TaskButtonSize.large),
                 ),
               ),
-            ],
-          ),
-        ),
-        floatingActionButton: _isTasksTabActive
-            ? FloatingActionButton.extended(
-                key: TaskManagementScreen.addTaskFabKey,
-                heroTag: 'task-management-add-task-fab',
-                onPressed: _controller.isSaving ? null : _openCreateFlow,
-                backgroundColor: AppColors.primaryButtonFill,
-                foregroundColor: AppColors.primaryButtonText,
-                elevation: 0,
-                focusElevation: 0,
-                hoverElevation: 0,
-                highlightElevation: 0,
-                disabledElevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    taskButtonRadius(TaskButtonSize.large),
-                  ),
-                ),
-                extendedPadding: taskButtonPadding(TaskButtonSize.large),
-                extendedTextStyle: taskButtonTextStyle(
-                  context,
-                  TaskButtonSize.large,
-                ),
-                icon: const Icon(TablerIcons.plus, size: 18),
-                label: Text(widget.fabLabel),
-              )
-            : null,
-      ),
+              extendedPadding: taskButtonPadding(TaskButtonSize.large),
+              extendedTextStyle: taskButtonTextStyle(
+                context,
+                TaskButtonSize.large,
+              ),
+              icon: const Icon(TablerIcons.plus, size: 18),
+              label: Text(widget.fabLabel),
+            )
+          : null,
     );
   }
 
@@ -1360,18 +1337,20 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                       category: category,
                       space: space,
                       previewProtected: previewProtected,
-                      showCheckbox: _isSelectionMode,
-                      onTap: () => _isSelectionMode
-                          ? _controller.toggleTaskCompletion(task)
-                          : _openEditor(task.id),
-                      onLongPress: () {
-                        setState(() {
-                          _isSelectionMode = true;
-                        });
-                      },
-                      onToggle: () => _controller.toggleTaskCompletion(task),
+                      onTap: () => _openEditor(task.id),
                       onMenuSelected: (action) async {
                         switch (action) {
+                          case _TaskMenuAction.markComplete:
+                            await _controller.toggleTaskCompletion(task);
+                            if (!mounted) {
+                              return;
+                            }
+                            showTaskToast(
+                              context,
+                              message: task.isCompleted
+                                  ? 'Task marked as pending.'
+                                  : 'Task completed successfully.',
+                            );
                           case _TaskMenuAction.moveToSpace:
                             await _moveTaskToSpace(task);
                           case _TaskMenuAction.archive:
@@ -1692,7 +1671,7 @@ String _formatCalendarDetailTime(int minutes) {
   return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
 }
 
-enum _TaskMenuAction { moveToSpace, archive, delete }
+enum _TaskMenuAction { markComplete, moveToSpace, archive, delete }
 
 enum _CalendarTaskContextAction { delete }
 
@@ -2227,10 +2206,7 @@ class _TaskCard extends StatelessWidget {
     required this.category,
     required this.space,
     required this.previewProtected,
-    required this.showCheckbox,
     required this.onTap,
-    required this.onLongPress,
-    required this.onToggle,
     required this.onMenuSelected,
   });
 
@@ -2238,10 +2214,7 @@ class _TaskCard extends StatelessWidget {
   final TaskCategory? category;
   final TaskSpace? space;
   final bool previewProtected;
-  final bool showCheckbox;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final VoidCallback onToggle;
   final Future<void> Function(_TaskMenuAction action) onMenuSelected;
 
   @override
@@ -2266,51 +2239,10 @@ class _TaskCard extends StatelessWidget {
       child: InkWell(
         key: TaskManagementScreen.taskTileKey(task.id),
         onTap: onTap,
-        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(AppRadii.twoXl),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: showCheckbox
-                  ? Padding(
-                      key: ValueKey(task.id),
-                      padding: const EdgeInsets.only(top: AppSpacing.two),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          checkboxTheme: CheckboxThemeData(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppRadii.defaultRadius,
-                              ),
-                            ),
-                            side: const BorderSide(
-                              color: AppColors.blue200,
-                              width: AppSizes.borderDefault,
-                            ),
-                            fillColor: WidgetStatePropertyAll(
-                              AppColors.blue500,
-                            ),
-                            checkColor: WidgetStatePropertyAll(
-                              AppColors.blue50,
-                            ),
-                          ),
-                        ),
-                        child: Checkbox(
-                          key: TaskManagementScreen.taskToggleKey(task.id),
-                          value: task.isCompleted,
-                          onChanged: (_) => onToggle(),
-                          activeColor: AppColors.blue500,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(key: ValueKey('hidden-checkbox')),
-            ),
-            if (showCheckbox) const SizedBox(width: AppSpacing.three),
             Expanded(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadii.twoXl),
@@ -2381,6 +2313,19 @@ class _TaskCard extends StatelessWidget {
                                       onSelected: (value) =>
                                           onMenuSelected(value),
                                       itemBuilder: (context) => [
+                                        buildTaskPopupMenuItem<_TaskMenuAction>(
+                                          key:
+                                              TaskManagementScreen.taskMenuActionKey(
+                                                task.id,
+                                                task.isCompleted
+                                                    ? 'mark-incomplete'
+                                                    : 'mark-complete',
+                                              ),
+                                          value: _TaskMenuAction.markComplete,
+                                          label: task.isCompleted
+                                              ? 'Mark as Incomplete'
+                                              : 'Mark as Complete',
+                                        ),
                                         buildTaskPopupMenuItem<_TaskMenuAction>(
                                           key:
                                               TaskManagementScreen.taskMenuActionKey(

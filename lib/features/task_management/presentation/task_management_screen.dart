@@ -840,11 +840,29 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       color: AppColors.cardFill,
       surfaceTintColor: AppColors.cardFill,
       menuPadding: taskPopupMenuPadding,
-      items: const [
+      items: [
+        PopupMenuItem<_CalendarTaskContextAction>(
+          value: _CalendarTaskContextAction.markComplete,
+          padding: EdgeInsets.zero,
+          child: TaskMenuEntry(
+            label: task.isCompleted
+                ? 'Mark as Incomplete'
+                : 'Mark as Complete',
+          ),
+        ),
+        const PopupMenuItem<_CalendarTaskContextAction>(
+          value: _CalendarTaskContextAction.archive,
+          padding: EdgeInsets.zero,
+          child: TaskMenuEntry(label: 'Archive'),
+        ),
         PopupMenuItem<_CalendarTaskContextAction>(
           value: _CalendarTaskContextAction.delete,
           padding: EdgeInsets.zero,
-          child: TaskMenuEntry(label: 'Delete', isDestructive: true),
+          child: TaskMenuEntry(
+            label: 'Delete',
+            isDestructive: true,
+            showDivider: true,
+          ),
         ),
       ],
     );
@@ -854,6 +872,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
 
     switch (selectedAction) {
+      case _CalendarTaskContextAction.markComplete:
+        await _controller.toggleTaskCompletion(task);
+        if (!mounted) {
+          return;
+        }
+        showTaskToast(
+          context,
+          message: task.isCompleted
+              ? 'Task marked as pending.'
+              : 'Task completed successfully.',
+        );
+      case _CalendarTaskContextAction.archive:
+        await _archiveTask(task);
       case _CalendarTaskContextAction.delete:
         await _confirmDelete(task);
     }
@@ -1767,7 +1798,7 @@ String _formatCalendarDetailTime(int minutes) {
 
 enum _TaskMenuAction { markComplete, moveToSpace, archive, delete }
 
-enum _CalendarTaskContextAction { delete }
+enum _CalendarTaskContextAction { markComplete, archive, delete }
 
 enum _TaskManagementContentTab { tasks, calendar }
 

@@ -397,7 +397,7 @@ void main() {
   });
 
   testWidgets(
-    'long pressing a calendar task opens a delete context menu and removes the task',
+    'long pressing a pending calendar task shows complete archive and delete actions',
     (WidgetTester tester) async {
       await pumpScreen(tester);
       await openCalendarAndSelectDate(tester, '2026-04-20');
@@ -407,7 +407,72 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Mark as Complete'), findsOneWidget);
+      expect(find.text('Archive'), findsOneWidget);
       expect(find.text('Delete'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'long pressing a calendar task can toggle completion from the context menu',
+    (WidgetTester tester) async {
+      await pumpScreen(tester);
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      await tester.longPress(
+        find.byKey(const ValueKey('calendar_task_science')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Mark as Complete'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Task completed successfully.'), findsOneWidget);
+      expect((await repository.getTaskById('science'))?.isCompleted, isTrue);
+
+      await tester.longPress(
+        find.byKey(const ValueKey('calendar_task_science')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mark as Incomplete'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'long pressing a calendar task can archive it from the context menu',
+    (WidgetTester tester) async {
+      await pumpScreen(tester);
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      await tester.longPress(
+        find.byKey(const ValueKey('calendar_task_science')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Archive'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archive Task?'), findsOneWidget);
+
+      await tester.tap(find.text('Yes, Archive'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Science Assessment'), findsNothing);
+      expect((await repository.getTaskById('science'))?.isArchived, isTrue);
+    },
+  );
+
+  testWidgets(
+    'long pressing a calendar task can still delete it from the context menu',
+    (WidgetTester tester) async {
+      await pumpScreen(tester);
+      await openCalendarAndSelectDate(tester, '2026-04-20');
+
+      await tester.longPress(
+        find.byKey(const ValueKey('calendar_task_science')),
+      );
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();

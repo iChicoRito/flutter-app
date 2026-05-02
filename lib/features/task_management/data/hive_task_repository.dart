@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../../core/vault/vault_models.dart';
 import '../../spaces/domain/task_space.dart';
 import 'task_note_codec.dart';
+import '../domain/task_attachment.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
@@ -37,7 +38,9 @@ class HiveTaskRepository implements TaskRepository {
         ..registerAdapter(TaskCategoryAdapter())
         ..registerAdapter(TaskSpaceAdapter())
         ..registerAdapter(VaultConfigAdapter())
-        ..registerAdapter(VaultMethodAdapter());
+        ..registerAdapter(VaultMethodAdapter())
+        ..registerAdapter(TaskAttachmentKindAdapter())
+        ..registerAdapter(TaskAttachmentAdapter());
       _adaptersRegistered = true;
     }
 
@@ -116,7 +119,9 @@ class HiveTaskRepository implements TaskRepository {
       return null;
     }
 
-    return normalizeTaskNoteFields(task).normalizedSingleSchedule();
+    return _normalizeTaskMetadata(
+      normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+    );
   }
 
   @override
@@ -125,7 +130,9 @@ class HiveTaskRepository implements TaskRepository {
         _taskBox.values
             .map(
               (task) =>
-                  normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+                  _normalizeTaskMetadata(
+                    normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+                  ),
             )
             .toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -157,8 +164,9 @@ class HiveTaskRepository implements TaskRepository {
       final normalized = normalizeTaskNoteFields(
         task,
       ).normalizedSingleSchedule();
-      if (normalized != task) {
-        await _taskBox.put(task.id, normalized);
+      final normalizedWithMetadata = _normalizeTaskMetadata(normalized);
+      if (normalizedWithMetadata != task) {
+        await _taskBox.put(task.id, normalizedWithMetadata);
       }
     }
   }
@@ -187,7 +195,9 @@ class HiveTaskRepository implements TaskRepository {
   Future<void> upsertTask(TaskItem task) async {
     await _taskBox.put(
       task.id,
-      normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+      _normalizeTaskMetadata(
+        normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+      ),
     );
   }
 }
@@ -238,9 +248,9 @@ class InMemoryTaskRepository implements TaskRepository {
       return null;
     }
 
-    final normalized = normalizeTaskNoteFields(
-      _tasks[index],
-    ).normalizedSingleSchedule();
+    final normalized = _normalizeTaskMetadata(
+      normalizeTaskNoteFields(_tasks[index]).normalizedSingleSchedule(),
+    );
     _tasks[index] = normalized;
     return normalized;
   }
@@ -267,7 +277,9 @@ class InMemoryTaskRepository implements TaskRepository {
         _tasks
             .map(
               (task) =>
-                  normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+                  _normalizeTaskMetadata(
+                    normalizeTaskNoteFields(task).normalizedSingleSchedule(),
+                  ),
             )
             .toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -308,14 +320,24 @@ class InMemoryTaskRepository implements TaskRepository {
     final normalizedTask = normalizeTaskNoteFields(
       task,
     ).normalizedSingleSchedule();
+    final normalizedWithMetadata = _normalizeTaskMetadata(normalizedTask);
     final index = _tasks.indexWhere((item) => item.id == task.id);
     if (index >= 0) {
-      _tasks[index] = normalizedTask;
+      _tasks[index] = normalizedWithMetadata;
       return;
     }
 
-    _tasks.add(normalizedTask);
+    _tasks.add(normalizedWithMetadata);
   }
+}
+
+TaskItem _normalizeTaskMetadata(TaskItem task) {
+  if (task.sortOrder != 0) {
+    return task;
+  }
+  return task.copyWith(
+    sortOrder: task.createdAt.millisecondsSinceEpoch.toDouble(),
+  );
 }
 
 class TaskItemAdapter extends TypeAdapter<TaskItem> {
@@ -371,6 +393,14 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
     final standaloneCategoryId = reader.availableBytes > 0
         ? reader.read() as String?
         : null;
+    final isPinned = reader.availableBytes > 0 ? reader.readBool() : false;
+    final sortOrder = reader.availableBytes > 0
+        ? (reader.read() as num?)?.toDouble()
+        : null;
+    final attachments = reader.availableBytes > 0
+        ? (reader.read() as List?)?.cast<TaskAttachment>() ??
+            const <TaskAttachment>[]
+        : const <TaskAttachment>[];
 
     return TaskItem(
       id: id,
@@ -392,6 +422,9 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       createdAt: createdAt,
       updatedAt: updatedAt,
       completedAt: completedAt,
+      isPinned: isPinned,
+      sortOrder: sortOrder ?? createdAt.millisecondsSinceEpoch.toDouble(),
+      attachments: attachments,
     ).normalizedSingleSchedule();
   }
 
@@ -418,7 +451,10 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
       ..write(obj.spaceId)
       ..write(obj.vaultConfig)
       ..write(_writeDateValue(obj.archivedAt))
-      ..write(obj.standaloneCategoryId);
+      ..write(obj.standaloneCategoryId)
+      ..writeBool(obj.isPinned)
+      ..write(obj.sortOrder)
+      ..write(obj.attachments);
   }
 
   static DateTime? _readDateValue(dynamic value, {bool dateOnly = false}) {
@@ -445,6 +481,53 @@ class TaskItemAdapter extends TypeAdapter<TaskItem> {
         ? DateTime(value.year, value.month, value.day)
         : value;
     return normalized.millisecondsSinceEpoch;
+  }
+}
+
+class TaskAttachmentKindAdapter extends TypeAdapter<TaskAttachmentKind> {
+  @override
+  final int typeId = 5;
+
+  @override
+  TaskAttachmentKind read(BinaryReader reader) {
+    return TaskAttachmentKind.values[reader.readInt()];
+  }
+
+  @override
+  void write(BinaryWriter writer, TaskAttachmentKind obj) {
+    writer.writeInt(obj.index);
+  }
+}
+
+class TaskAttachmentAdapter extends TypeAdapter<TaskAttachment> {
+  @override
+  final int typeId = 6;
+
+  @override
+  TaskAttachment read(BinaryReader reader) {
+    return TaskAttachment(
+      id: reader.readString(),
+      kind: reader.read() as TaskAttachmentKind,
+      displayName: reader.readString(),
+      mimeType: reader.readString(),
+      localPath: reader.readString(),
+      sizeBytes: reader.readInt(),
+      createdAt:
+          TaskItemAdapter._readDateValue(reader.read()) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, TaskAttachment obj) {
+    writer
+      ..writeString(obj.id)
+      ..write(obj.kind)
+      ..writeString(obj.displayName)
+      ..writeString(obj.mimeType)
+      ..writeString(obj.localPath)
+      ..writeInt(obj.sizeBytes)
+      ..write(TaskItemAdapter._writeDateValue(obj.createdAt));
   }
 }
 

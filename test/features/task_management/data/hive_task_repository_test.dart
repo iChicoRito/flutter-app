@@ -6,6 +6,7 @@ import 'package:hive/src/registry/type_registry_impl.dart';
 
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
+import 'package:flutter_app/features/task_management/domain/task_attachment.dart';
 import 'package:flutter_app/features/task_management/domain/task_category.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
 
@@ -119,9 +120,13 @@ void main() {
 
   group('TaskItemAdapter', () {
     late TaskItemAdapter adapter;
+    late TypeRegistryImpl registry;
 
     setUp(() {
       adapter = TaskItemAdapter();
+      registry = TypeRegistryImpl();
+      registry.registerAdapter(TaskAttachmentKindAdapter());
+      registry.registerAdapter(TaskAttachmentAdapter());
     });
 
     test('preserves spaceId in the current serialization format', () {
@@ -136,16 +141,55 @@ void main() {
         updatedAt: DateTime(2026, 4, 15, 10),
       );
 
-      final writer = BinaryWriterImpl(TypeRegistryImpl.nullImpl);
+      final writer = BinaryWriterImpl(registry);
       adapter.write(writer, task);
       final reader = BinaryReaderImpl(
         writer.toBytes(),
-        TypeRegistryImpl.nullImpl,
+        registry,
       );
       final restored = adapter.read(reader);
 
       expect(restored.spaceId, 'space-1');
       expect(restored.noteDocumentJson, task.noteDocumentJson);
+    });
+
+    test('preserves pinning, manual order, and attachments', () {
+      final task = TaskItem(
+        id: 'task-with-metadata',
+        title: 'Pinned task',
+        description: 'Includes attachments',
+        spaceId: 'space-1',
+        priority: TaskPriority.high,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 15, 10),
+        updatedAt: DateTime(2026, 4, 15, 10),
+        isPinned: true,
+        sortOrder: 42,
+        attachments: [
+          TaskAttachment(
+            id: 'attachment-1',
+            kind: TaskAttachmentKind.file,
+            displayName: 'brief.pdf',
+            mimeType: 'application/pdf',
+            localPath: '/tmp/brief.pdf',
+            sizeBytes: 2048,
+            createdAt: DateTime(2026, 4, 15, 10),
+          ),
+        ],
+      );
+
+      final writer = BinaryWriterImpl(registry);
+      adapter.write(writer, task);
+      final reader = BinaryReaderImpl(
+        writer.toBytes(),
+        registry,
+      );
+      final restored = adapter.read(reader);
+
+      expect(restored.isPinned, isTrue);
+      expect(restored.sortOrder, 42);
+      expect(restored.attachments, hasLength(1));
+      expect(restored.attachments.single.displayName, 'brief.pdf');
     });
 
     test(
@@ -165,13 +209,13 @@ void main() {
           endMinutes: 11 * 60,
         );
 
-        final writer = BinaryWriterImpl(TypeRegistryImpl.nullImpl);
-        adapter.write(writer, task);
-        final reader = BinaryReaderImpl(
-          writer.toBytes(),
-          TypeRegistryImpl.nullImpl,
-        );
-        final restored = adapter.read(reader);
+      final writer = BinaryWriterImpl(registry);
+      adapter.write(writer, task);
+      final reader = BinaryReaderImpl(
+        writer.toBytes(),
+        registry,
+      );
+      final restored = adapter.read(reader);
 
         expect(restored.startDateTime, DateTime(2026, 4, 20, 8));
         expect(restored.endDateTime, DateTime(2026, 4, 20, 11));
@@ -179,7 +223,7 @@ void main() {
     );
 
     test('reads legacy payloads that do not include spaceId', () {
-      final writer = BinaryWriterImpl(TypeRegistryImpl.nullImpl)
+      final writer = BinaryWriterImpl(registry)
         ..writeString('legacy-task')
         ..writeString('Legacy')
         ..write('Old description')
@@ -199,12 +243,14 @@ void main() {
         ..write('hello');
 
       final restored = adapter.read(
-        BinaryReaderImpl(writer.toBytes(), TypeRegistryImpl.nullImpl),
+        BinaryReaderImpl(writer.toBytes(), registry),
       );
 
       expect(restored.spaceId, isNull);
       expect(restored.noteDocumentJson, '[{"insert":"hello"}]');
       expect(restored.notePlainText, 'hello');
+      expect(restored.isPinned, isFalse);
+      expect(restored.attachments, isEmpty);
     });
   });
 }

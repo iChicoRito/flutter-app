@@ -1,4 +1,5 @@
 import '../../../core/vault/vault_models.dart';
+import 'task_attachment.dart';
 
 enum TaskPriority { low, medium, high, urgent }
 
@@ -27,6 +28,9 @@ class TaskItem {
     this.endMinutes,
     this.isCompleted = false,
     this.completedAt,
+    this.isPinned = false,
+    this.sortOrder = 0,
+    this.attachments = const [],
   });
 
   final String id;
@@ -48,6 +52,9 @@ class TaskItem {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? completedAt;
+  final bool isPinned;
+  final double sortOrder;
+  final List<TaskAttachment> attachments;
 
   bool get isArchived => archivedAt != null;
 
@@ -167,6 +174,9 @@ class TaskItem {
     DateTime? updatedAt,
     DateTime? completedAt,
     bool clearCompletedAt = false,
+    bool? isPinned,
+    double? sortOrder,
+    List<TaskAttachment>? attachments,
   }) {
     return TaskItem(
       id: id ?? this.id,
@@ -192,6 +202,9 @@ class TaskItem {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       completedAt: clearCompletedAt ? null : completedAt ?? this.completedAt,
+      isPinned: isPinned ?? this.isPinned,
+      sortOrder: sortOrder ?? this.sortOrder,
+      attachments: attachments ?? this.attachments,
     );
   }
 }

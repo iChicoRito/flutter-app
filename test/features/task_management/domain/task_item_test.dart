@@ -148,4 +148,20 @@ void main() {
     expect(task.isDueTimeTask, isFalse);
     expect(task.isTimeRangeTask, isTrue);
   });
+
+  test('defaults pinning, sort order, and attachments for new tasks', () {
+    final now = DateTime(2026, 4, 13, 9);
+    final task = TaskItem(
+      id: 'task-defaults',
+      title: 'New task defaults',
+      priority: TaskPriority.medium,
+      categoryId: 'work',
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    expect(task.isPinned, isFalse);
+    expect(task.sortOrder, isNotNull);
+    expect(task.attachments, isEmpty);
+  });
 }

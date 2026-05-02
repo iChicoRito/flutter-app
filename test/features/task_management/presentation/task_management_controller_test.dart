@@ -128,6 +128,101 @@ void main() {
     },
   );
 
+  test('filteredTasks sorts pinned tasks before manual order groups', () async {
+    await repository.upsertTask(
+      TaskItem(
+        id: 'unpinned-first',
+        title: 'Unpinned first',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        sortOrder: 1,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'pinned-second',
+        title: 'Pinned second',
+        priority: TaskPriority.low,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        isPinned: true,
+        sortOrder: 1,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'pinned-first',
+        title: 'Pinned first',
+        priority: TaskPriority.high,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        isPinned: true,
+        sortOrder: 2,
+      ),
+    );
+    await controller.load();
+
+    final tasks = controller.filteredTasks(DateTime(2026, 4, 20, 7));
+
+    expect(tasks.map((task) => task.id), [
+      'pinned-first',
+      'pinned-second',
+      'unpinned-first',
+    ]);
+  });
+
+  test('toggleTaskPin persists the updated pin state', () async {
+    final task = TaskItem(
+      id: 'pin-me',
+      title: 'Pin me',
+      priority: TaskPriority.medium,
+      categoryId: 'work',
+      createdAt: DateTime(2026, 4, 14, 9),
+      updatedAt: DateTime(2026, 4, 14, 9),
+    );
+    await repository.upsertTask(task);
+
+    await controller.toggleTaskPin(task);
+
+    final stored = await repository.getTaskById(task.id);
+    expect(stored?.isPinned, isTrue);
+  });
+
+  test('reorderTasks persists manual order for the provided task ids', () async {
+    await repository.upsertTask(
+      TaskItem(
+        id: 'task-a',
+        title: 'Task A',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        sortOrder: 1,
+      ),
+    );
+    await repository.upsertTask(
+      TaskItem(
+        id: 'task-b',
+        title: 'Task B',
+        priority: TaskPriority.medium,
+        categoryId: 'work',
+        createdAt: DateTime(2026, 4, 20, 8),
+        updatedAt: DateTime(2026, 4, 20, 8),
+        sortOrder: 2,
+      ),
+    );
+    await controller.load();
+
+    await controller.reorderTasks(['task-b', 'task-a']);
+
+    final tasks = controller.filteredTasks(DateTime(2026, 4, 20, 7));
+    expect(tasks.map((task) => task.id), ['task-b', 'task-a']);
+  });
+
   test('calendarDaysForMonth returns every day in the selected month', () {
     final days = controller.calendarDaysForMonth(DateTime(2026, 4, 20));
 

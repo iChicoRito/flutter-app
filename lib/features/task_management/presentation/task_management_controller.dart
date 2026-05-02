@@ -104,6 +104,7 @@ class TaskManagementController extends ChangeNotifier {
       startMinutes: startMinutes,
       endDate: endDate,
       endMinutes: endMinutes,
+      sortOrder: now.millisecondsSinceEpoch.toDouble(),
       createdAt: now,
       updatedAt: now,
     );
@@ -148,6 +149,56 @@ class TaskManagementController extends ChangeNotifier {
         clearCompletedAt: !nextCompleted,
       ),
     );
+  }
+
+  Future<void> toggleTaskPin(TaskItem task) async {
+    final now = DateTime.now();
+    await saveTask(
+      task.copyWith(
+        isPinned: !task.isPinned,
+        updatedAt: now,
+      ),
+    );
+  }
+
+  Future<void> reorderTasks(List<String> orderedTaskIds) async {
+    if (orderedTaskIds.isEmpty) {
+      return;
+    }
+
+    final taskLookup = {for (final task in _tasks) task.id: task};
+    final updatedTasks = <TaskItem>[];
+    var nextSortOrder = orderedTaskIds.length.toDouble();
+
+    for (final taskId in orderedTaskIds) {
+      final task = taskLookup[taskId];
+      if (task == null) {
+        continue;
+      }
+      updatedTasks.add(
+        task.copyWith(
+          sortOrder: nextSortOrder,
+          updatedAt: task.updatedAt,
+        ),
+      );
+      nextSortOrder -= 1;
+    }
+
+    if (updatedTasks.isEmpty) {
+      return;
+    }
+
+    isSaving = true;
+    notifyListeners();
+    try {
+      for (final task in updatedTasks) {
+        await _repository.upsertTask(task);
+      }
+      await load();
+    } finally {
+      isSaving = false;
+      notifyListeners();
+    }
   }
 
   void updateSearchQuery(String value) {
@@ -274,6 +325,15 @@ class TaskManagementController extends ChangeNotifier {
     }).toList();
 
     filtered.sort((a, b) {
+      if (a.isPinned != b.isPinned) {
+        return a.isPinned ? -1 : 1;
+      }
+
+      final sortOrderDiff = b.sortOrder.compareTo(a.sortOrder);
+      if (sortOrderDiff != 0) {
+        return sortOrderDiff;
+      }
+
       final priorityDiff =
           _priorityWeight(b.priority) - _priorityWeight(a.priority);
       if (priorityDiff != 0) {

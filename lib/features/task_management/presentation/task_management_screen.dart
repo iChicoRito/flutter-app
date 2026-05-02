@@ -9,6 +9,7 @@ import '../../../core/vault/vault_access.dart';
 import '../../../core/vault/vault_models.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../spaces/domain/task_space.dart';
+import '../data/task_export_service.dart';
 import '../data/task_note_codec.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
@@ -929,6 +930,49 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
   }
 
+  Future<void> _toggleTaskPin(TaskItem task) async {
+    try {
+      await _controller.toggleTaskPin(task);
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: task.isPinned
+            ? 'Task unpinned successfully.'
+            : 'Task pinned successfully.',
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to update pin state right now.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _exportTask(TaskItem task) async {
+    try {
+      await shareTaskExport(task);
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(context, message: 'Task export ready to share.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to export the task right now.',
+        isError: true,
+      );
+    }
+  }
+
   Future<bool> _confirmVaultProtectedTaskAction(
     TaskItem task, {
     TaskSpace? parentSpace,
@@ -1364,6 +1408,15 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       onRefresh: _controller.load,
       child: CustomScrollView(
         slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.four,
+              AppSpacing.six,
+              AppSpacing.four,
+              AppSpacing.zero,
+            ),
+            sliver: SliverToBoxAdapter(child: _buildTasksHeader()),
+          ),
           if (filteredTasks.isEmpty)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(
@@ -1373,31 +1426,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 AppSpacing.zero,
               ),
               sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _TaskPageHeader(),
-                    if (!widget.tasksOnlyMode) ...[
-                      const SizedBox(height: AppSpacing.three),
-                      _TaskViewSegmentedControl(
-                        activeTab: _activeTab,
-                        onChanged: (value) {
-                          setState(() {
-                            _activeTab = value;
-                          });
-                        },
-                      ),
-                    ],
-                    if (_effectiveLockedCategoryId == null) ...[
-                      const SizedBox(height: AppSpacing.three),
-                      _CategoryFilterRow(
-                        categories: _controller.categories,
-                        selectedCategoryId: _controller.categoryFilterId,
-                        onSelected: _controller.updateCategoryFilter,
-                      ),
-                    ],
-                  ],
-                ),
+                child: const SizedBox.shrink(),
               ),
             )
           else
@@ -1408,38 +1437,12 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 AppSpacing.four,
                 120,
               ),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  if (index == 0) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _TaskPageHeader(),
-                        if (!widget.tasksOnlyMode) ...[
-                          const SizedBox(height: AppSpacing.three),
-                          _TaskViewSegmentedControl(
-                            activeTab: _activeTab,
-                            onChanged: (value) {
-                              setState(() {
-                                _activeTab = value;
-                              });
-                            },
-                          ),
-                        ],
-                        if (_effectiveLockedCategoryId == null) ...[
-                          const SizedBox(height: AppSpacing.three),
-                          _CategoryFilterRow(
-                            categories: _controller.categories,
-                            selectedCategoryId: _controller.categoryFilterId,
-                            onSelected: _controller.updateCategoryFilter,
-                          ),
-                        ],
-                        const SizedBox(height: AppSpacing.six),
-                      ],
-                    );
-                  }
-
-                  final task = filteredTasks[index - 1];
+              sliver: SliverReorderableList(
+                itemCount: filteredTasks.length,
+                onReorder: (oldIndex, newIndex) =>
+                    _reorderFilteredTasks(filteredTasks, oldIndex, newIndex),
+                itemBuilder: (context, index) {
+                  final task = filteredTasks[index];
                   final category = _controller.categoryFor(task.categoryId);
                   final space = _controller.spaceFor(task.spaceId);
                   final previewProtected = isPreviewProtected(
@@ -1452,41 +1455,49 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                         : spaceVaultEntityKey(space.id),
                   );
                   return Padding(
+                    key: ValueKey(task.id),
                     padding: EdgeInsets.only(
-                      bottom: index == filteredTasks.length
+                      bottom: index == filteredTasks.length - 1
                           ? AppSpacing.zero
                           : AppSpacing.four,
                     ),
-                    child: _TaskCard(
-                      task: task,
-                      category: category,
-                      space: space,
-                      previewProtected: previewProtected,
-                      onTap: () => _openEditor(task.id),
-                      onMenuSelected: (action) async {
-                        switch (action) {
-                          case _TaskMenuAction.markComplete:
-                            await _controller.toggleTaskCompletion(task);
-                            if (!mounted) {
-                              return;
-                            }
-                            showTaskToast(
-                              context,
-                              message: task.isCompleted
-                                  ? 'Task marked as pending.'
-                                  : 'Task completed successfully.',
-                            );
-                          case _TaskMenuAction.moveToSpace:
-                            await _moveTaskToSpace(task);
-                          case _TaskMenuAction.archive:
-                            await _archiveTask(task);
-                          case _TaskMenuAction.delete:
-                            await _confirmDelete(task);
-                        }
-                      },
+                    child: ReorderableDelayedDragStartListener(
+                      index: index,
+                      child: _TaskCard(
+                        task: task,
+                        category: category,
+                        space: space,
+                        previewProtected: previewProtected,
+                        onTap: () => _openEditor(task.id),
+                        onMenuSelected: (action) async {
+                          switch (action) {
+                            case _TaskMenuAction.markComplete:
+                              await _controller.toggleTaskCompletion(task);
+                              if (!mounted) {
+                                return;
+                              }
+                              showTaskToast(
+                                context,
+                                message: task.isCompleted
+                                    ? 'Task marked as pending.'
+                                    : 'Task completed successfully.',
+                              );
+                            case _TaskMenuAction.moveToSpace:
+                              await _moveTaskToSpace(task);
+                            case _TaskMenuAction.pin:
+                              await _toggleTaskPin(task);
+                            case _TaskMenuAction.export:
+                              await _exportTask(task);
+                            case _TaskMenuAction.archive:
+                              await _archiveTask(task);
+                            case _TaskMenuAction.delete:
+                              await _confirmDelete(task);
+                          }
+                        },
+                      ),
                     ),
                   );
-                }, childCount: filteredTasks.length + 1),
+                },
               ),
             ),
           if (filteredTasks.isEmpty)
@@ -1510,6 +1521,59 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildTasksHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _TaskPageHeader(),
+        if (!widget.tasksOnlyMode) ...[
+          const SizedBox(height: AppSpacing.three),
+          _TaskViewSegmentedControl(
+            activeTab: _activeTab,
+            onChanged: (value) {
+              setState(() {
+                _activeTab = value;
+              });
+            },
+          ),
+        ],
+        if (_effectiveLockedCategoryId == null) ...[
+          const SizedBox(height: AppSpacing.three),
+          _CategoryFilterRow(
+            categories: _controller.categories,
+            selectedCategoryId: _controller.categoryFilterId,
+            onSelected: _controller.updateCategoryFilter,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _reorderFilteredTasks(
+    List<TaskItem> filteredTasks,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (newIndex > oldIndex) {
+      newIndex -= 1;
+    }
+    if (oldIndex == newIndex) {
+      return;
+    }
+
+    final reorderedTasks = [...filteredTasks];
+    final movedTask = reorderedTasks.removeAt(oldIndex);
+    reorderedTasks.insert(newIndex, movedTask);
+
+    await _controller.reorderTasks(
+      reorderedTasks.map((task) => task.id).toList(),
+    );
+    if (!mounted) {
+      return;
+    }
+    showTaskToast(context, message: 'Task order updated.');
   }
 }
 
@@ -1796,7 +1860,7 @@ String _formatCalendarDetailTime(int minutes) {
   return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
 }
 
-enum _TaskMenuAction { markComplete, moveToSpace, archive, delete }
+enum _TaskMenuAction { markComplete, moveToSpace, pin, export, archive, delete }
 
 enum _CalendarTaskContextAction { markComplete, archive, delete }
 
@@ -2468,6 +2532,24 @@ class _TaskCard extends StatelessWidget {
                                               ),
                                           value: _TaskMenuAction.moveToSpace,
                                           label: 'Move to Space',
+                                        ),
+                                        buildTaskPopupMenuItem<_TaskMenuAction>(
+                                          key:
+                                              TaskManagementScreen.taskMenuActionKey(
+                                                task.id,
+                                                task.isPinned ? 'unpin' : 'pin',
+                                              ),
+                                          value: _TaskMenuAction.pin,
+                                          label: task.isPinned ? 'Unpin' : 'Pin',
+                                        ),
+                                        buildTaskPopupMenuItem<_TaskMenuAction>(
+                                          key:
+                                              TaskManagementScreen.taskMenuActionKey(
+                                                task.id,
+                                                'export',
+                                              ),
+                                          value: _TaskMenuAction.export,
+                                          label: 'Export',
                                         ),
                                         buildTaskPopupMenuItem<_TaskMenuAction>(
                                           key:

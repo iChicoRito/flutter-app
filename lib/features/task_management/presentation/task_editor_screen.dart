@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:tabler_icons/tabler_icons.dart';
@@ -14,7 +17,9 @@ import '../../../core/vault/vault_access.dart';
 import '../../../core/vault/vault_models.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../../shared/widgets/custom_category_sheet.dart';
+import '../data/task_attachment_storage.dart';
 import '../data/task_note_codec.dart';
+import '../domain/task_attachment.dart';
 import '../domain/task_category.dart';
 import '../domain/task_item.dart';
 import '../domain/task_repository.dart';
@@ -57,6 +62,9 @@ class TaskEditorScreen extends StatefulWidget {
   static const Key editDetailsButtonKey = Key('task-editor-edit-details');
   static const Key deleteButtonKey = Key('task-editor-delete');
   static const Key archiveButtonKey = Key('task-editor-archive');
+  static const Key attachImageButtonKey = Key('task-editor-attach-image');
+  static const Key attachFileButtonKey = Key('task-editor-attach-file');
+  static const Key highlightButtonKey = Key('task-editor-highlight');
 
   final TaskRepository repository;
   final String taskId;
@@ -78,10 +86,13 @@ enum _EditorMenuAction {
   delete,
 }
 
+const _taskFileEmbedType = 'task-file';
+
 class _TaskEditorScreenState extends State<TaskEditorScreen> {
   final _titleController = TextEditingController();
   final _editorFocusNode = FocusNode();
   final _editorScrollController = ScrollController();
+  final TaskAttachmentStorage _attachmentStorage = TaskAttachmentStorage();
 
   quill.QuillController? _noteController;
   TaskItem? _task;
@@ -169,6 +180,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     _task = task;
     _parentSpace = parentSpace;
     _categories = categories;
+    _titleController.text = task.title;
 
     final document = quill.Document.fromJson(
       jsonDecode(
@@ -182,6 +194,11 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final noteController = quill.QuillController(
       document: document,
       selection: const TextSelection.collapsed(offset: 0),
+      config: quill.QuillControllerConfig(
+        clipboardConfig: quill.QuillClipboardConfig(
+          onImagePaste: _handleImagePaste,
+        ),
+      ),
       readOnly: _isReadMode,
     );
     noteController.addListener(_scheduleAutosave);
@@ -201,6 +218,212 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       const Duration(milliseconds: 800),
       _persistPendingChanges,
     );
+  }
+
+  void _toggleHighlight() {
+    final noteController = _noteController;
+    if (noteController == null || _isReadMode) {
+      return;
+    }
+    noteController.formatSelection(
+      const quill.BackgroundAttribute('#FEF3C7'),
+    );
+  }
+
+  Future<String?> _handleImagePaste(Uint8List imageBytes) async {
+    final task = _task;
+    if (task == null) {
+      return null;
+    }
+
+    final attachment = await _attachmentStorage.saveImageBytes(
+      taskId: task.id,
+      bytes: imageBytes,
+    );
+    _registerAttachment(attachment);
+    return attachment.localPath;
+  }
+
+  Future<void> _insertImageAttachment() async {
+    final task = _task;
+    final noteController = _noteController;
+    if (task == null || noteController == null || _isReadMode) {
+      return;
+    }
+
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    final pickedFile = result?.files.singleOrNull;
+    final path = pickedFile?.path;
+    if (path == null) {
+      return;
+    }
+
+    final attachment = await _attachmentStorage.saveFile(
+      taskId: task.id,
+      sourceFile: File(path),
+      displayName: pickedFile!.name,
+      mimeType: pickedFile.extension == null
+          ? 'image/png'
+          : 'image/${pickedFile.extension}',
+    );
+    _registerAttachment(attachment);
+    noteController.replaceText(
+      noteController.selection.end,
+      0,
+      quill.BlockEmbed.image(attachment.localPath),
+      null,
+    );
+  }
+
+  Future<void> _insertFileAttachment() async {
+    final task = _task;
+    final noteController = _noteController;
+    if (task == null || noteController == null || _isReadMode) {
+      return;
+    }
+
+    final result = await FilePicker.pickFiles(
+      allowMultiple: false,
+      withData: false,
+    );
+    final pickedFile = result?.files.singleOrNull;
+    final path = pickedFile?.path;
+    if (path == null) {
+      return;
+    }
+
+    final attachment = await _attachmentStorage.saveFile(
+      taskId: task.id,
+      sourceFile: File(path),
+      displayName: pickedFile!.name,
+      mimeType: pickedFile.extension == null
+          ? 'application/octet-stream'
+          : 'application/${pickedFile.extension}',
+    );
+    _registerAttachment(attachment);
+    noteController.replaceText(
+      noteController.selection.end,
+      0,
+      quill.BlockEmbed.custom(
+        quill.CustomBlockEmbed(_taskFileEmbedType, attachment.id),
+      ),
+      null,
+    );
+  }
+
+  void _registerAttachment(TaskAttachment attachment) {
+    final task = _task;
+    if (task == null) {
+      return;
+    }
+
+    setState(() {
+      _task = task.copyWith(
+        attachments: [...task.attachments, attachment],
+        updatedAt: DateTime.now(),
+      );
+    });
+    _scheduleAutosave();
+  }
+
+  TaskAttachment? _attachmentById(String attachmentId) {
+    final task = _task;
+    if (task == null) {
+      return null;
+    }
+    for (final attachment in task.attachments) {
+      if (attachment.id == attachmentId) {
+        return attachment;
+      }
+    }
+    return null;
+  }
+
+  TaskAttachment? _attachmentByPath(String path) {
+    final task = _task;
+    if (task == null) {
+      return null;
+    }
+    for (final attachment in task.attachments) {
+      if (attachment.localPath == path) {
+        return attachment;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _removeAttachment(TaskAttachment attachment) async {
+    final noteController = _noteController;
+    final task = _task;
+    if (noteController == null || task == null) {
+      return;
+    }
+
+    _removeAttachmentEmbeds(
+      noteController: noteController,
+      attachment: attachment,
+    );
+    await _attachmentStorage.deleteAttachment(attachment);
+    setState(() {
+      _task = task.copyWith(
+        attachments: task.attachments
+            .where((item) => item.id != attachment.id)
+            .toList(),
+        updatedAt: DateTime.now(),
+      );
+    });
+    _scheduleAutosave();
+  }
+
+  void _removeAttachmentEmbeds({
+    required quill.QuillController noteController,
+    required TaskAttachment attachment,
+  }) {
+    final operations = noteController.document.toDelta().toList();
+    var cursor = 0;
+
+    for (final operation in operations) {
+      final data = operation.data;
+      if (data is String) {
+        cursor += data.length;
+        continue;
+      }
+      if (data is! Map) {
+        cursor += 1;
+        continue;
+      }
+
+      final imagePath = data[quill.BlockEmbed.imageType];
+      if (attachment.kind == TaskAttachmentKind.image &&
+          imagePath == attachment.localPath) {
+        noteController.replaceText(
+          cursor,
+          1,
+          '',
+          TextSelection.collapsed(offset: cursor),
+        );
+        return;
+      }
+
+      final customData = data[quill.BlockEmbed.customType];
+      if (customData is String) {
+        final embed = quill.CustomBlockEmbed.fromJsonString(customData);
+        if (embed.type == _taskFileEmbedType && embed.data == attachment.id) {
+          noteController.replaceText(
+            cursor,
+            1,
+            '',
+            TextSelection.collapsed(offset: cursor),
+          );
+          return;
+        }
+      }
+
+      cursor += 1;
+    }
   }
 
   Future<bool> _persistPendingChanges() async {
@@ -227,8 +450,12 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     final documentJson = jsonEncode(noteController.document.toDelta().toJson());
     final previousTask = _task!;
     final draft = previousTask.copyWith(
+      title: _titleController.text.trim().isEmpty
+          ? previousTask.title
+          : _titleController.text.trim(),
       noteDocumentJson: documentJson,
       notePlainText: extractPlainTextFromNoteDocumentJson(documentJson),
+      attachments: previousTask.attachments,
       updatedAt: DateTime.now(),
     );
 
@@ -854,6 +1081,25 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                 placeholder: 'Start writing your notes...',
                 showCursor: !_isReadMode,
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+                embedBuilders: [
+                  _TaskImageEmbedBuilder(
+                    onRemove: (path) async {
+                      final attachment = _attachmentByPath(path);
+                      if (attachment != null) {
+                        await _removeAttachment(attachment);
+                      }
+                    },
+                  ),
+                  _TaskFileEmbedBuilder(
+                    attachmentById: _attachmentById,
+                    onRemove: (attachmentId) async {
+                      final attachment = _attachmentById(attachmentId);
+                      if (attachment != null) {
+                        await _removeAttachment(attachment);
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
           ),
@@ -866,40 +1112,72 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
             ),
             child: SafeArea(
               top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                child: quill.QuillSimpleToolbar(
-                  controller: noteController,
-                  config: const quill.QuillSimpleToolbarConfig(
-                    multiRowsDisplay: false,
-                    toolbarSize: 30,
-                    showDividers: true,
-                    showFontFamily: false,
-                    showFontSize: false,
-                    showBoldButton: true,
-                    showItalicButton: true,
-                    showUnderLineButton: true,
-                    showStrikeThrough: false,
-                    showInlineCode: false,
-                    showColorButton: false,
-                    showBackgroundColorButton: false,
-                    showClearFormat: true,
-                    showAlignmentButtons: false,
-                    showHeaderStyle: true,
-                    showListNumbers: true,
-                    showListBullets: true,
-                    showListCheck: false,
-                    showCodeBlock: false,
-                    showQuote: false,
-                    showIndent: false,
-                    showLink: true,
-                    showUndo: false,
-                    showRedo: false,
-                    showSearchButton: false,
-                    showSubscript: false,
-                    showSuperscript: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                    child: Row(
+                      children: [
+                        _EditorActionButton(
+                          buttonKey: TaskEditorScreen.highlightButtonKey,
+                          icon: TablerIcons.highlight,
+                          tooltip: 'Highlight',
+                          onPressed: _toggleHighlight,
+                        ),
+                        const SizedBox(width: AppSpacing.two),
+                        _EditorActionButton(
+                          buttonKey: TaskEditorScreen.attachImageButtonKey,
+                          icon: TablerIcons.photo,
+                          tooltip: 'Insert image',
+                          onPressed: _insertImageAttachment,
+                        ),
+                        const SizedBox(width: AppSpacing.two),
+                        _EditorActionButton(
+                          buttonKey: TaskEditorScreen.attachFileButtonKey,
+                          icon: TablerIcons.paperclip,
+                          tooltip: 'Attach file',
+                          onPressed: _insertFileAttachment,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                    child: quill.QuillSimpleToolbar(
+                      controller: noteController,
+                      config: const quill.QuillSimpleToolbarConfig(
+                        multiRowsDisplay: false,
+                        toolbarSize: 30,
+                        showDividers: true,
+                        showFontFamily: false,
+                        showFontSize: false,
+                        showBoldButton: true,
+                        showItalicButton: true,
+                        showUnderLineButton: true,
+                        showStrikeThrough: false,
+                        showInlineCode: false,
+                        showColorButton: false,
+                        showBackgroundColorButton: true,
+                        showClearFormat: true,
+                        showAlignmentButtons: false,
+                        showHeaderStyle: true,
+                        showListNumbers: true,
+                        showListBullets: true,
+                        showListCheck: true,
+                        showCodeBlock: false,
+                        showQuote: true,
+                        showIndent: false,
+                        showLink: true,
+                        showUndo: true,
+                        showRedo: true,
+                        showSearchButton: false,
+                        showSubscript: false,
+                        showSuperscript: false,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1125,6 +1403,170 @@ class _TaskDetailsDialog extends StatelessWidget {
       'December',
     ];
     return '${months[value.month - 1]} ${value.day}, ${value.year}';
+  }
+}
+
+class _EditorActionButton extends StatelessWidget {
+  const _EditorActionButton({
+    required this.buttonKey,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final Key buttonKey;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        key: buttonKey,
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          backgroundColor: AppColors.checkboxCardFill,
+          foregroundColor: AppColors.titleText,
+          minimumSize: const Size(40, 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            side: const BorderSide(color: AppColors.checkboxCardBorder),
+          ),
+        ),
+        icon: Icon(icon, size: 18),
+      ),
+    );
+  }
+}
+
+class _TaskImageEmbedBuilder extends quill.EmbedBuilder {
+  const _TaskImageEmbedBuilder({required this.onRemove});
+
+  final Future<void> Function(String path) onRemove;
+
+  @override
+  String get key => quill.BlockEmbed.imageType;
+
+  @override
+  Widget build(BuildContext context, quill.EmbedContext embedContext) {
+    final path = embedContext.node.value.data as String;
+    final imageFile = File(path);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.three),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadii.twoXl),
+        child: Stack(
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: Image.file(
+                imageFile,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpacing.four),
+                    color: AppColors.checkboxCardFill,
+                    child: const Text('Image unavailable'),
+                  );
+                },
+              ),
+            ),
+            if (!embedContext.readOnly)
+              Positioned(
+                top: AppSpacing.two,
+                right: AppSpacing.two,
+                child: IconButton(
+                  onPressed: () => onRemove(path),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.cardFill,
+                    foregroundColor: AppColors.dangerBadgeText,
+                    minimumSize: const Size(32, 32),
+                  ),
+                  icon: const Icon(TablerIcons.x, size: 16),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskFileEmbedBuilder extends quill.EmbedBuilder {
+  const _TaskFileEmbedBuilder({
+    required this.attachmentById,
+    required this.onRemove,
+  });
+
+  final TaskAttachment? Function(String attachmentId) attachmentById;
+  final Future<void> Function(String attachmentId) onRemove;
+
+  @override
+  String get key => quill.BlockEmbed.customType;
+
+  @override
+  Widget build(BuildContext context, quill.EmbedContext embedContext) {
+    final customEmbed = quill.CustomBlockEmbed.fromJsonString(
+      embedContext.node.value.data as String,
+    );
+    if (customEmbed.type != _taskFileEmbedType) {
+      return const SizedBox.shrink();
+    }
+
+    final attachmentId = customEmbed.data as String;
+    final attachment = attachmentById(attachmentId);
+    final label = attachment?.displayName ?? 'Attached file';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: AppSpacing.two),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.four,
+        vertical: AppSpacing.three,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.checkboxCardFill,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: const Border.fromBorderSide(
+          BorderSide(color: AppColors.checkboxCardBorder),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            TablerIcons.paperclip,
+            size: 16,
+            color: AppColors.titleText,
+          ),
+          const SizedBox(width: AppSpacing.two),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.titleText,
+                fontSize: AppTypography.sizeSm,
+                fontWeight: AppTypography.weightMedium,
+              ),
+            ),
+          ),
+          if (!embedContext.readOnly) ...[
+            const SizedBox(width: AppSpacing.two),
+            GestureDetector(
+              onTap: () => onRemove(attachmentId),
+              child: const Icon(
+                TablerIcons.x,
+                size: 16,
+                color: AppColors.dangerBadgeText,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

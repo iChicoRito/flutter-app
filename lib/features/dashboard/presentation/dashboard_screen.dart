@@ -14,6 +14,7 @@ import '../../../core/services/task_repository_scope.dart';
 import '../../../core/theme/app_design_tokens.dart';
 import '../../../core/services/vault_service_scope.dart';
 import '../../../core/vault/vault_access.dart';
+import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../archive/presentation/archives_screen.dart';
 import '../../task_management/domain/task_category.dart';
@@ -22,6 +23,7 @@ import '../../task_management/presentation/task_editor_screen.dart';
 import '../../task_management/presentation/task_management_controller.dart';
 import '../../task_management/presentation/task_management_screen.dart';
 import '../../task_management/presentation/task_management_ui.dart';
+import '../../spaces/domain/task_space.dart';
 import '../../spaces/presentation/spaces_page.dart';
 
 typedef DashboardClock = DateTime Function();
@@ -31,6 +33,8 @@ enum _DashboardChartScope { today, thisWeek, thisMonth, allTasks }
 enum _DashboardTaskStatusFilter { all, completed, today, upcoming, overdue }
 
 enum _DashboardChartSegment { completed, today, upcoming, overdue }
+
+enum _DashboardHomeTaskAction { markComplete, archive, delete }
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
@@ -503,6 +507,209 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<void> _showHomeTaskContextMenu(
+    TaskItem task,
+    Offset globalPosition,
+  ) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final controller = _taskController;
+    if (overlay == null || controller == null) {
+      return;
+    }
+
+    final selectedAction = await showMenu<_DashboardHomeTaskAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        overlay.size.width - globalPosition.dx,
+        overlay.size.height - globalPosition.dy,
+      ),
+      elevation: taskPopupMenuElevation,
+      shadowColor: taskPopupMenuShadowColor,
+      shape: taskPopupMenuShape,
+      color: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      menuPadding: taskPopupMenuPadding,
+      items: [
+        PopupMenuItem<_DashboardHomeTaskAction>(
+          value: _DashboardHomeTaskAction.markComplete,
+          padding: EdgeInsets.zero,
+          child: TaskMenuEntry(
+            label: task.isCompleted
+                ? 'Mark as Incomplete'
+                : 'Mark as Complete',
+          ),
+        ),
+        const PopupMenuItem<_DashboardHomeTaskAction>(
+          value: _DashboardHomeTaskAction.archive,
+          padding: EdgeInsets.zero,
+          child: TaskMenuEntry(label: 'Archive'),
+        ),
+        const PopupMenuItem<_DashboardHomeTaskAction>(
+          value: _DashboardHomeTaskAction.delete,
+          padding: EdgeInsets.zero,
+          child: TaskMenuEntry(
+            label: 'Delete',
+            isDestructive: true,
+            showDivider: true,
+          ),
+        ),
+      ],
+    );
+
+    if (!mounted || selectedAction == null) {
+      return;
+    }
+
+    switch (selectedAction) {
+      case _DashboardHomeTaskAction.markComplete:
+        await _toggleHomeTaskCompletion(task);
+      case _DashboardHomeTaskAction.archive:
+        await _archiveHomeTask(task, controller);
+      case _DashboardHomeTaskAction.delete:
+        await _deleteHomeTask(task, controller);
+    }
+  }
+
+  Future<void> _archiveHomeTask(
+    TaskItem task,
+    TaskManagementController controller,
+  ) async {
+    final parentSpace = controller.spaceFor(task.spaceId);
+    if (!await _confirmDashboardTaskAction(task, parentSpace: parentSpace)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final shouldArchive = await showArchiveConfirmationDialog(
+      context: context,
+      itemLabel: 'Task',
+      itemName: task.title,
+    );
+    if (!shouldArchive) {
+      return;
+    }
+
+    try {
+      await controller.archiveTask(task);
+      if (!mounted) {
+        return;
+      }
+      TaskDataRefreshScope.of(context).notifyDataChanged();
+      showTaskToast(context, message: 'Task archived successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to archive the task right now.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _deleteHomeTask(
+    TaskItem task,
+    TaskManagementController controller,
+  ) async {
+    final parentSpace = controller.spaceFor(task.spaceId);
+    if (!await _confirmDashboardTaskAction(task, parentSpace: parentSpace)) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => _DashboardDeleteTaskDialog(taskTitle: task.title),
+    );
+    if (shouldDelete != true) {
+      return;
+    }
+
+    try {
+      await controller.deleteTask(task.id);
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(context, message: 'Task deleted successfully.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to delete the task right now.',
+        isError: true,
+      );
+    }
+  }
+
+  Future<bool> _confirmDashboardTaskAction(
+    TaskItem task, {
+    required TaskSpace? parentSpace,
+  }) async {
+    final vaultService = VaultServiceScope.of(context);
+
+    if (task.vaultConfig != null) {
+      final result = await ensureUnlocked(
+        context: context,
+        vaultService: vaultService,
+        entityKey: taskVaultEntityKey(task.id),
+        title: task.title,
+        entityKind: VaultEntityKind.task,
+        config: task.vaultConfig,
+        forcePrompt: true,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await TaskRepositoryScope.of(context).upsertTask(
+            task.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+          );
+          await _taskController?.load();
+        },
+      );
+      if (!mounted) {
+        return false;
+      }
+      return result == VaultUnlockResult.unlocked;
+    }
+
+    if (parentSpace?.vaultConfig != null) {
+      final result = await ensureUnlocked(
+        context: context,
+        vaultService: vaultService,
+        entityKey: spaceVaultEntityKey(parentSpace!.id),
+        title: parentSpace.name,
+        entityKind: VaultEntityKind.space,
+        config: parentSpace.vaultConfig,
+        forcePrompt: true,
+        onRecoveryReset: (resolution) async {
+          final config = resolution.config;
+          if (config == null) {
+            return;
+          }
+          await TaskRepositoryScope.of(context).upsertSpace(
+            parentSpace.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+          );
+          await _taskController?.load();
+        },
+      );
+      if (!mounted) {
+        return false;
+      }
+      return result == VaultUnlockResult.unlocked;
+    }
+
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -535,6 +742,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     taskStatusFilter: _taskStatusFilter,
                     onTaskToggled: _toggleHomeTaskCompletion,
                     onTaskOpened: (task) => _openEditor(task.id),
+                    onTaskLongPressed: _showHomeTaskContextMenu,
                     onChartScopeChanged: (value) {
                       setState(() {
                         _chartScope = value;
@@ -628,6 +836,7 @@ class _DashboardHomeTab extends StatelessWidget {
     required this.taskStatusFilter,
     required this.onTaskToggled,
     required this.onTaskOpened,
+    required this.onTaskLongPressed,
     required this.onChartScopeChanged,
     required this.onChartSegmentChanged,
     required this.onTaskStatusFilterChanged,
@@ -642,6 +851,8 @@ class _DashboardHomeTab extends StatelessWidget {
   final _DashboardTaskStatusFilter taskStatusFilter;
   final Future<void> Function(TaskItem task) onTaskToggled;
   final Future<void> Function(TaskItem task) onTaskOpened;
+  final Future<void> Function(TaskItem task, Offset globalPosition)
+  onTaskLongPressed;
   final ValueChanged<_DashboardChartScope> onChartScopeChanged;
   final ValueChanged<_DashboardChartSegment> onChartSegmentChanged;
   final ValueChanged<_DashboardTaskStatusFilter> onTaskStatusFilterChanged;
@@ -707,6 +918,7 @@ class _DashboardHomeTab extends StatelessWidget {
             onFilterChanged: onTaskStatusFilterChanged,
             onTaskOpened: onTaskOpened,
             onTaskToggled: onTaskToggled,
+            onTaskLongPressed: onTaskLongPressed,
           ),
         ],
       ),
@@ -1121,6 +1333,7 @@ class _DashboardTaskStatusCard extends StatelessWidget {
     required this.onFilterChanged,
     required this.onTaskOpened,
     required this.onTaskToggled,
+    required this.onTaskLongPressed,
   });
 
   final List<TaskItem> tasks;
@@ -1130,6 +1343,8 @@ class _DashboardTaskStatusCard extends StatelessWidget {
   final ValueChanged<_DashboardTaskStatusFilter> onFilterChanged;
   final Future<void> Function(TaskItem task) onTaskOpened;
   final Future<void> Function(TaskItem task) onTaskToggled;
+  final Future<void> Function(TaskItem task, Offset globalPosition)
+  onTaskLongPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -1154,6 +1369,8 @@ class _DashboardTaskStatusCard extends StatelessWidget {
                     now: now,
                     onOpen: () => onTaskOpened(tasks[index]),
                     onToggle: () => onTaskToggled(tasks[index]),
+                    onLongPress: (position) =>
+                        onTaskLongPressed(tasks[index], position),
                   ),
                   if (index != tasks.length - 1)
                     const Divider(
@@ -1365,6 +1582,7 @@ class _DashboardTaskStatusRow extends StatelessWidget {
     required this.now,
     required this.onOpen,
     required this.onToggle,
+    required this.onLongPress,
   });
 
   final TaskItem task;
@@ -1372,6 +1590,7 @@ class _DashboardTaskStatusRow extends StatelessWidget {
   final DateTime now;
   final VoidCallback onOpen;
   final VoidCallback onToggle;
+  final ValueChanged<Offset> onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -1381,12 +1600,15 @@ class _DashboardTaskStatusRow extends StatelessWidget {
     final icon = resolveTaskCategoryIcon(category?.iconKey ?? '');
     final status = _taskStatusLabel(task, now);
 
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(AppRadii.xl),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.two),
-        child: Row(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPressStart: (details) => onLongPress(details.globalPosition),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.two),
+          child: Row(
           children: [
             GestureDetector(
               key: DashboardScreen.taskToggleKey(task.id),
@@ -1459,6 +1681,7 @@ class _DashboardTaskStatusRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1764,6 +1987,53 @@ class _DashboardEmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DashboardDeleteTaskDialog extends StatelessWidget {
+  const _DashboardDeleteTaskDialog({required this.taskTitle});
+
+  final String taskTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        side: const BorderSide(color: AppColors.cardBorder),
+      ),
+      title: Text(
+        'Delete Task?',
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          color: AppColors.titleText,
+          fontSize: AppTypography.sizeLg,
+          fontWeight: AppTypography.weightSemibold,
+        ),
+      ),
+      content: Text(
+        'Are you sure you want to delete "$taskTitle"? This cannot be undone.',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.subHeaderText,
+          fontSize: AppTypography.sizeBase,
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.dangerButtonFill,
+            foregroundColor: AppColors.dangerButtonText,
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 }

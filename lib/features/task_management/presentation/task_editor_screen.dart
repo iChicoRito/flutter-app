@@ -64,7 +64,6 @@ class TaskEditorScreen extends StatefulWidget {
   static const Key archiveButtonKey = Key('task-editor-archive');
   static const Key attachImageButtonKey = Key('task-editor-attach-image');
   static const Key attachFileButtonKey = Key('task-editor-attach-file');
-  static const Key highlightButtonKey = Key('task-editor-highlight');
 
   final TaskRepository repository;
   final String taskId;
@@ -85,6 +84,8 @@ enum _EditorMenuAction {
   archive,
   delete,
 }
+
+enum _AttachmentMenuAction { insertImage, attachFile }
 
 const _taskFileEmbedType = 'task-file';
 
@@ -220,16 +221,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
     );
   }
 
-  void _toggleHighlight() {
-    final noteController = _noteController;
-    if (noteController == null || _isReadMode) {
-      return;
-    }
-    noteController.formatSelection(
-      const quill.BackgroundAttribute('#FEF3C7'),
-    );
-  }
-
   Future<String?> _handleImagePaste(Uint8List imageBytes) async {
     final task = _task;
     if (task == null) {
@@ -246,8 +237,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
 
   Future<void> _insertImageAttachment() async {
     final task = _task;
-    final noteController = _noteController;
-    if (task == null || noteController == null || _isReadMode) {
+    if (task == null || _isReadMode) {
       return;
     }
 
@@ -270,18 +260,21 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
           : 'image/${pickedFile.extension}',
     );
     _registerAttachment(attachment);
-    noteController.replaceText(
-      noteController.selection.end,
-      0,
+    final noteController = _noteController;
+    if (noteController == null) {
+      return;
+    }
+    final insertOffset = _safeInsertOffset(noteController);
+    _insertBlockEmbed(
+      noteController,
+      insertOffset,
       quill.BlockEmbed.image(attachment.localPath),
-      null,
     );
   }
 
   Future<void> _insertFileAttachment() async {
     final task = _task;
-    final noteController = _noteController;
-    if (task == null || noteController == null || _isReadMode) {
+    if (task == null || _isReadMode) {
       return;
     }
 
@@ -304,13 +297,17 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
           : 'application/${pickedFile.extension}',
     );
     _registerAttachment(attachment);
-    noteController.replaceText(
-      noteController.selection.end,
-      0,
+    final noteController = _noteController;
+    if (noteController == null) {
+      return;
+    }
+    final insertOffset = _safeInsertOffset(noteController);
+    _insertBlockEmbed(
+      noteController,
+      insertOffset,
       quill.BlockEmbed.custom(
         quill.CustomBlockEmbed(_taskFileEmbedType, attachment.id),
       ),
-      null,
     );
   }
 
@@ -320,13 +317,98 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       return;
     }
 
-    setState(() {
-      _task = task.copyWith(
-        attachments: [...task.attachments, attachment],
-        updatedAt: DateTime.now(),
-      );
-    });
+    if (task.attachments.any((item) => item.id == attachment.id)) {
+      return;
+    }
+
+    _task = task.copyWith(
+      attachments: [...task.attachments, attachment],
+      updatedAt: DateTime.now(),
+    );
     _scheduleAutosave();
+  }
+
+  int _safeInsertOffset(quill.QuillController noteController) {
+    final selection = noteController.selection;
+    if (selection.start >= 0 && selection.end >= 0) {
+      return selection.end;
+    }
+
+    final documentLength = noteController.document.length;
+    if (documentLength <= 0) {
+      return 0;
+    }
+
+    return documentLength - 1;
+  }
+
+  void _insertBlockEmbed(
+    quill.QuillController noteController,
+    int offset,
+    Object embed,
+  ) {
+    final plainText = noteController.document.toPlainText();
+    final safeOffset = offset.clamp(0, plainText.length);
+    final hasNewlineBefore =
+        safeOffset == 0 || plainText[safeOffset - 1] == '\n';
+    final hasNewlineAfter =
+        safeOffset >= plainText.length || plainText[safeOffset] == '\n';
+
+    var cursor = safeOffset;
+
+    if (!hasNewlineBefore) {
+      noteController.replaceText(
+        cursor,
+        0,
+        '\n',
+        TextSelection.collapsed(offset: cursor + 1),
+      );
+      cursor += 1;
+    }
+
+    noteController.replaceText(
+      cursor,
+      0,
+      embed,
+      TextSelection.collapsed(offset: cursor + 1),
+    );
+    cursor += 1;
+
+    if (!hasNewlineAfter) {
+      noteController.replaceText(
+        cursor,
+        0,
+        '\n',
+        TextSelection.collapsed(offset: cursor + 1),
+      );
+      cursor += 1;
+    } else if (cursor < noteController.document.length) {
+      cursor += 1;
+    }
+
+    noteController.updateSelection(
+      TextSelection.collapsed(offset: cursor),
+      quill.ChangeSource.local,
+    );
+  }
+
+  static void _moveCursorAfterEmbed(
+    quill.QuillController controller,
+    int embedOffset,
+  ) {
+    final plainText = controller.document.toPlainText();
+    var cursor = (embedOffset + 1).clamp(0, controller.document.length - 1);
+
+    if (cursor < plainText.length && plainText[cursor] == '\n') {
+      cursor += 1;
+    }
+
+    controller
+      ..skipRequestKeyboard = true
+      ..updateSelection(
+        TextSelection.collapsed(offset: cursor),
+        quill.ChangeSource.local,
+      );
   }
 
   TaskAttachment? _attachmentById(String attachmentId) {
@@ -367,14 +449,12 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       attachment: attachment,
     );
     await _attachmentStorage.deleteAttachment(attachment);
-    setState(() {
-      _task = task.copyWith(
-        attachments: task.attachments
-            .where((item) => item.id != attachment.id)
-            .toList(),
-        updatedAt: DateTime.now(),
-      );
-    });
+    _task = task.copyWith(
+      attachments: task.attachments
+          .where((item) => item.id != attachment.id)
+          .toList(),
+      updatedAt: DateTime.now(),
+    );
     _scheduleAutosave();
   }
 
@@ -533,8 +613,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
           priorityFieldKey: TaskEditorScreen.priorityFieldKey,
           categoryFieldKey: TaskEditorScreen.categoryFieldKey,
           addCategoryButtonKey: TaskEditorScreen.addCategoryButtonKey,
-          categoryColorSelectionKey:
-              TaskEditorScreen.categoryColorSelectionKey,
+          categoryColorSelectionKey: TaskEditorScreen.categoryColorSelectionKey,
           categoryCurrentIconKey: TaskEditorScreen.categoryCurrentIconKey,
           saveButtonKey: TaskEditorScreen.saveButtonKey,
           dateButtonKey: TaskEditorScreen.dateRangeButtonKey,
@@ -968,6 +1047,40 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                   ),
                 ),
               ),
+            if (!_isReadMode)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: PopupMenuButton<_AttachmentMenuAction>(
+                  enabled: task != null,
+                  color: AppColors.cardFill,
+                  surfaceTintColor: AppColors.cardFill,
+                  elevation: taskPopupMenuElevation,
+                  shadowColor: taskPopupMenuShadowColor,
+                  shape: taskPopupMenuShape,
+                  menuPadding: taskPopupMenuPadding,
+                  icon: Icon(TablerIcons.plus, size: 20, color: taskMutedText),
+                  onSelected: (value) {
+                    switch (value) {
+                      case _AttachmentMenuAction.insertImage:
+                        _insertImageAttachment();
+                      case _AttachmentMenuAction.attachFile:
+                        _insertFileAttachment();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    buildTaskPopupMenuItem<_AttachmentMenuAction>(
+                      key: TaskEditorScreen.attachImageButtonKey,
+                      value: _AttachmentMenuAction.insertImage,
+                      label: 'Insert Image',
+                    ),
+                    buildTaskPopupMenuItem<_AttachmentMenuAction>(
+                      key: TaskEditorScreen.attachFileButtonKey,
+                      value: _AttachmentMenuAction.attachFile,
+                      label: 'Attach File',
+                    ),
+                  ],
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: PopupMenuButton<_EditorMenuAction>(
@@ -1072,32 +1185,34 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         Expanded(
           child: ColoredBox(
             color: AppColors.cardFill,
-            child: quill.QuillEditor.basic(
-              key: TaskEditorScreen.editorBodyKey,
-              controller: noteController,
-              focusNode: _editorFocusNode,
-              scrollController: _editorScrollController,
-              config: quill.QuillEditorConfig(
-                placeholder: 'Start writing your notes...',
-                showCursor: !_isReadMode,
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
-                embedBuilders: [
-                  _TaskImageEmbedBuilder(
-                    onRemove: (path) async {
-                      final attachment = _attachmentByPath(path);
-                      if (attachment != null) {
-                        await _removeAttachment(attachment);
-                      }
-                    },
-                  ),
-                  _TaskFileEmbedBuilder(
-                    attachmentById: _attachmentById,
-                    onRemove: (attachmentId) async {
-                      final attachment = _attachmentById(attachmentId);
-                      if (attachment != null) {
-                        await _removeAttachment(attachment);
-                      }
-                    },
+            child: SafeArea(
+              top: false,
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: quill.QuillEditor.basic(
+                      key: TaskEditorScreen.editorBodyKey,
+                      controller: noteController,
+                      focusNode: _editorFocusNode,
+                      scrollController: _editorScrollController,
+                      config: quill.QuillEditorConfig(
+                        placeholder: 'Start writing your notes...',
+                        showCursor: !_isReadMode,
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+                        embedBuilders: [
+                          _TaskImageEmbedBuilder(
+                            attachmentByPath: _attachmentByPath,
+                            onRemove: _removeAttachment,
+                          ),
+                          _TaskFileEmbedBuilder(
+                            attachmentById: _attachmentById,
+                            onRemove: _removeAttachment,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1115,33 +1230,6 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                    child: Row(
-                      children: [
-                        _EditorActionButton(
-                          buttonKey: TaskEditorScreen.highlightButtonKey,
-                          icon: TablerIcons.highlight,
-                          tooltip: 'Highlight',
-                          onPressed: _toggleHighlight,
-                        ),
-                        const SizedBox(width: AppSpacing.two),
-                        _EditorActionButton(
-                          buttonKey: TaskEditorScreen.attachImageButtonKey,
-                          icon: TablerIcons.photo,
-                          tooltip: 'Insert image',
-                          onPressed: _insertImageAttachment,
-                        ),
-                        const SizedBox(width: AppSpacing.two),
-                        _EditorActionButton(
-                          buttonKey: TaskEditorScreen.attachFileButtonKey,
-                          icon: TablerIcons.paperclip,
-                          tooltip: 'Attach file',
-                          onPressed: _insertFileAttachment,
-                        ),
-                      ],
-                    ),
-                  ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                     child: quill.QuillSimpleToolbar(
@@ -1162,6 +1250,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
                         showClearFormat: true,
                         showAlignmentButtons: false,
                         showHeaderStyle: true,
+                        headerStyleType: quill.HeaderStyleType.buttons,
                         showListNumbers: true,
                         showListBullets: true,
                         showListCheck: true,
@@ -1406,45 +1495,14 @@ class _TaskDetailsDialog extends StatelessWidget {
   }
 }
 
-class _EditorActionButton extends StatelessWidget {
-  const _EditorActionButton({
-    required this.buttonKey,
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
+class _TaskImageEmbedBuilder extends quill.EmbedBuilder {
+  const _TaskImageEmbedBuilder({
+    required this.attachmentByPath,
+    required this.onRemove,
   });
 
-  final Key buttonKey;
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        key: buttonKey,
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          backgroundColor: AppColors.checkboxCardFill,
-          foregroundColor: AppColors.titleText,
-          minimumSize: const Size(40, 40),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadii.xl),
-            side: const BorderSide(color: AppColors.checkboxCardBorder),
-          ),
-        ),
-        icon: Icon(icon, size: 18),
-      ),
-    );
-  }
-}
-
-class _TaskImageEmbedBuilder extends quill.EmbedBuilder {
-  const _TaskImageEmbedBuilder({required this.onRemove});
-
-  final Future<void> Function(String path) onRemove;
+  final TaskAttachment? Function(String path) attachmentByPath;
+  final Future<void> Function(TaskAttachment attachment) onRemove;
 
   @override
   String get key => quill.BlockEmbed.imageType;
@@ -1452,43 +1510,20 @@ class _TaskImageEmbedBuilder extends quill.EmbedBuilder {
   @override
   Widget build(BuildContext context, quill.EmbedContext embedContext) {
     final path = embedContext.node.value.data as String;
-    final imageFile = File(path);
+    final attachment = attachmentByPath(path);
+    if (attachment == null) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.three),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadii.twoXl),
-        child: Stack(
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: Image.file(
-                imageFile,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    padding: const EdgeInsets.all(AppSpacing.four),
-                    color: AppColors.checkboxCardFill,
-                    child: const Text('Image unavailable'),
-                  );
-                },
-              ),
-            ),
-            if (!embedContext.readOnly)
-              Positioned(
-                top: AppSpacing.two,
-                right: AppSpacing.two,
-                child: IconButton(
-                  onPressed: () => onRemove(path),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.cardFill,
-                    foregroundColor: AppColors.dangerBadgeText,
-                    minimumSize: const Size(32, 32),
-                  ),
-                  icon: const Icon(TablerIcons.x, size: 16),
-                ),
-              ),
-          ],
+      child: _AttachmentImageCard(
+        attachment: attachment,
+        isReadOnly: embedContext.readOnly,
+        onRemove: () => onRemove(attachment),
+        onTap: () => _TaskEditorScreenState._moveCursorAfterEmbed(
+          embedContext.controller,
+          embedContext.node.documentOffset,
         ),
       ),
     );
@@ -1502,72 +1537,237 @@ class _TaskFileEmbedBuilder extends quill.EmbedBuilder {
   });
 
   final TaskAttachment? Function(String attachmentId) attachmentById;
-  final Future<void> Function(String attachmentId) onRemove;
+  final Future<void> Function(TaskAttachment attachment) onRemove;
 
   @override
-  String get key => quill.BlockEmbed.customType;
+  String get key => _taskFileEmbedType;
 
   @override
   Widget build(BuildContext context, quill.EmbedContext embedContext) {
-    final customEmbed = quill.CustomBlockEmbed.fromJsonString(
-      embedContext.node.value.data as String,
-    );
-    if (customEmbed.type != _taskFileEmbedType) {
+    final attachmentId = embedContext.node.value.data as String;
+    final attachment = attachmentById(attachmentId);
+    if (attachment == null) {
       return const SizedBox.shrink();
     }
 
-    final attachmentId = customEmbed.data as String;
-    final attachment = attachmentById(attachmentId);
-    final label = attachment?.displayName ?? 'Attached file';
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: AppSpacing.two),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.four,
-        vertical: AppSpacing.three,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.checkboxCardFill,
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        border: const Border.fromBorderSide(
-          BorderSide(color: AppColors.checkboxCardBorder),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.two),
+      child: _AttachmentFileRow(
+        attachment: attachment,
+        isReadOnly: embedContext.readOnly,
+        onRemove: () => onRemove(attachment),
+        onTap: () => _TaskEditorScreenState._moveCursorAfterEmbed(
+          embedContext.controller,
+          embedContext.node.documentOffset,
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            TablerIcons.paperclip,
-            size: 16,
-            color: AppColors.titleText,
-          ),
-          const SizedBox(width: AppSpacing.two),
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.titleText,
-                fontSize: AppTypography.sizeSm,
-                fontWeight: AppTypography.weightMedium,
-              ),
-            ),
-          ),
-          if (!embedContext.readOnly) ...[
-            const SizedBox(width: AppSpacing.two),
-            GestureDetector(
-              onTap: () => onRemove(attachmentId),
-              child: const Icon(
-                TablerIcons.x,
-                size: 16,
-                color: AppColors.dangerBadgeText,
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
+}
+
+class _AttachmentImageCard extends StatelessWidget {
+  const _AttachmentImageCard({
+    required this.attachment,
+    required this.isReadOnly,
+    required this.onRemove,
+    required this.onTap,
+  });
+
+  final TaskAttachment attachment;
+  final bool isReadOnly;
+  final VoidCallback onRemove;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageFile = File(attachment.localPath);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadii.twoXl),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Container(color: AppColors.checkboxCardFill),
+              Image.file(
+                imageFile,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    padding: const EdgeInsets.all(AppSpacing.four),
+                    color: AppColors.checkboxCardFill,
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Image unavailable',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.subHeaderText,
+                        fontSize: AppTypography.sizeSm,
+                        fontWeight: AppTypography.weightMedium,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (!isReadOnly)
+                Positioned(
+                  top: AppSpacing.two,
+                  right: AppSpacing.two,
+                  child: IconButton(
+                    onPressed: onRemove,
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.cardFill,
+                      foregroundColor: AppColors.dangerBadgeText,
+                      minimumSize: const Size(30, 30),
+                      padding: EdgeInsets.zero,
+                    ),
+                    icon: const Icon(TablerIcons.x, size: 16),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AttachmentFileRow extends StatelessWidget {
+  const _AttachmentFileRow({
+    required this.attachment,
+    required this.isReadOnly,
+    required this.onRemove,
+    required this.onTap,
+  });
+
+  final TaskAttachment attachment;
+  final bool isReadOnly;
+  final VoidCallback onRemove;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeLabel = _formatAttachmentSize(attachment.sizeBytes);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.three),
+        decoration: BoxDecoration(
+          color: AppColors.cardFill,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          border: const Border.fromBorderSide(
+            BorderSide(color: AppColors.checkboxCardBorder),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.checkboxCardFill,
+                borderRadius: BorderRadius.circular(AppRadii.twoXl),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                TablerIcons.paperclip,
+                size: 20,
+                color: AppColors.titleText,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.three),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    attachment.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: AppTypography.sizeSm,
+                      fontWeight: AppTypography.weightSemibold,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.one),
+                  Text(
+                    attachment.mimeType,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.subHeaderText,
+                      fontSize: AppTypography.sizeXs,
+                      fontWeight: AppTypography.weightNormal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.three),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  sizeLabel,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.subHeaderText,
+                    fontSize: AppTypography.sizeXs,
+                    fontWeight: AppTypography.weightMedium,
+                  ),
+                ),
+                if (!isReadOnly) ...[
+                  const SizedBox(height: AppSpacing.one),
+                  IconButton(
+                    onPressed: onRemove,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    icon: const Icon(
+                      TablerIcons.x,
+                      size: 16,
+                      color: AppColors.dangerBadgeText,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _formatAttachmentSize(int sizeBytes) {
+  if (sizeBytes < 1024) {
+    return '$sizeBytes B';
+  }
+
+  final kilobytes = sizeBytes / 1024;
+  if (kilobytes < 1024) {
+    return '${kilobytes.toStringAsFixed(kilobytes >= 10 ? 0 : 1)} KB';
+  }
+
+  final megabytes = kilobytes / 1024;
+  if (megabytes < 1024) {
+    return '${megabytes.toStringAsFixed(megabytes >= 10 ? 0 : 2)} MB';
+  }
+
+  final gigabytes = megabytes / 1024;
+  return '${gigabytes.toStringAsFixed(2)} GB';
 }
 
 class _TaskDetailsMetric extends StatelessWidget {

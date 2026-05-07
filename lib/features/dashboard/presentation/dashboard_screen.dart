@@ -17,6 +17,8 @@ import '../../../core/vault/vault_access.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../archive/presentation/archives_screen.dart';
+import '../data/dashboard_chart_export_service.dart';
+import '../domain/dashboard_task_count_chart.dart';
 import '../../task_management/domain/task_category.dart';
 import '../../task_management/domain/task_item.dart';
 import '../../task_management/presentation/task_editor_screen.dart';
@@ -41,6 +43,7 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     required this.displayNameStore,
     this.clock = DateTime.now,
+    this.onExportTaskCountChart,
   });
 
   static const Key markerKey = Key('dashboard-screen');
@@ -55,6 +58,11 @@ class DashboardScreen extends StatefulWidget {
   static const Key chartStatusCardKey = Key('dashboard-chart-status-card');
   static const Key chartCanvasKey = Key('dashboard-chart-canvas');
   static const Key chartLegendKey = Key('dashboard-chart-legend');
+  static const Key taskCountChartCardKey = Key('dashboard-task-count-card');
+  static const Key taskCountChartMenuButtonKey = Key(
+    'dashboard-task-count-menu',
+  );
+  static const Key taskCountChartScrollKey = Key('dashboard-task-count-scroll');
   static const Key taskStatusMenuButtonKey = Key('dashboard-task-status-menu');
   static const Key profileTabKey = Key('dashboard-profile-tab');
   static const Key profileIdentityKey = Key('dashboard-profile-identity');
@@ -105,9 +113,15 @@ class DashboardScreen extends StatefulWidget {
       Key('dashboard-chart-segment-$value');
   static Key taskStatusMenuItemKey(String value) =>
       Key('dashboard-task-status-menu-$value');
+  static Key taskCountChartMenuItemKey(String value) =>
+      Key('dashboard-task-count-menu-$value');
+  static Key taskCountChartBarKey(String value) =>
+      Key('dashboard-task-count-bar-$value');
 
   final DisplayNameStore displayNameStore;
   final DashboardClock clock;
+  final Future<void> Function(DashboardTaskCountChartData data)?
+  onExportTaskCountChart;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -119,9 +133,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   _DashboardChartScope _chartScope = _DashboardChartScope.allTasks;
   _DashboardChartSegment? _selectedChartSegment;
   _DashboardTaskStatusFilter _taskStatusFilter = _DashboardTaskStatusFilter.all;
+  DashboardTaskCountScope _taskCountScope = DashboardTaskCountScope.thisWeek;
   String? _displayName;
   String? _profileImageData;
   bool _isPromptOpen = false;
+  bool _isExportingTaskCount = false;
   final ImagePicker _imagePicker = ImagePicker();
   TaskDataRefreshController? _taskDataRefreshController;
 
@@ -537,9 +553,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           value: _DashboardHomeTaskAction.markComplete,
           padding: EdgeInsets.zero,
           child: TaskMenuEntry(
-            label: task.isCompleted
-                ? 'Mark as Incomplete'
-                : 'Mark as Complete',
+            label: task.isCompleted ? 'Mark as Incomplete' : 'Mark as Complete',
           ),
         ),
         const PopupMenuItem<_DashboardHomeTaskAction>(
@@ -649,6 +663,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _exportTaskCountChart(DashboardTaskCountChartData data) async {
+    if (_isExportingTaskCount) {
+      return;
+    }
+
+    setState(() {
+      _isExportingTaskCount = true;
+    });
+
+    try {
+      final exportAction =
+          widget.onExportTaskCountChart ?? shareDashboardTaskCountExport;
+      await exportAction(data);
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(context, message: 'Chart data exported.');
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      showTaskToast(
+        context,
+        message: 'Unable to export chart data right now.',
+        isError: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExportingTaskCount = false;
+        });
+      }
+    }
+  }
+
   Future<bool> _confirmDashboardTaskAction(
     TaskItem task, {
     required TaskSpace? parentSpace,
@@ -696,7 +745,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             return;
           }
           await TaskRepositoryScope.of(context).upsertSpace(
-            parentSpace.copyWith(vaultConfig: config, updatedAt: DateTime.now()),
+            parentSpace.copyWith(
+              vaultConfig: config,
+              updatedAt: DateTime.now(),
+            ),
           );
           await _taskController?.load();
         },
@@ -740,6 +792,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     chartScope: _chartScope,
                     selectedChartSegment: _selectedChartSegment,
                     taskStatusFilter: _taskStatusFilter,
+                    taskCountScope: _taskCountScope,
+                    isExportingTaskCount: _isExportingTaskCount,
                     onTaskToggled: _toggleHomeTaskCompletion,
                     onTaskOpened: (task) => _openEditor(task.id),
                     onTaskLongPressed: _showHomeTaskContextMenu,
@@ -761,6 +815,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _taskStatusFilter = value;
                       });
                     },
+                    onTaskCountScopeChanged: (value) {
+                      setState(() {
+                        _taskCountScope = value;
+                      });
+                    },
+                    onExportTaskCountChart: _exportTaskCountChart,
                   );
                 },
               ),
@@ -834,12 +894,16 @@ class _DashboardHomeTab extends StatelessWidget {
     required this.chartScope,
     required this.selectedChartSegment,
     required this.taskStatusFilter,
+    required this.taskCountScope,
+    required this.isExportingTaskCount,
     required this.onTaskToggled,
     required this.onTaskOpened,
     required this.onTaskLongPressed,
     required this.onChartScopeChanged,
     required this.onChartSegmentChanged,
     required this.onTaskStatusFilterChanged,
+    required this.onTaskCountScopeChanged,
+    required this.onExportTaskCountChart,
   });
 
   final ThemeData theme;
@@ -849,6 +913,8 @@ class _DashboardHomeTab extends StatelessWidget {
   final _DashboardChartScope chartScope;
   final _DashboardChartSegment? selectedChartSegment;
   final _DashboardTaskStatusFilter taskStatusFilter;
+  final DashboardTaskCountScope taskCountScope;
+  final bool isExportingTaskCount;
   final Future<void> Function(TaskItem task) onTaskToggled;
   final Future<void> Function(TaskItem task) onTaskOpened;
   final Future<void> Function(TaskItem task, Offset globalPosition)
@@ -856,6 +922,9 @@ class _DashboardHomeTab extends StatelessWidget {
   final ValueChanged<_DashboardChartScope> onChartScopeChanged;
   final ValueChanged<_DashboardChartSegment> onChartSegmentChanged;
   final ValueChanged<_DashboardTaskStatusFilter> onTaskStatusFilterChanged;
+  final ValueChanged<DashboardTaskCountScope> onTaskCountScopeChanged;
+  final Future<void> Function(DashboardTaskCountChartData data)
+  onExportTaskCountChart;
 
   @override
   Widget build(BuildContext context) {
@@ -870,6 +939,11 @@ class _DashboardHomeTab extends StatelessWidget {
         .where((task) => _isInChartScope(task, chartScope, now))
         .toList();
     final chartData = _DashboardChartData.fromTasks(chartTasks, now);
+    final taskCountChartData = DashboardTaskCountChartData.fromTasks(
+      tasks: tasks,
+      scope: taskCountScope,
+      now: now,
+    );
     final listTasks =
         tasks
             .where((task) => _matchesListFilter(task, taskStatusFilter, now))
@@ -881,9 +955,9 @@ class _DashboardHomeTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.four,
-          AppSpacing.six,
           AppSpacing.four,
-          120,
+          AppSpacing.four,
+          108,
         ),
         children: [
           _HeaderRow(
@@ -894,13 +968,13 @@ class _DashboardHomeTab extends StatelessWidget {
             ),
             dateLabel: _formatDate(now),
           ),
-          const SizedBox(height: AppSpacing.six),
+          const SizedBox(height: AppSpacing.two),
           _ProgressCard(
             completedCount: completedTasks.length,
             totalCount: tasks.length,
             progressValue: progressValue,
           ),
-          const SizedBox(height: AppSpacing.six),
+          const SizedBox(height: AppSpacing.two),
           _DashboardChartStatusCard(
             dateLabel: _formatCompactDate(now),
             data: chartData,
@@ -909,7 +983,16 @@ class _DashboardHomeTab extends StatelessWidget {
             onScopeChanged: onChartScopeChanged,
             onSegmentChanged: onChartSegmentChanged,
           ),
-          const SizedBox(height: AppSpacing.six),
+          const SizedBox(height: AppSpacing.two),
+          _DashboardTaskCountChartCard(
+            tasks: tasks,
+            now: now,
+            data: taskCountChartData,
+            isExporting: isExportingTaskCount,
+            onScopeChanged: onTaskCountScopeChanged,
+            onExportRequested: onExportTaskCountChart,
+          ),
+          const SizedBox(height: AppSpacing.two),
           _DashboardTaskStatusCard(
             tasks: listTasks,
             controller: controller,
@@ -1097,15 +1180,6 @@ class _HeaderRow extends StatelessWidget {
             fontWeight: AppTypography.weightSemibold,
           ),
         ),
-        const SizedBox(height: AppSpacing.one),
-        // Text(
-        //   'Manage your tasks and stay on track.',
-        //   style: theme.textTheme.bodySmall?.copyWith(
-        //     color: AppColors.subHeaderText,
-        //     fontSize: AppTypography.sizeBase,
-        //     fontWeight: AppTypography.weightNormal,
-        //   ),
-        // ),
         const SizedBox(height: AppSpacing.one),
         Text(
           dateLabel,
@@ -1324,6 +1398,515 @@ class _DashboardChartStatusCard extends StatelessWidget {
   }
 }
 
+class _DashboardTaskCountChartCard extends StatelessWidget {
+  const _DashboardTaskCountChartCard({
+    required this.tasks,
+    required this.now,
+    required this.data,
+    required this.isExporting,
+    required this.onScopeChanged,
+    required this.onExportRequested,
+  });
+
+  final List<TaskItem> tasks;
+  final DateTime now;
+  final DashboardTaskCountChartData data;
+  final bool isExporting;
+  final ValueChanged<DashboardTaskCountScope> onScopeChanged;
+  final Future<void> Function(DashboardTaskCountChartData data)
+  onExportRequested;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: DashboardScreen.taskCountChartCardKey,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.five,
+        vertical: AppSpacing.five,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _taskCountTitle(data.scope),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.titleText,
+                        fontSize: AppTypography.sizeLg,
+                        fontWeight: AppTypography.weightSemibold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _taskCountSubtitle(data),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.subHeaderText,
+                        fontSize: AppTypography.sizeBase,
+                        fontWeight: AppTypography.weightNormal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _DashboardTaskCountMenu(
+                currentValue: data.scope,
+                isExporting: isExporting,
+                onScopeChanged: onScopeChanged,
+                onExportRequested: () => onExportRequested(data),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.eight),
+          if (data.totalCount == 0)
+            const _DashboardTaskCountEmptyState()
+          else
+            _DashboardTaskCountBarChart(data: data),
+          const SizedBox(height: AppSpacing.five),
+          _DashboardTaskCountInsightBanner(
+            insight: _taskCountInsight(tasks: tasks, data: data, now: now),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTaskCountBarChart extends StatelessWidget {
+  const _DashboardTaskCountBarChart({required this.data});
+
+  final DashboardTaskCountChartData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final monthView = data.scope == DashboardTaskCountScope.thisMonth;
+    final chart = _DashboardTaskCountPlot(data: data, monthView: monthView);
+
+    if (monthView) {
+      return SingleChildScrollView(
+        key: DashboardScreen.taskCountChartScrollKey,
+        scrollDirection: Axis.horizontal,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.one),
+          child: chart,
+        ),
+      );
+    }
+
+    return chart;
+  }
+}
+
+class _DashboardTaskCountPlot extends StatelessWidget {
+  const _DashboardTaskCountPlot({required this.data, required this.monthView});
+
+  final DashboardTaskCountChartData data;
+  final bool monthView;
+
+  @override
+  Widget build(BuildContext context) {
+    const axisLabelWidth = 34.0;
+    const chartGapWidth = AppSpacing.oneAndHalf;
+    const monthBarWidth = 26.0;
+    const monthGapWidth = 6.0;
+    const chartRightPadding = 4.0;
+    final chartHeight = monthView ? 300.0 : 320.0;
+    final plotWidth = monthView
+        ? math.max(
+            420.0,
+            axisLabelWidth +
+                chartGapWidth +
+                (data.bars.length * monthBarWidth) +
+                ((data.bars.length - 1) * monthGapWidth) +
+                chartRightPadding +
+                8.0,
+          )
+        : double.infinity;
+
+    return SizedBox(
+      height: chartHeight,
+      width: plotWidth,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: axisLabelWidth,
+            child: _DashboardTaskCountAxisLabels(labels: data.axisLabels),
+          ),
+          const SizedBox(width: chartGapWidth),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _DashboardTaskCountGridPainter(
+                      columnCount: data.bars.length,
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      top: 10,
+                      right: 4,
+                      bottom: 0,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (
+                          var index = 0;
+                          index < data.bars.length;
+                          index++
+                        ) ...[
+                          if (monthView)
+                            SizedBox(
+                              width: monthBarWidth,
+                              child: _DashboardTaskCountBarItem(
+                                bar: data.bars[index],
+                                axisMaximum: data.axisMaximum,
+                                monthView: true,
+                              ),
+                            )
+                          else
+                            Expanded(
+                              child: _DashboardTaskCountBarItem(
+                                bar: data.bars[index],
+                                axisMaximum: data.axisMaximum,
+                                monthView: false,
+                              ),
+                            ),
+                          if (index != data.bars.length - 1)
+                            SizedBox(width: monthView ? monthGapWidth : 3),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTaskCountBarItem extends StatelessWidget {
+  const _DashboardTaskCountBarItem({
+    required this.bar,
+    required this.axisMaximum,
+    required this.monthView,
+  });
+
+  final DashboardTaskCountBar bar;
+  final int axisMaximum;
+  final bool monthView;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = bar.isCurrentMonthDay
+        ? AppColors.blue500
+        : AppColors.neutral200;
+    final labelColor = bar.isCurrentMonthDay
+        ? AppColors.subHeaderText
+        : AppColors.neutral400;
+    final barHeight = math.max(
+      10.0,
+      math.min(248.0, (bar.count / axisMaximum) * 248.0),
+    );
+
+    return SizedBox(
+      key: DashboardScreen.taskCountChartBarKey(
+        dashboardTaskCountDateKey(bar.date),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const Spacer(),
+          if (bar.count > 0)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                width: monthView ? 22 : 38,
+                height: barHeight,
+                decoration: BoxDecoration(
+                  color: activeColor,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 0),
+          const SizedBox(height: 8),
+          Text(
+            _displayBarLabel(bar),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: labelColor,
+              fontSize: 12,
+              fontWeight: AppTypography.weightNormal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTaskCountAxisLabels extends StatelessWidget {
+  const _DashboardTaskCountAxisLabels({required this.labels});
+
+  final List<int> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final label in labels)
+          Text(
+            '$label',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.titleText,
+              fontSize: 10,
+              fontWeight: AppTypography.weightMedium,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DashboardTaskCountGridPainter extends CustomPainter {
+  const _DashboardTaskCountGridPainter({required this.columnCount});
+
+  final int columnCount;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppColors.neutral200
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final path = Path();
+    const dashWidth = 4.0;
+    const dashSpace = 4.0;
+    const baselineInset = 18.0;
+    const rowCount = 5;
+
+    for (var row = 0; row < rowCount; row++) {
+      final y = row == rowCount - 1
+          ? size.height - baselineInset
+          : (size.height - baselineInset) * (row / (rowCount - 1));
+      _drawDashedLine(
+        canvas,
+        paint,
+        Offset(0, y),
+        Offset(size.width, y),
+        dashWidth,
+        dashSpace,
+      );
+    }
+
+    final columnSpacing = columnCount <= 1
+        ? size.width
+        : size.width / columnCount;
+    for (var column = 0; column <= columnCount; column++) {
+      final x = math.min(size.width, column * columnSpacing);
+      _drawDashedLine(
+        canvas,
+        paint,
+        Offset(x, 0),
+        Offset(x, size.height - baselineInset),
+        dashWidth,
+        dashSpace,
+      );
+    }
+
+    final baselineY = size.height - baselineInset;
+    path
+      ..moveTo(0, baselineY)
+      ..lineTo(size.width, baselineY);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = AppColors.subHeaderText
+        ..strokeWidth = 1.1
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashboardTaskCountGridPainter oldDelegate) {
+    return oldDelegate.columnCount != columnCount;
+  }
+}
+
+class _DashboardTaskCountEmptyState extends StatelessWidget {
+  const _DashboardTaskCountEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.two),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No task activity yet',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.titleText,
+              fontWeight: AppTypography.weightSemibold,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.one),
+          Text(
+            'Tasks you create this period will appear here.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.subHeaderText,
+              fontWeight: AppTypography.weightNormal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTaskCountInsightBanner extends StatelessWidget {
+  const _DashboardTaskCountInsightBanner({required this.insight});
+
+  final _TaskCountInsight insight;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 56),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.oneAndHalf,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.blue50,
+          borderRadius: BorderRadius.circular(AppRadii.threeXl),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              TablerIcons.trending_up,
+              color: AppColors.blue500,
+              size: 14,
+            ),
+            const SizedBox(width: AppSpacing.three),
+            Expanded(
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'You added',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: 14,
+                      fontWeight: AppTypography.weightNormal,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    '${insight.percentage}%',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.blue500,
+                      fontSize: 14,
+                      fontWeight: AppTypography.weightSemibold,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    'tasks this ${insight.periodLabel}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.titleText,
+                      fontSize: 14,
+                      fontWeight: AppTypography.weightNormal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardTaskCountMenu extends StatelessWidget {
+  const _DashboardTaskCountMenu({
+    required this.currentValue,
+    required this.isExporting,
+    required this.onScopeChanged,
+    required this.onExportRequested,
+  });
+
+  final DashboardTaskCountScope currentValue;
+  final bool isExporting;
+  final ValueChanged<DashboardTaskCountScope> onScopeChanged;
+  final Future<void> Function() onExportRequested;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      key: DashboardScreen.taskCountChartMenuButtonKey,
+      initialValue: _taskCountScopeValue(currentValue),
+      color: AppColors.cardFill,
+      surfaceTintColor: AppColors.cardFill,
+      elevation: taskPopupMenuElevation,
+      shadowColor: taskPopupMenuShadowColor,
+      shape: taskPopupMenuShape,
+      menuPadding: taskPopupMenuPadding,
+      onSelected: (value) {
+        if (value == 'this-week') {
+          onScopeChanged(DashboardTaskCountScope.thisWeek);
+        } else if (value == 'this-month') {
+          onScopeChanged(DashboardTaskCountScope.thisMonth);
+        } else if (value == 'export-data' && !isExporting) {
+          onExportRequested();
+        }
+      },
+      itemBuilder: (context) => [
+        buildTaskPopupMenuItem<String>(
+          key: DashboardScreen.taskCountChartMenuItemKey('this-week'),
+          value: 'this-week',
+          label: 'This Week',
+        ),
+        buildTaskPopupMenuItem<String>(
+          key: DashboardScreen.taskCountChartMenuItemKey('this-month'),
+          value: 'this-month',
+          label: 'This Month',
+        ),
+        buildTaskPopupMenuItem<String>(
+          key: DashboardScreen.taskCountChartMenuItemKey('export-data'),
+          value: 'export-data',
+          label: 'Export Data',
+          showDivider: true,
+        ),
+      ],
+      child: _DashboardMenuIcon(isBusy: isExporting),
+    );
+  }
+}
+
 class _DashboardTaskStatusCard extends StatelessWidget {
   const _DashboardTaskStatusCard({
     required this.tasks,
@@ -1349,7 +1932,7 @@ class _DashboardTaskStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DashboardStatusShell(
-      title: 'Tasks Status',
+      title: 'Task Overview',
       subtitle: _taskStatusFilterSubtitle(filter),
       menu: _DashboardTaskFilterMenu(
         currentValue: filter,
@@ -1556,20 +2139,31 @@ class _DashboardTaskFilterMenu extends StatelessWidget {
 }
 
 class _DashboardMenuIcon extends StatelessWidget {
-  const _DashboardMenuIcon();
+  const _DashboardMenuIcon({this.isBusy = false});
+
+  final bool isBusy;
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
+    return SizedBox(
       width: 32,
       height: 32,
       child: Align(
         alignment: Alignment.topRight,
-        child: Icon(
-          TablerIcons.dots_vertical,
-          color: AppColors.subHeaderText,
-          size: 22,
-        ),
+        child: isBusy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.blue500,
+                ),
+              )
+            : const Icon(
+                TablerIcons.dots_vertical,
+                color: AppColors.subHeaderText,
+                size: 22,
+              ),
       ),
     );
   }
@@ -1609,79 +2203,79 @@ class _DashboardTaskStatusRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.two),
           child: Row(
-          children: [
-            GestureDetector(
-              key: DashboardScreen.taskToggleKey(task.id),
-              behavior: HitTestBehavior.opaque,
-              onTap: onToggle,
-              child: Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: categoryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppRadii.twoXl),
+            children: [
+              GestureDetector(
+                key: DashboardScreen.taskToggleKey(task.id),
+                behavior: HitTestBehavior.opaque,
+                onTap: onToggle,
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: categoryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppRadii.twoXl),
+                  ),
+                  child: Icon(icon, color: categoryColor, size: 26),
                 ),
-                child: Icon(icon, color: categoryColor, size: 26),
               ),
-            ),
-            const SizedBox(width: AppSpacing.four),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: AppSpacing.four),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppColors.titleText,
+                        fontSize: AppTypography.sizeBase,
+                        fontWeight: AppTypography.weightSemibold,
+                        decoration: task.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.one),
+                    Text(
+                      categoryName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.subHeaderText,
+                        fontSize: AppTypography.sizeBase,
+                        fontWeight: AppTypography.weightNormal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.three),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.titleText,
-                      fontSize: AppTypography.sizeBase,
-                      fontWeight: AppTypography.weightSemibold,
-                      decoration: task.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
+                    status,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.neutral500,
+                      fontSize: AppTypography.sizeSm,
+                      fontWeight: AppTypography.weightMedium,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.one),
                   Text(
-                    categoryName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    _formatTaskStatusDate(task),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.subHeaderText,
-                      fontSize: AppTypography.sizeBase,
+                      fontSize: AppTypography.sizeSm,
                       fontWeight: AppTypography.weightNormal,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: AppSpacing.three),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  status,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.neutral500,
-                    fontSize: AppTypography.sizeSm,
-                    fontWeight: AppTypography.weightMedium,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.one),
-                Text(
-                  _formatTaskStatusDate(task),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.subHeaderText,
-                    fontSize: AppTypography.sizeSm,
-                    fontWeight: AppTypography.weightNormal,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -1781,6 +2375,28 @@ String _chartSegmentValue(_DashboardChartSegment segment) {
   };
 }
 
+String _taskCountSubtitle(DashboardTaskCountChartData data) {
+  return switch (data.scope) {
+    DashboardTaskCountScope.thisWeek =>
+      '${_formatMonthDay(data.rangeStart)} - ${_formatMonthDay(data.rangeEnd)}',
+    DashboardTaskCountScope.thisMonth => _formatMonthYear(data.rangeStart),
+  };
+}
+
+String _taskCountTitle(DashboardTaskCountScope scope) {
+  return switch (scope) {
+    DashboardTaskCountScope.thisWeek => 'Weekly Task Statistics',
+    DashboardTaskCountScope.thisMonth => 'Monthly Task Statistics',
+  };
+}
+
+String _taskCountScopeValue(DashboardTaskCountScope scope) {
+  return switch (scope) {
+    DashboardTaskCountScope.thisWeek => 'this-week',
+    DashboardTaskCountScope.thisMonth => 'this-month',
+  };
+}
+
 Color _chartSegmentColor(_DashboardChartSegment segment) {
   return switch (segment) {
     _DashboardChartSegment.completed => AppColors.teal500,
@@ -1855,6 +2471,171 @@ String _taskStatusFilterSubtitle(_DashboardTaskStatusFilter filter) {
   };
 }
 
+String _formatShortMonthDay(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[date.month - 1]} ${date.day.toString().padLeft(2, '0')}';
+}
+
+String _formatMonthDay(DateTime date) {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${months[date.month - 1]} ${date.day}';
+}
+
+String _formatMonthYear(DateTime date) {
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${months[date.month - 1]} ${date.year}';
+}
+
+String _displayBarLabel(DashboardTaskCountBar bar) {
+  if (bar.label == 'Mon') {
+    return 'Mo';
+  }
+  if (bar.label == 'Tue') {
+    return 'Tu';
+  }
+  if (bar.label == 'Wed') {
+    return 'We';
+  }
+  if (bar.label == 'Thu') {
+    return 'Th';
+  }
+  if (bar.label == 'Fri') {
+    return 'Fr';
+  }
+  if (bar.label == 'Sat') {
+    return 'Sa';
+  }
+  if (bar.label == 'Sun') {
+    return 'Su';
+  }
+  return bar.label;
+}
+
+_TaskCountInsight _taskCountInsight({
+  required List<TaskItem> tasks,
+  required DashboardTaskCountChartData data,
+  required DateTime now,
+}) {
+  final currentTotal = data.totalCount;
+  final previousTotal = switch (data.scope) {
+    DashboardTaskCountScope.thisWeek => _countTasksInRange(
+      tasks: tasks,
+      start: DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(const Duration(days: 7)),
+      end: DateTime(now.year, now.month, now.day),
+    ),
+    DashboardTaskCountScope.thisMonth => _countTasksInRange(
+      tasks: tasks,
+      start: DateTime(
+        now.month == 1 ? now.year - 1 : now.year,
+        now.month == 1 ? 12 : now.month - 1,
+        1,
+      ),
+      end: DateTime(now.year, now.month, 1),
+    ),
+  };
+  final percentage = previousTotal == 0
+      ? (currentTotal > 0 ? 100 : 0)
+      : (((currentTotal - previousTotal) / previousTotal) * 100).abs().round();
+  return _TaskCountInsight(
+    percentage: percentage,
+    periodLabel: data.scope == DashboardTaskCountScope.thisWeek
+        ? 'week'
+        : 'month',
+  );
+}
+
+int _countTasksInRange({
+  required List<TaskItem> tasks,
+  required DateTime start,
+  required DateTime end,
+}) {
+  final normalizedStart = DateTime(start.year, start.month, start.day);
+  final normalizedEnd = DateTime(end.year, end.month, end.day);
+  var total = 0;
+  for (final task in tasks) {
+    final date = dashboardTaskCountDateForTask(task);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    if (!normalizedDate.isBefore(normalizedStart) &&
+        normalizedDate.isBefore(normalizedEnd)) {
+      total++;
+    }
+  }
+  return total;
+}
+
+void _drawDashedLine(
+  Canvas canvas,
+  Paint paint,
+  Offset start,
+  Offset end,
+  double dashWidth,
+  double dashSpace,
+) {
+  final totalDistance = (end - start).distance;
+  final direction = (end - start) / totalDistance;
+  double distance = 0;
+  while (distance < totalDistance) {
+    final nextDistance = math.min(distance + dashWidth, totalDistance);
+    final segmentStart = start + (direction * distance);
+    final segmentEnd = start + (direction * nextDistance);
+    canvas.drawLine(segmentStart, segmentEnd, paint);
+    distance += dashWidth + dashSpace;
+  }
+}
+
+class _TaskCountInsight {
+  const _TaskCountInsight({
+    required this.percentage,
+    required this.periodLabel,
+  });
+
+  final int percentage;
+  final String periodLabel;
+}
+
 String _taskStatusLabel(TaskItem task, DateTime now) {
   if (task.isCompleted) {
     return 'Completed';
@@ -1903,7 +2684,7 @@ class _ProgressCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.eight,
-        vertical: AppSpacing.six,
+        vertical: AppSpacing.five,
       ),
       decoration: BoxDecoration(
         color: AppColors.primaryButtonFill,
@@ -1920,7 +2701,7 @@ class _ProgressCard extends StatelessWidget {
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
-          const SizedBox(height: AppSpacing.three),
+          const SizedBox(height: AppSpacing.two),
           Text(
             '$completedCount / $totalCount tasks completed',
             key: DashboardScreen.progressLabelKey,
@@ -1930,7 +2711,7 @@ class _ProgressCard extends StatelessWidget {
               fontWeight: AppTypography.weightNormal,
             ),
           ),
-          const SizedBox(height: AppSpacing.three),
+          const SizedBox(height: AppSpacing.two),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadii.full),
             child: LinearProgressIndicator(

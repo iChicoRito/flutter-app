@@ -349,6 +349,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         return;
       }
 
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Task created successfully.');
       if (vaultResolution.recoveryKeys.isNotEmpty) {
         await showVaultRecoveryKeysDialog(
@@ -443,6 +444,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         );
         _calendarStatusFilter = TaskStatusFilter.all;
       });
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Task scheduled successfully.');
     } catch (_) {
       if (!mounted) {
@@ -558,6 +560,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
         );
         _calendarStatusFilter = TaskStatusFilter.all;
       });
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Task updated successfully.');
     } catch (_) {
       if (!mounted) {
@@ -590,8 +593,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           priorityFieldKey: TaskEditorScreen.priorityFieldKey,
           categoryFieldKey: TaskEditorScreen.categoryFieldKey,
           addCategoryButtonKey: TaskEditorScreen.addCategoryButtonKey,
-          categoryColorSelectionKey:
-              TaskEditorScreen.categoryColorSelectionKey,
+          categoryColorSelectionKey: TaskEditorScreen.categoryColorSelectionKey,
           categoryCurrentIconKey: TaskEditorScreen.categoryCurrentIconKey,
           saveButtonKey: TaskEditorScreen.saveButtonKey,
           dateButtonKey: TaskEditorScreen.dateRangeButtonKey,
@@ -630,9 +632,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       }
 
       final focusDate =
-          updatedTask.startDate ??
-          updatedTask.endDate ??
-          _selectedCalendarDate;
+          updatedTask.startDate ?? updatedTask.endDate ?? _selectedCalendarDate;
       setState(() {
         _selectedCalendarMonth = DateTime(focusDate.year, focusDate.month, 1);
         _selectedCalendarDate = DateTime(
@@ -772,6 +772,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     if (!mounted) {
       return;
     }
+    TaskDataRefreshScope.of(context).notifyDataChanged();
     if (result == TaskEditorScreen.deletedResult) {
       showTaskToast(context, message: 'Task deleted successfully.');
     } else if (result == TaskEditorScreen.archivedResult) {
@@ -846,9 +847,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           value: _CalendarTaskContextAction.markComplete,
           padding: EdgeInsets.zero,
           child: TaskMenuEntry(
-            label: task.isCompleted
-                ? 'Mark as Incomplete'
-                : 'Mark as Complete',
+            label: task.isCompleted ? 'Mark as Incomplete' : 'Mark as Complete',
           ),
         ),
         const PopupMenuItem<_CalendarTaskContextAction>(
@@ -1192,6 +1191,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       if (!mounted) {
         return;
       }
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Task moved successfully.');
     } catch (_) {
       if (!mounted) {
@@ -1403,15 +1403,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   Widget _buildTasksView(List<TaskItem> filteredTasks) {
+    final topHeaderPadding = widget.useInlineBackHeader
+        ? AppSpacing.zero
+        : AppSpacing.six;
+    final listTopPadding = widget.useInlineBackHeader
+        ? AppSpacing.three
+        : AppSpacing.six;
+
     return RefreshIndicator(
       color: AppColors.blue500,
       onRefresh: _controller.load,
       child: CustomScrollView(
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               AppSpacing.four,
-              AppSpacing.six,
+              topHeaderPadding,
               AppSpacing.four,
               AppSpacing.zero,
             ),
@@ -1419,21 +1426,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           ),
           if (filteredTasks.isEmpty)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 AppSpacing.four,
-                AppSpacing.six,
+                listTopPadding,
                 AppSpacing.four,
                 AppSpacing.zero,
               ),
-              sliver: SliverToBoxAdapter(
-                child: const SizedBox.shrink(),
-              ),
+              sliver: SliverToBoxAdapter(child: const SizedBox.shrink()),
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
+              padding: EdgeInsets.fromLTRB(
                 AppSpacing.four,
-                AppSpacing.six,
+                listTopPadding,
                 AppSpacing.four,
                 120,
               ),
@@ -1527,7 +1532,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _TaskPageHeader(),
+        if (!widget.useInlineBackHeader) const _TaskPageHeader(),
         if (!widget.tasksOnlyMode) ...[
           const SizedBox(height: AppSpacing.three),
           _TaskViewSegmentedControl(
@@ -1950,11 +1955,12 @@ class _TaskViewSegmentButton extends StatelessWidget {
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: color,
-                          fontSize: AppTypography.sizeBase,
-                          fontWeight: AppTypography.weightNormal,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: color,
+                              fontSize: AppTypography.sizeBase,
+                              fontWeight: AppTypography.weightNormal,
+                            ),
                       ),
                     ),
                   ],
@@ -2540,7 +2546,9 @@ class _TaskCard extends StatelessWidget {
                                                 task.isPinned ? 'unpin' : 'pin',
                                               ),
                                           value: _TaskMenuAction.pin,
-                                          label: task.isPinned ? 'Unpin' : 'Pin',
+                                          label: task.isPinned
+                                              ? 'Unpin'
+                                              : 'Pin',
                                         ),
                                         buildTaskPopupMenuItem<_TaskMenuAction>(
                                           key:

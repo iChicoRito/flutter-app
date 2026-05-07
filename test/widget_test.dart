@@ -15,6 +15,7 @@ import 'package:flutter_app/core/services/vault_service_scope.dart';
 import 'package:flutter_app/core/theme/app_design_tokens.dart';
 import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/archive/presentation/archives_screen.dart';
+import 'package:flutter_app/features/dashboard/domain/dashboard_task_count_chart.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
@@ -42,12 +43,14 @@ void main() {
   late FakeDisplayNameStore displayNameStore;
   late InMemoryTaskRepository taskRepository;
   late DateTime Function() dashboardClock;
+  Future<void> Function(DashboardTaskCountChartData data)? exportTaskCountChart;
 
   setUp(() {
     onboardingStatusStore = FakeOnboardingStatusStore();
     displayNameStore = FakeDisplayNameStore();
     taskRepository = InMemoryTaskRepository();
     dashboardClock = () => DateTime(2026, 4, 13, 9);
+    exportTaskCountChart = null;
   });
 
   Future<void> pumpApp(
@@ -61,6 +64,7 @@ void main() {
         displayNameStore: displayNameStore,
         taskRepository: taskRepository,
         dashboardClock: clock ?? dashboardClock,
+        onExportTaskCountChart: exportTaskCountChart,
       ),
     );
   }
@@ -433,41 +437,18 @@ void main() {
     );
 
     await openDashboard(tester);
+    await tester.scrollUntilVisible(
+      find.text('Task Overview'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
 
-    expect(find.text('Tasks Status'), findsNWidgets(2));
-    expect(find.text('April 13, 2026'), findsOneWidget);
-    expect(find.text('Total Tasks'), findsOneWidget);
-    expect(find.text('4'), findsOneWidget);
-    expect(find.text('Today'), findsWidgets);
-    expect(find.text('Upcoming'), findsWidgets);
-    expect(find.text('Completed'), findsWidgets);
-    expect(find.text('Overdue'), findsWidgets);
-    expect(find.text('Submit project brief'), findsOneWidget);
-    expect(find.text('Work'), findsWidgets);
-    expect(find.text('April 13'), findsWidgets);
+    expect(find.text('Task Overview'), findsOneWidget);
     expect(find.text('Today\'s Tasks'), findsNothing);
     expect(find.text('Upcoming Tasks'), findsNothing);
     expect(find.text('Overdue Tasks'), findsNothing);
     expect(find.text('Completed Tasks'), findsNothing);
-
-    final progressTitle = tester.widget<Text>(find.text('Today\'s Progress'));
-    expect(progressTitle.style?.fontSize, AppTypography.sizeLg);
-    expect(progressTitle.style?.fontWeight, AppTypography.weightSemibold);
-
-    final progressCard = tester
-        .widgetList<Container>(find.byType(Container))
-        .firstWhere((container) {
-          final decoration = container.decoration;
-          return decoration is BoxDecoration &&
-              decoration.color == AppColors.primaryButtonFill &&
-              decoration.borderRadius ==
-                  BorderRadius.circular(AppRadii.threeXl);
-        });
-    final progressDecoration = progressCard.decoration as BoxDecoration;
-    expect(
-      progressDecoration.borderRadius,
-      BorderRadius.circular(AppRadii.threeXl),
-    );
   });
 
   testWidgets('dashboard chart filter and segment selection update legend', (
@@ -711,6 +692,12 @@ void main() {
     );
 
     await openDashboard(tester);
+    await tester.dragUntilVisible(
+      find.byKey(DashboardScreen.taskStatusMenuButtonKey),
+      find.byType(Scrollable).first,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('Web Development'), findsOneWidget);
     expect(find.text('Written Exam'), findsOneWidget);
@@ -732,6 +719,323 @@ void main() {
     expect(find.text('Written Exam'), findsNothing);
     expect(find.text('Tuition Fee'), findsNothing);
   });
+
+  testWidgets(
+    'dashboard shows a weekly task count card below the donut chart',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'monday-a',
+            title: 'Monday A',
+            priority: TaskPriority.high,
+            categoryId: 'work',
+          ),
+          buildTask(
+            id: 'monday-b',
+            title: 'Monday B',
+            priority: TaskPriority.medium,
+            categoryId: 'personal',
+          ),
+          buildTask(
+            id: 'wednesday',
+            title: 'Wednesday',
+            priority: TaskPriority.low,
+            categoryId: 'finance',
+            archivedAt: null,
+          ).copyWith(
+            createdAt: DateTime(2026, 4, 15, 9),
+            updatedAt: DateTime(2026, 4, 15, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      expect(find.byKey(DashboardScreen.taskCountChartCardKey), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(DashboardScreen.taskCountChartCardKey)).dy,
+        greaterThan(
+          tester
+              .getBottomLeft(find.byKey(DashboardScreen.chartStatusCardKey))
+              .dy,
+        ),
+      );
+      expect(find.text('Weekly Task Statistics'), findsOneWidget);
+      expect(find.text('April 13 - April 19'), findsOneWidget);
+      final taskCountCard = find.byKey(DashboardScreen.taskCountChartCardKey);
+      expect(
+        find.byKey(DashboardScreen.taskCountChartBarKey('2026-04-13')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(DashboardScreen.taskCountChartBarKey('2026-04-15')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(DashboardScreen.taskCountChartBarKey('2026-04-14')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Container && widget.decoration is BoxDecoration,
+          ),
+        ),
+        findsNothing,
+      );
+      expect(find.text('You added'), findsOneWidget);
+      expect(find.text('tasks this week'), findsOneWidget);
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('0')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('1')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('2')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('3')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('4')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('5')),
+        findsOneWidget,
+      );
+      final thursdayBar = find.byKey(
+        DashboardScreen.taskCountChartBarKey('2026-04-16'),
+      );
+      expect(tester.getSize(taskCountCard).height, greaterThan(300));
+      expect(tester.getSize(thursdayBar).height, greaterThan(180));
+    },
+  );
+
+  testWidgets(
+    'task count insight compares the current week to the previous week',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'previous-week',
+            title: 'Previous week',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+          ).copyWith(
+            endDate: DateTime(2026, 4, 9),
+            endMinutes: 9 * 60,
+            createdAt: DateTime(2026, 4, 9, 9),
+            updatedAt: DateTime(2026, 4, 9, 9),
+          ),
+          buildTask(
+            id: 'current-week-a',
+            title: 'Current week A',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+          ).copyWith(
+            endDate: DateTime(2026, 4, 14),
+            endMinutes: 9 * 60,
+            createdAt: DateTime(2026, 4, 14, 9),
+            updatedAt: DateTime(2026, 4, 14, 9),
+          ),
+          buildTask(
+            id: 'current-week-b',
+            title: 'Current week B',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+          ).copyWith(
+            endDate: DateTime(2026, 4, 15),
+            endMinutes: 9 * 60,
+            createdAt: DateTime(2026, 4, 15, 9),
+            updatedAt: DateTime(2026, 4, 15, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      final taskCountCard = find.byKey(DashboardScreen.taskCountChartCardKey);
+      expect(
+        find.descendant(of: taskCountCard, matching: find.text('100%')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('task count chart menu contains only week month and export', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    await tester.tap(find.byKey(DashboardScreen.taskCountChartMenuButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(DashboardScreen.taskCountChartMenuItemKey('this-week')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(DashboardScreen.taskCountChartMenuItemKey('this-month')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(DashboardScreen.taskCountChartMenuItemKey('export-data')),
+      findsOneWidget,
+    );
+    expect(find.byKey(DashboardScreen.chartMenuItemKey('today')), findsNothing);
+    expect(
+      find.byKey(DashboardScreen.chartMenuItemKey('all-tasks')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('task count card title and subtitle match pie chart typography', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
+
+    final pieTitle = tester.widget<Text>(find.text('Tasks Status').first);
+    final pieSubtitle = tester.widget<Text>(find.text('April 13, 2026').first);
+    final barTitle = tester.widget<Text>(find.text('Weekly Task Statistics'));
+    final barSubtitle = tester.widget<Text>(find.text('April 13 - April 19'));
+
+    expect(barTitle.style?.fontSize, pieTitle.style?.fontSize);
+    expect(barTitle.style?.fontWeight, pieTitle.style?.fontWeight);
+    expect(barTitle.style?.color, pieTitle.style?.color);
+
+    expect(barSubtitle.style?.fontSize, pieSubtitle.style?.fontSize);
+    expect(barSubtitle.style?.fontWeight, pieSubtitle.style?.fontWeight);
+    expect(barSubtitle.style?.color, pieSubtitle.style?.color);
+  });
+
+  testWidgets(
+    'task count chart switches to month view and supports scrolling',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'first',
+            title: 'First',
+            priority: TaskPriority.high,
+            categoryId: 'work',
+          ).copyWith(
+            createdAt: DateTime(2026, 4, 1, 9),
+            updatedAt: DateTime(2026, 4, 1, 9),
+          ),
+          buildTask(
+            id: 'last',
+            title: 'Last',
+            priority: TaskPriority.high,
+            categoryId: 'work',
+          ).copyWith(
+            createdAt: DateTime(2026, 4, 30, 9),
+            updatedAt: DateTime(2026, 4, 30, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      await tester.tap(find.byKey(DashboardScreen.taskCountChartMenuButtonKey));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(DashboardScreen.taskCountChartMenuItemKey('this-month')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monthly Task Statistics'), findsOneWidget);
+      expect(find.text('April 2026'), findsOneWidget);
+      expect(
+        find.byKey(DashboardScreen.taskCountChartScrollKey),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(DashboardScreen.taskCountChartBarKey('2026-04-01')),
+        findsOneWidget,
+      );
+
+      await tester.drag(
+        find.byKey(DashboardScreen.taskCountChartScrollKey),
+        const Offset(-600, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(DashboardScreen.taskCountChartBarKey('2026-04-30')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'task count export uses the injected callback and shows success',
+    (WidgetTester tester) async {
+      DashboardTaskCountChartData? exportedData;
+      exportTaskCountChart = (data) async {
+        exportedData = data;
+      };
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'created',
+            title: 'Created',
+            priority: TaskPriority.medium,
+            categoryId: 'work',
+          ).copyWith(
+            createdAt: DateTime(2026, 4, 13, 9),
+            updatedAt: DateTime(2026, 4, 13, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      await tester.tap(find.byKey(DashboardScreen.taskCountChartMenuButtonKey));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(DashboardScreen.taskCountChartMenuItemKey('export-data')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(exportedData, isNotNull);
+      expect(exportedData!.scope, DashboardTaskCountScope.thisWeek);
+      expect(exportedData!.rangeStart, DateTime(2026, 4, 13));
+      expect(exportedData!.bars.first.count, 1);
+      expect(find.text('Chart data exported.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'task count chart shows an empty state when the period has no tasks',
+    (WidgetTester tester) async {
+      taskRepository = InMemoryTaskRepository(
+        tasks: [
+          buildTask(
+            id: 'old',
+            title: 'Old',
+            priority: TaskPriority.low,
+            categoryId: 'work',
+          ).copyWith(
+            createdAt: DateTime(2026, 3, 1, 9),
+            updatedAt: DateTime(2026, 3, 1, 9),
+          ),
+        ],
+      );
+
+      await openDashboard(tester);
+
+      expect(find.text('No task activity yet'), findsOneWidget);
+      expect(
+        find.text('Tasks you create this period will appear here.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('dashboard home header removes the trailing top action slot', (
     WidgetTester tester,
@@ -2993,7 +3297,7 @@ void main() {
         find.byKey(TaskManagementScreen.taskBadgeKey('locked-task')),
       );
       final lockedBadgeDecoration = lockedBadge.decoration! as BoxDecoration;
-      expect(lockedBadgeDecoration.color, AppColors.rose100);
+      expect(lockedBadgeDecoration.color, AppColors.teal100);
 
       final taskCard = tester.widget<Container>(
         find.descendant(

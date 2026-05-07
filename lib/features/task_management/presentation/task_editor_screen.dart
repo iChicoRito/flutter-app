@@ -553,6 +553,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       setState(() {
         _task = latest;
       });
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       return true;
     } catch (_) {
       if (!mounted) {
@@ -657,6 +658,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
         _task = latest ?? updatedTask;
         _categories = result.categories;
       });
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       showTaskToast(context, message: 'Task updated successfully.');
       if (recoveryKeys.isNotEmpty) {
         await showVaultRecoveryKeysDialog(
@@ -736,6 +738,7 @@ class _TaskEditorScreenState extends State<TaskEditorScreen> {
       if (!mounted) {
         return;
       }
+      TaskDataRefreshScope.of(context).notifyDataChanged();
       Navigator.of(context).pop(TaskEditorScreen.deletedResult);
     } catch (_) {
       if (!mounted) {

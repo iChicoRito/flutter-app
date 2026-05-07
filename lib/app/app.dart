@@ -18,6 +18,7 @@ import '../core/services/task_repository_scope.dart';
 import '../core/theme/app_theme.dart';
 import '../core/services/vault_service.dart';
 import '../core/services/vault_service_scope.dart';
+import '../features/dashboard/domain/dashboard_task_count_chart.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/task_reminder/presentation/task_alarm_screen.dart';
@@ -33,6 +34,8 @@ class MyApp extends StatefulWidget {
     TaskReminderService? reminderService,
     VaultService? vaultService,
     DashboardClock? dashboardClock,
+    Future<void> Function(DashboardTaskCountChartData data)?
+    onExportTaskCountChart,
   }) : onboardingStatusStore =
            onboardingStatusStore ??
            const SharedPreferencesOnboardingStatusStore(),
@@ -41,7 +44,8 @@ class MyApp extends StatefulWidget {
        taskRepository = taskRepository ?? InMemoryTaskRepository(),
        reminderService = reminderService ?? const NoopTaskReminderService(),
        vaultService = vaultService ?? LocalVaultService(),
-       dashboardClock = dashboardClock ?? DateTime.now;
+       dashboardClock = dashboardClock ?? DateTime.now,
+       onExportTaskCountChart = onExportTaskCountChart;
 
   final OnboardingStatusStore onboardingStatusStore;
   final DisplayNameStore displayNameStore;
@@ -49,6 +53,8 @@ class MyApp extends StatefulWidget {
   final TaskReminderService reminderService;
   final VaultService vaultService;
   final DashboardClock dashboardClock;
+  final Future<void> Function(DashboardTaskCountChartData data)?
+  onExportTaskCountChart;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -307,6 +313,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 onboardingStatusStore: widget.onboardingStatusStore,
                 displayNameStore: widget.displayNameStore,
                 dashboardClock: widget.dashboardClock,
+                onExportTaskCountChart: widget.onExportTaskCountChart,
               ),
             ),
           ),
@@ -321,11 +328,14 @@ class _InitialLaunchGate extends StatelessWidget {
     required this.onboardingStatusStore,
     required this.displayNameStore,
     required this.dashboardClock,
+    this.onExportTaskCountChart,
   });
 
   final OnboardingStatusStore onboardingStatusStore;
   final DisplayNameStore displayNameStore;
   final DashboardClock dashboardClock;
+  final Future<void> Function(DashboardTaskCountChartData data)?
+  onExportTaskCountChart;
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +352,7 @@ class _InitialLaunchGate extends StatelessWidget {
           return DashboardScreen(
             displayNameStore: displayNameStore,
             clock: dashboardClock,
+            onExportTaskCountChart: onExportTaskCountChart,
           );
         }
 

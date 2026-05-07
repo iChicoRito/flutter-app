@@ -72,11 +72,11 @@ TaskCardAppearance taskCardAppearanceForCategory({
   required bool previewProtected,
 }) {
   if (previewProtected) {
-    return const TaskCardAppearance(
-      accentColor: AppColors.rose500,
-      badgeBackgroundColor: AppColors.rose100,
-      badgeForegroundColor: AppColors.rose500,
-      lockedForegroundColor: AppColors.subHeaderText,
+    return TaskCardAppearance(
+      accentColor: categoryColor,
+      badgeBackgroundColor: _taskBadgeBackgroundFor(categoryColor),
+      badgeForegroundColor: categoryColor,
+      lockedForegroundColor: categoryColor,
     );
   }
 

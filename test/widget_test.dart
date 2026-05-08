@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import 'package:flutter_app/core/vault/vault_models.dart';
 import 'package:flutter_app/features/archive/presentation/archives_screen.dart';
 import 'package:flutter_app/features/dashboard/domain/dashboard_task_count_chart.dart';
 import 'package:flutter_app/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:flutter_app/features/dashboard/presentation/manage_data_sheet.dart';
 import 'package:flutter_app/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:flutter_app/features/spaces/domain/task_space.dart';
 import 'package:flutter_app/features/spaces/presentation/space_detail_screen.dart';
@@ -25,6 +27,7 @@ import 'package:flutter_app/features/spaces/presentation/spaces_page.dart';
 import 'package:flutter_app/shared/widgets/first_run_handoff_dialogs.dart';
 import 'package:flutter_app/shared/widgets/custom_category_sheet.dart';
 import 'package:flutter_app/features/task_management/data/hive_task_repository.dart';
+import 'package:flutter_app/features/task_management/data/app_data_transfer_service.dart';
 import 'package:flutter_app/features/task_management/data/task_note_codec.dart';
 import 'package:flutter_app/features/task_management/domain/task_category.dart';
 import 'package:flutter_app/features/task_management/domain/task_item.dart';
@@ -34,6 +37,7 @@ import 'package:flutter_app/features/task_management/presentation/task_editor_sc
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_ui.dart';
 import 'package:flutter_app/features/task_management/presentation/task_schedule_sheet.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
@@ -44,6 +48,8 @@ void main() {
   late InMemoryTaskRepository taskRepository;
   late DateTime Function() dashboardClock;
   Future<void> Function(DashboardTaskCountChartData data)? exportTaskCountChart;
+  Future<AppDataImportResult> Function(PlatformFile file)? importAppData;
+  Future<void> Function(AppDataExportSelection selection)? exportAppData;
 
   setUp(() {
     onboardingStatusStore = FakeOnboardingStatusStore();
@@ -51,6 +57,8 @@ void main() {
     taskRepository = InMemoryTaskRepository();
     dashboardClock = () => DateTime(2026, 4, 13, 9);
     exportTaskCountChart = null;
+    importAppData = null;
+    exportAppData = null;
   });
 
   Future<void> pumpApp(
@@ -65,6 +73,8 @@ void main() {
         taskRepository: taskRepository,
         dashboardClock: clock ?? dashboardClock,
         onExportTaskCountChart: exportTaskCountChart,
+        onImportAppData: importAppData,
+        onExportAppData: exportAppData,
       ),
     );
   }
@@ -77,6 +87,12 @@ void main() {
     displayNameStore.displayName = 'Mark';
     await pumpApp(tester, clock: clock);
     await tester.pumpAndSettle();
+  }
+
+  Future<void> tapTaskCountBar(WidgetTester tester, Finder barFinder) async {
+    await tester.ensureVisible(barFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(barFinder);
   }
 
   Future<void> pumpTaskManagementScreen(
@@ -487,8 +503,13 @@ void main() {
     await tester.tap(find.byKey(DashboardScreen.chartMenuItemKey('today')));
     await tester.pumpAndSettle();
 
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('Next week task'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartCanvasKey),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
 
     final chartCenter = tester.getCenter(
       find.byKey(DashboardScreen.chartCanvasKey),
@@ -503,7 +524,13 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartCanvasKey),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
         of: find.byKey(DashboardScreen.chartLegendKey),
@@ -569,12 +596,18 @@ void main() {
 
     expect(
       find.descendant(
-        of: find.byKey(DashboardScreen.chartLegendKey),
+        of: find.byKey(DashboardScreen.chartCanvasKey),
         matching: find.text('Upcoming'),
       ),
       findsOneWidget,
     );
-    expect(find.text('1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(DashboardScreen.chartCanvasKey),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.descendant(
         of: find.byKey(DashboardScreen.chartLegendKey),
@@ -972,6 +1005,72 @@ void main() {
     },
   );
 
+  testWidgets('task count chart shows and clears a bar tooltip on tap', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: [
+        buildTask(
+          id: 'tooltip-thursday',
+          title: 'Thursday task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(
+          endDate: DateTime(2026, 4, 16),
+          endMinutes: 9 * 60,
+          createdAt: DateTime(2026, 4, 16, 9),
+          updatedAt: DateTime(2026, 4, 16, 9),
+        ),
+        buildTask(
+          id: 'tooltip-wednesday',
+          title: 'Wednesday task',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(
+          endDate: DateTime(2026, 4, 15),
+          endMinutes: 9 * 60,
+          createdAt: DateTime(2026, 4, 15, 9),
+          updatedAt: DateTime(2026, 4, 15, 9),
+        ),
+      ],
+    );
+
+    await openDashboard(tester);
+
+    final thursdayBar = find.byKey(
+      DashboardScreen.taskCountChartBarKey('2026-04-16'),
+    );
+    final wednesdayBar = find.byKey(
+      DashboardScreen.taskCountChartBarKey('2026-04-15'),
+    );
+
+    await tapTaskCountBar(tester, thursdayBar);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thu, Apr 16'), findsOneWidget);
+    expect(find.text('1 task'), findsOneWidget);
+
+    final taskCountCard = find.byKey(DashboardScreen.taskCountChartCardKey);
+    final blankCanvasPoint =
+        tester.getTopLeft(taskCountCard) + const Offset(220, 160);
+    await tester.tapAt(blankCanvasPoint);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thu, Apr 16'), findsNothing);
+    expect(find.text('1 task'), findsNothing);
+
+    await tapTaskCountBar(tester, wednesdayBar);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Wed, Apr 15'), findsOneWidget);
+    expect(find.text('Thu, Apr 16'), findsNothing);
+
+    await tapTaskCountBar(tester, wednesdayBar);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Wed, Apr 15'), findsNothing);
+  });
+
   testWidgets(
     'task count export uses the injected callback and shows success',
     (WidgetTester tester) async {
@@ -1125,8 +1224,10 @@ void main() {
 
     expect(find.byKey(DashboardScreen.profileTabKey), findsOneWidget);
     expect(find.text('My Profile'), findsOneWidget);
-    expect(find.text('Manage Account'), findsOneWidget);
+    expect(find.text('Account Details'), findsOneWidget);
     expect(find.text('User Profile'), findsOneWidget);
+    expect(find.text('Manage Data'), findsOneWidget);
+    expect(find.byKey(DashboardScreen.profileManageDataRowKey), findsOneWidget);
     final nameFinder = find.descendant(
       of: find.byKey(DashboardScreen.profileIdentityKey),
       matching: find.text('Mark'),
@@ -1264,6 +1365,46 @@ void main() {
     expect(find.text('Profile photo removed successfully.'), findsOneWidget);
   });
 
+  testWidgets('profile manage data sheet opens and exports selected data', (
+    WidgetTester tester,
+  ) async {
+    AppDataExportSelection? exportedSelection;
+    exportAppData = (selection) async {
+      exportedSelection = selection;
+    };
+
+    await openDashboard(tester);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileManageDataRowKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ManageDataSheet.modeSegmentKey), findsOneWidget);
+    expect(find.byKey(ManageDataSheet.importModeKey), findsOneWidget);
+    expect(find.byKey(ManageDataSheet.pickFileButtonKey), findsOneWidget);
+    expect(find.text('Import Data'), findsOneWidget);
+    expect(find.text('Export Data'), findsOneWidget);
+    expect(find.text('Format: .JSON & Max file size: 25 MB'), findsOneWidget);
+
+    await tester.tap(find.text('Export Data'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ManageDataSheet.exportModeKey), findsOneWidget);
+    expect(find.byKey(ManageDataSheet.includeTasksKey), findsOneWidget);
+    expect(find.byKey(ManageDataSheet.includeSpacesKey), findsOneWidget);
+
+    await tester.tap(find.byKey(ManageDataSheet.includeTasksKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ManageDataSheet.submitButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(exportedSelection, isNotNull);
+    expect(exportedSelection!.includeTasks, isFalse);
+    expect(exportedSelection!.includeSpaces, isTrue);
+    expect(find.byKey(ManageDataSheet.modeSegmentKey), findsNothing);
+  });
+
   testWidgets('profile name can be changed from the bottom sheet', (
     WidgetTester tester,
   ) async {
@@ -1288,37 +1429,32 @@ void main() {
     expect(find.text('Edit Profile Name'), findsNothing);
   });
 
-  testWidgets(
-    'profile archives row opens archives and other static rows stay inert',
-    (WidgetTester tester) async {
-      await openDashboard(tester);
+  testWidgets('profile archives row opens archives', (
+    WidgetTester tester,
+  ) async {
+    await openDashboard(tester);
 
-      await tester.tap(find.text('Profile'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(DashboardScreen.profileIdentityKey));
-      await tester.pumpAndSettle();
-      expect(find.text('Edit Profile Name'), findsNothing);
+    await tester.tap(find.byKey(DashboardScreen.profileIdentityKey));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Profile Name'), findsNothing);
 
-      await tester.tap(find.byKey(DashboardScreen.profileVaultRowKey));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(DashboardScreen.profileRecoveryRowKey));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(DashboardScreen.profileArchivesRowKey));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileArchivesRowKey));
+    await tester.pumpAndSettle();
 
-      expect(find.text('My Archives'), findsOneWidget);
-      expect(find.text('Your archive is clear'), findsOneWidget);
-      expect(find.text('Edit Profile Name'), findsNothing);
+    expect(find.text('My Archives'), findsOneWidget);
+    expect(find.text('Your archive is clear'), findsOneWidget);
+    expect(find.text('Edit Profile Name'), findsNothing);
 
-      await tester.tap(find.byIcon(TablerIcons.arrow_left));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(DashboardScreen.profileUserRowKey));
-      await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.profileUserRowKey));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Edit Profile Name'), findsOneWidget);
-    },
-  );
+    expect(find.text('Edit Profile Name'), findsOneWidget);
+  });
 
   testWidgets(
     'archives screen shows filters and restores real archived items',
@@ -3420,22 +3556,27 @@ void main() {
       expect(find.text('Plain Space'), findsWidgets);
       expect(find.text('Vault Space'), findsWidgets);
       expect(find.text('Filter'), findsNothing);
+      expect(find.text('Protected'), findsNothing);
+      expect(find.text('Open'), findsNothing);
+      expect(find.text('Folder short description'), findsNothing);
 
       final subtitleBottom = tester
           .getBottomLeft(find.text('Organize and manage your task spaces'))
           .dy;
-      final searchTop = tester
-          .getTopLeft(
-            find.widgetWithText(
-              TextField,
-              'Search spaces, descriptions, categories',
-            ),
-          )
-          .dy;
+      final categoriesTop = tester.getTopLeft(find.text('All Categories')).dy;
       final firstCardTop = tester.getTopLeft(find.text('Vault Space').first).dy;
 
-      expect(searchTop - subtitleBottom, lessThan(80));
-      expect(firstCardTop - searchTop, lessThan(260));
+      expect(categoriesTop - subtitleBottom, lessThan(80));
+      expect(firstCardTop - categoriesTop, lessThan(260));
+
+      await tester.tap(find.byIcon(TablerIcons.layout_grid));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Protected'), findsNothing);
+      expect(find.text('Open'), findsNothing);
+      expect(find.text('Folder short description'), findsNothing);
+      expect(find.text('Plain Space'), findsWidgets);
+      expect(find.text('Vault Space'), findsWidgets);
     },
   );
 

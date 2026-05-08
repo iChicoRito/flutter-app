@@ -2020,42 +2020,13 @@ class _MoveTaskToSpaceSheetState extends State<_MoveTaskToSpaceSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final destinationCount = widget.spaces.length + 1;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final needsScroll = destinationCount > 6;
 
-    final header = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Center(
-          child: Container(
-            width: 42,
-            height: 4,
-            decoration: BoxDecoration(
-              color: taskMutedBorderColor,
-              borderRadius: BorderRadius.circular(AppRadii.full),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.five),
-        Text(
-          'Move to Space',
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: AppColors.titleText,
-            fontWeight: AppTypography.weightSemibold,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.oneAndHalf),
-        Text(
-          'Choose where this task should live.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: AppColors.subHeaderText,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.four),
-      ],
+    final header = const TaskSheetHeader(
+      title: 'Move to Space',
+      subtitle: 'Choose where this task should live.',
     );
 
     final footer = Row(
@@ -2178,6 +2149,7 @@ class _MoveTaskToSpaceSheetState extends State<_MoveTaskToSpaceSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           header,
+          const SizedBox(height: 18),
           list,
           const SizedBox(height: AppSpacing.four),
           footer,
@@ -2201,6 +2173,7 @@ class _MoveTaskToSpaceSheetState extends State<_MoveTaskToSpaceSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               header,
+              const SizedBox(height: 18),
               Expanded(child: scrollableList),
               const SizedBox(height: AppSpacing.four),
               footer,

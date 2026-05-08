@@ -528,6 +528,53 @@ class TaskFieldLabel extends StatelessWidget {
   }
 }
 
+class TaskSheetHeader extends StatelessWidget {
+  const TaskSheetHeader({
+    super.key,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: taskMutedBorderColor,
+              borderRadius: BorderRadius.circular(100),
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: taskDarkText,
+            fontWeight: FontWeight.w700,
+            fontSize: AppTypography.sizeLg,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: taskSecondaryText,
+            fontSize: AppTypography.sizeSm,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class TaskCategoryColorSelector extends StatelessWidget {
   const TaskCategoryColorSelector({
     super.key,

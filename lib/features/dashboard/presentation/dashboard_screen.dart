@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -17,6 +18,7 @@ import '../../../core/vault/vault_access.dart';
 import '../../../shared/widgets/app_decision_dialog.dart';
 import '../../../shared/widgets/first_run_handoff_dialogs.dart';
 import '../../archive/presentation/archives_screen.dart';
+import '../../task_management/data/app_data_transfer_service.dart';
 import '../data/dashboard_chart_export_service.dart';
 import '../domain/dashboard_task_count_chart.dart';
 import '../../task_management/domain/task_category.dart';
@@ -27,6 +29,7 @@ import '../../task_management/presentation/task_management_screen.dart';
 import '../../task_management/presentation/task_management_ui.dart';
 import '../../spaces/domain/task_space.dart';
 import '../../spaces/presentation/spaces_page.dart';
+import 'manage_data_sheet.dart';
 
 typedef DashboardClock = DateTime Function();
 
@@ -44,6 +47,8 @@ class DashboardScreen extends StatefulWidget {
     required this.displayNameStore,
     this.clock = DateTime.now,
     this.onExportTaskCountChart,
+    this.onImportAppData,
+    this.onExportAppData,
   });
 
   static const Key markerKey = Key('dashboard-screen');
@@ -92,12 +97,11 @@ class DashboardScreen extends StatefulWidget {
   static const Key profileOverdueStatKey = Key(
     'dashboard-profile-overdue-stat',
   );
-  static const Key profileVaultRowKey = Key('dashboard-profile-vault-row');
-  static const Key profileRecoveryRowKey = Key(
-    'dashboard-profile-recovery-row',
-  );
   static const Key profileArchivesRowKey = Key(
     'dashboard-profile-archives-row',
+  );
+  static const Key profileManageDataRowKey = Key(
+    'dashboard-profile-manage-data-row',
   );
   static const Key namePromptKey = FirstRunHandoffKeys.namePrompt;
   static const Key nameFieldKey = FirstRunHandoffKeys.nameField;
@@ -122,6 +126,10 @@ class DashboardScreen extends StatefulWidget {
   final DashboardClock clock;
   final Future<void> Function(DashboardTaskCountChartData data)?
   onExportTaskCountChart;
+  final Future<AppDataImportResult> Function(PlatformFile file)?
+  onImportAppData;
+  final Future<void> Function(AppDataExportSelection selection)?
+  onExportAppData;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -134,6 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   _DashboardChartSegment? _selectedChartSegment;
   _DashboardTaskStatusFilter _taskStatusFilter = _DashboardTaskStatusFilter.all;
   DashboardTaskCountScope _taskCountScope = DashboardTaskCountScope.thisWeek;
+  String? _selectedTaskCountBarKey;
   String? _displayName;
   String? _profileImageData;
   bool _isPromptOpen = false;
@@ -698,6 +707,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _openManageDataSheet() async {
+    final repository = TaskRepositoryScope.of(context);
+    final refreshController = TaskDataRefreshScope.of(context);
+    final taskController = _taskController;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        Future<AppDataImportResult> handleImport(PlatformFile file) async {
+          final result = widget.onImportAppData != null
+              ? await widget.onImportAppData!(file)
+              : await importAppDataFromPlatformFile(file, repository);
+          if (mounted) {
+            refreshController.notifyDataChanged();
+            await taskController?.load();
+          }
+          return result;
+        }
+
+        Future<void> handleExport(AppDataExportSelection selection) async {
+          if (widget.onExportAppData != null) {
+            await widget.onExportAppData!(selection);
+            return;
+          }
+          await shareAppDataExport(
+            repository: repository,
+            selection: selection,
+          );
+        }
+
+        return ManageDataSheet(
+          onImportRequested: handleImport,
+          onExportRequested: handleExport,
+        );
+      },
+    );
+  }
+
   Future<bool> _confirmDashboardTaskAction(
     TaskItem task, {
     required TaskSpace? parentSpace,
@@ -791,6 +841,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     controller: taskController,
                     chartScope: _chartScope,
                     selectedChartSegment: _selectedChartSegment,
+                    selectedTaskCountBarKey: _selectedTaskCountBarKey,
                     taskStatusFilter: _taskStatusFilter,
                     taskCountScope: _taskCountScope,
                     isExportingTaskCount: _isExportingTaskCount,
@@ -801,6 +852,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       setState(() {
                         _chartScope = value;
                         _selectedChartSegment = null;
+                        _selectedTaskCountBarKey = null;
                       });
                     },
                     onChartSegmentChanged: (value) {
@@ -818,9 +870,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onTaskCountScopeChanged: (value) {
                       setState(() {
                         _taskCountScope = value;
+                        _selectedTaskCountBarKey = null;
                       });
                     },
                     onExportTaskCountChart: _exportTaskCountChart,
+                    onTaskCountBarSelected: (value) {
+                      setState(() {
+                        _selectedTaskCountBarKey =
+                            _selectedTaskCountBarKey == value ? null : value;
+                      });
+                    },
                   );
                 },
               ),
@@ -849,6 +908,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onPickProfileImage: _pickProfileImage,
                     onEditProfile: _openProfileNameEditor,
                     onOpenArchives: _openArchives,
+                    onOpenManageData: _openManageDataSheet,
                   );
                 },
               ),
@@ -893,6 +953,7 @@ class _DashboardHomeTab extends StatelessWidget {
     required this.controller,
     required this.chartScope,
     required this.selectedChartSegment,
+    required this.selectedTaskCountBarKey,
     required this.taskStatusFilter,
     required this.taskCountScope,
     required this.isExportingTaskCount,
@@ -904,6 +965,7 @@ class _DashboardHomeTab extends StatelessWidget {
     required this.onTaskStatusFilterChanged,
     required this.onTaskCountScopeChanged,
     required this.onExportTaskCountChart,
+    required this.onTaskCountBarSelected,
   });
 
   final ThemeData theme;
@@ -912,6 +974,7 @@ class _DashboardHomeTab extends StatelessWidget {
   final TaskManagementController controller;
   final _DashboardChartScope chartScope;
   final _DashboardChartSegment? selectedChartSegment;
+  final String? selectedTaskCountBarKey;
   final _DashboardTaskStatusFilter taskStatusFilter;
   final DashboardTaskCountScope taskCountScope;
   final bool isExportingTaskCount;
@@ -925,6 +988,7 @@ class _DashboardHomeTab extends StatelessWidget {
   final ValueChanged<DashboardTaskCountScope> onTaskCountScopeChanged;
   final Future<void> Function(DashboardTaskCountChartData data)
   onExportTaskCountChart;
+  final ValueChanged<String?> onTaskCountBarSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -989,8 +1053,10 @@ class _DashboardHomeTab extends StatelessWidget {
             now: now,
             data: taskCountChartData,
             isExporting: isExportingTaskCount,
+            selectedBarKey: selectedTaskCountBarKey,
             onScopeChanged: onTaskCountScopeChanged,
             onExportRequested: onExportTaskCountChart,
+            onBarSelected: onTaskCountBarSelected,
           ),
           const SizedBox(height: AppSpacing.two),
           _DashboardTaskStatusCard(
@@ -1404,17 +1470,21 @@ class _DashboardTaskCountChartCard extends StatelessWidget {
     required this.now,
     required this.data,
     required this.isExporting,
+    required this.selectedBarKey,
     required this.onScopeChanged,
     required this.onExportRequested,
+    required this.onBarSelected,
   });
 
   final List<TaskItem> tasks;
   final DateTime now;
   final DashboardTaskCountChartData data;
   final bool isExporting;
+  final String? selectedBarKey;
   final ValueChanged<DashboardTaskCountScope> onScopeChanged;
   final Future<void> Function(DashboardTaskCountChartData data)
   onExportRequested;
+  final ValueChanged<String?> onBarSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1471,7 +1541,11 @@ class _DashboardTaskCountChartCard extends StatelessWidget {
           if (data.totalCount == 0)
             const _DashboardTaskCountEmptyState()
           else
-            _DashboardTaskCountBarChart(data: data),
+            _DashboardTaskCountBarChart(
+              data: data,
+              selectedBarKey: selectedBarKey,
+              onBarSelected: onBarSelected,
+            ),
           const SizedBox(height: AppSpacing.five),
           _DashboardTaskCountInsightBanner(
             insight: _taskCountInsight(tasks: tasks, data: data, now: now),
@@ -1483,14 +1557,25 @@ class _DashboardTaskCountChartCard extends StatelessWidget {
 }
 
 class _DashboardTaskCountBarChart extends StatelessWidget {
-  const _DashboardTaskCountBarChart({required this.data});
+  const _DashboardTaskCountBarChart({
+    required this.data,
+    required this.selectedBarKey,
+    required this.onBarSelected,
+  });
 
   final DashboardTaskCountChartData data;
+  final String? selectedBarKey;
+  final ValueChanged<String?> onBarSelected;
 
   @override
   Widget build(BuildContext context) {
     final monthView = data.scope == DashboardTaskCountScope.thisMonth;
-    final chart = _DashboardTaskCountPlot(data: data, monthView: monthView);
+    final chart = _DashboardTaskCountPlot(
+      data: data,
+      monthView: monthView,
+      selectedBarKey: selectedBarKey,
+      onBarSelected: onBarSelected,
+    );
 
     if (monthView) {
       return SingleChildScrollView(
@@ -1508,10 +1593,17 @@ class _DashboardTaskCountBarChart extends StatelessWidget {
 }
 
 class _DashboardTaskCountPlot extends StatelessWidget {
-  const _DashboardTaskCountPlot({required this.data, required this.monthView});
+  const _DashboardTaskCountPlot({
+    required this.data,
+    required this.monthView,
+    required this.selectedBarKey,
+    required this.onBarSelected,
+  });
 
   final DashboardTaskCountChartData data;
   final bool monthView;
+  final String? selectedBarKey;
+  final ValueChanged<String?> onBarSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1545,55 +1637,98 @@ class _DashboardTaskCountPlot extends StatelessWidget {
           ),
           const SizedBox(width: chartGapWidth),
           Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _DashboardTaskCountGridPainter(
-                      columnCount: data.bars.length,
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: Padding(
-                    padding: const EdgeInsets.only(
-                      top: 10,
-                      right: 4,
-                      bottom: 0,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        for (
-                          var index = 0;
-                          index < data.bars.length;
-                          index++
-                        ) ...[
-                          if (monthView)
-                            SizedBox(
-                              width: monthBarWidth,
-                              child: _DashboardTaskCountBarItem(
-                                bar: data.bars[index],
-                                axisMaximum: data.axisMaximum,
-                                monthView: true,
-                              ),
-                            )
-                          else
-                            Expanded(
-                              child: _DashboardTaskCountBarItem(
-                                bar: data.bars[index],
-                                axisMaximum: data.axisMaximum,
-                                monthView: false,
-                              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: selectedBarKey == null
+                      ? null
+                      : () => onBarSelected(null),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _DashboardTaskCountGridPainter(
+                            columnCount: data.bars.length,
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            top: 10,
+                            right: 4,
+                            bottom: 0,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              for (
+                                var index = 0;
+                                index < data.bars.length;
+                                index++
+                              ) ...[
+                                if (monthView)
+                                  SizedBox(
+                                    width: monthBarWidth,
+                                    child: _DashboardTaskCountBarItem(
+                                      bar: data.bars[index],
+                                      axisMaximum: data.axisMaximum,
+                                      monthView: true,
+                                      isSelected:
+                                          selectedBarKey ==
+                                          dashboardTaskCountDateKey(
+                                            data.bars[index].date,
+                                          ),
+                                      onTap: () => onBarSelected(
+                                        dashboardTaskCountDateKey(
+                                          data.bars[index].date,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Expanded(
+                                    child: _DashboardTaskCountBarItem(
+                                      bar: data.bars[index],
+                                      axisMaximum: data.axisMaximum,
+                                      monthView: false,
+                                      isSelected:
+                                          selectedBarKey ==
+                                          dashboardTaskCountDateKey(
+                                            data.bars[index].date,
+                                          ),
+                                      onTap: () => onBarSelected(
+                                        dashboardTaskCountDateKey(
+                                          data.bars[index].date,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (index != data.bars.length - 1)
+                                  SizedBox(width: monthView ? monthGapWidth : 3),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (selectedBarKey != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: _DashboardTaskCountTooltipOverlay(
+                              data: data,
+                              monthView: monthView,
+                              selectedBarKey: selectedBarKey,
+                              monthBarWidth: monthBarWidth,
+                              monthGapWidth: monthGapWidth,
                             ),
-                          if (index != data.bars.length - 1)
-                            SizedBox(width: monthView ? monthGapWidth : 3),
-                        ],
-                      ],
-                    ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -1607,17 +1742,22 @@ class _DashboardTaskCountBarItem extends StatelessWidget {
     required this.bar,
     required this.axisMaximum,
     required this.monthView,
+    required this.isSelected,
+    required this.onTap,
   });
 
   final DashboardTaskCountBar bar;
   final int axisMaximum;
   final bool monthView;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final activeColor = bar.isCurrentMonthDay
         ? AppColors.blue500
         : AppColors.neutral200;
+    final selectedColor = AppColors.blue600;
     final labelColor = bar.isCurrentMonthDay
         ? AppColors.subHeaderText
         : AppColors.neutral400;
@@ -1626,38 +1766,184 @@ class _DashboardTaskCountBarItem extends StatelessWidget {
       math.min(248.0, (bar.count / axisMaximum) * 248.0),
     );
 
-    return SizedBox(
-      key: DashboardScreen.taskCountChartBarKey(
-        dashboardTaskCountDateKey(bar.date),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          const Spacer(),
-          if (bar.count > 0)
-            Align(
-              alignment: Alignment.bottomCenter,
+    final barWidth = monthView ? 22.0 : 38.0;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        const Spacer(),
+        if (bar.count > 0)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: GestureDetector(
+              key: DashboardScreen.taskCountChartBarKey(
+                dashboardTaskCountDateKey(bar.date),
+              ),
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
               child: Container(
-                width: monthView ? 22 : 38,
+                width: barWidth,
                 height: barHeight,
                 decoration: BoxDecoration(
-                  color: activeColor,
+                  color: isSelected ? selectedColor : activeColor,
                   borderRadius: BorderRadius.circular(10),
+                  border: isSelected
+                      ? Border.all(color: AppColors.blue100, width: 1.5)
+                      : null,
+                  boxShadow: isSelected
+                      ? const [
+                          BoxShadow(
+                            color: Color(0x223B82F6),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
+                          ),
+                        ]
+                      : null,
                 ),
               ),
-            )
-          else
-            const SizedBox(height: 0),
-          const SizedBox(height: 8),
-          Text(
-            _displayBarLabel(bar),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: labelColor,
-              fontSize: 12,
-              fontWeight: AppTypography.weightNormal,
             ),
+          )
+        else
+          const SizedBox(height: 0),
+        const SizedBox(height: 8),
+        Text(
+          _displayBarLabel(bar),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: labelColor,
+            fontSize: 12,
+            fontWeight: AppTypography.weightNormal,
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardTaskCountTooltipOverlay extends StatelessWidget {
+  const _DashboardTaskCountTooltipOverlay({
+    required this.data,
+    required this.monthView,
+    required this.selectedBarKey,
+    required this.monthBarWidth,
+    required this.monthGapWidth,
+  });
+
+  final DashboardTaskCountChartData data;
+  final bool monthView;
+  final String? selectedBarKey;
+  final double monthBarWidth;
+  final double monthGapWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedIndex = data.bars.indexWhere(
+      (bar) => dashboardTaskCountDateKey(bar.date) == selectedBarKey,
+    );
+    if (selectedIndex < 0) {
+      return const SizedBox.shrink();
+    }
+
+    final selectedBar = data.bars[selectedIndex];
+    final barHeight = math.max(
+      10.0,
+      math.min(248.0, (selectedBar.count / data.axisMaximum) * 248.0),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const tooltipWidth = 132.0;
+        final chartWidth = math.max(0.0, constraints.maxWidth - 4);
+        final interItemGap = monthView ? monthGapWidth : 3.0;
+        final totalGap = math.max(0.0, (data.bars.length - 1) * interItemGap);
+        final barWidth = monthView
+            ? monthBarWidth
+            : math.max(0.0, (chartWidth - totalGap) / data.bars.length);
+        final centerX =
+            (barWidth + interItemGap) * selectedIndex + barWidth / 2;
+        final left = (centerX - tooltipWidth / 2)
+            .clamp(0.0, math.max(0.0, chartWidth - tooltipWidth))
+            .toDouble();
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: left,
+              bottom: barHeight + 18,
+              width: tooltipWidth,
+              child: _DashboardTaskCountTooltip(
+                title: monthView
+                    ? _formatMonthDay(selectedBar.date)
+                    : '${selectedBar.label}, ${_formatShortMonthDay(selectedBar.date)}',
+                value:
+                    '${selectedBar.count} task${selectedBar.count == 1 ? '' : 's'}',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DashboardTaskCountTooltip extends StatelessWidget {
+  const _DashboardTaskCountTooltip({required this.title, required this.value});
+
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 132),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.two,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          border: Border.all(color: AppColors.blue100),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 12,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: AppColors.titleText,
+                fontSize: AppTypography.sizeXs,
+                fontWeight: AppTypography.weightSemibold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: AppColors.blue500,
+                fontSize: AppTypography.sizeXs,
+                fontWeight: AppTypography.weightMedium,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2858,6 +3144,7 @@ class _ProfileTab extends StatelessWidget {
     required this.onPickProfileImage,
     required this.onEditProfile,
     required this.onOpenArchives,
+    required this.onOpenManageData,
   });
 
   final ThemeData theme;
@@ -2867,6 +3154,7 @@ class _ProfileTab extends StatelessWidget {
   final VoidCallback onPickProfileImage;
   final VoidCallback onEditProfile;
   final VoidCallback onOpenArchives;
+  final VoidCallback onOpenManageData;
 
   @override
   Widget build(BuildContext context) {
@@ -2904,7 +3192,7 @@ class _ProfileTab extends StatelessWidget {
           _ProfileStatsRow(stats: stats),
           const SizedBox(height: AppSpacing.six),
           Text(
-            'Manage Account',
+            'Account Details',
             style: theme.textTheme.bodySmall?.copyWith(
               color: taskMutedText,
               fontSize: AppTypography.sizeBase,
@@ -2915,6 +3203,7 @@ class _ProfileTab extends StatelessWidget {
           _ProfileAccountList(
             onEditProfile: onEditProfile,
             onOpenArchives: onOpenArchives,
+            onOpenManageData: onOpenManageData,
           ),
         ],
       ),
@@ -3220,10 +3509,12 @@ class _ProfileAccountList extends StatelessWidget {
   const _ProfileAccountList({
     required this.onEditProfile,
     required this.onOpenArchives,
+    required this.onOpenManageData,
   });
 
   final VoidCallback onEditProfile;
   final VoidCallback onOpenArchives;
+  final VoidCallback onOpenManageData;
 
   @override
   Widget build(BuildContext context) {
@@ -3247,6 +3538,12 @@ class _ProfileAccountList extends StatelessWidget {
             icon: TablerIcons.archive,
             label: 'Archives',
             onTap: onOpenArchives,
+          ),
+          _ProfileAccountRow(
+            key: DashboardScreen.profileManageDataRowKey,
+            icon: TablerIcons.database,
+            label: 'Manage Data',
+            onTap: onOpenManageData,
           ),
         ],
       ),
@@ -3357,12 +3654,9 @@ class _ProfileNameSheetState extends State<_ProfileNameSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
+    return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -3376,30 +3670,9 @@ class _ProfileNameSheetState extends State<_ProfileNameSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: taskMutedBorderColor,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'Edit Profile Name',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: taskDarkText,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'This name appears on your profile and reminders.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: taskSecondaryText,
-                ),
+              const TaskSheetHeader(
+                title: 'Edit Profile Name',
+                subtitle: 'This name appears on your profile and reminders.',
               ),
               const SizedBox(height: 18),
               const TaskFieldLabel('Display Name'),

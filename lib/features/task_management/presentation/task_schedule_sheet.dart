@@ -265,17 +265,10 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
           constraints: BoxConstraints(maxHeight: maxSheetHeight),
           child: Container(
             key: widget.sheetKey,
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.five,
-              AppSpacing.four,
-              AppSpacing.five,
-              AppSpacing.five,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
             decoration: const BoxDecoration(
-              color: AppColors.cardFill,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(AppRadii.threeXl),
-              ),
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
             ),
             child: Form(
               key: _formKey,
@@ -283,31 +276,9 @@ class _TaskScheduleSheetState extends State<TaskScheduleSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Center(
-                      child: Container(
-                        width: 56,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: AppColors.neutral200,
-                          borderRadius: BorderRadius.circular(AppRadii.full),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.six),
-                    Text(
-                      _sheetTitle,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.titleText,
-                        fontSize: AppTypography.sizeLg,
-                        fontWeight: AppTypography.weightSemibold,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.oneAndHalf),
-                    Text(
-                      _sheetSubtitle,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.subHeaderText,
-                      ),
+                    TaskSheetHeader(
+                      title: _sheetTitle,
+                      subtitle: _sheetSubtitle,
                     ),
                     const SizedBox(height: AppSpacing.five),
                     const TaskFieldLabel('Task Title'),

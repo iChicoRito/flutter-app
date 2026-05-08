@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -21,6 +22,7 @@ import '../core/services/vault_service_scope.dart';
 import '../features/dashboard/domain/dashboard_task_count_chart.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
+import '../features/task_management/data/app_data_transfer_service.dart';
 import '../features/task_reminder/presentation/task_alarm_screen.dart';
 import '../features/task_management/data/hive_task_repository.dart';
 import '../features/task_management/domain/task_repository.dart';
@@ -34,8 +36,9 @@ class MyApp extends StatefulWidget {
     TaskReminderService? reminderService,
     VaultService? vaultService,
     DashboardClock? dashboardClock,
-    Future<void> Function(DashboardTaskCountChartData data)?
-    onExportTaskCountChart,
+    this.onExportTaskCountChart,
+    this.onImportAppData,
+    this.onExportAppData,
   }) : onboardingStatusStore =
            onboardingStatusStore ??
            const SharedPreferencesOnboardingStatusStore(),
@@ -44,8 +47,7 @@ class MyApp extends StatefulWidget {
        taskRepository = taskRepository ?? InMemoryTaskRepository(),
        reminderService = reminderService ?? const NoopTaskReminderService(),
        vaultService = vaultService ?? LocalVaultService(),
-       dashboardClock = dashboardClock ?? DateTime.now,
-       onExportTaskCountChart = onExportTaskCountChart;
+       dashboardClock = dashboardClock ?? DateTime.now;
 
   final OnboardingStatusStore onboardingStatusStore;
   final DisplayNameStore displayNameStore;
@@ -55,6 +57,10 @@ class MyApp extends StatefulWidget {
   final DashboardClock dashboardClock;
   final Future<void> Function(DashboardTaskCountChartData data)?
   onExportTaskCountChart;
+  final Future<AppDataImportResult> Function(PlatformFile file)?
+  onImportAppData;
+  final Future<void> Function(AppDataExportSelection selection)?
+  onExportAppData;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -314,6 +320,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 displayNameStore: widget.displayNameStore,
                 dashboardClock: widget.dashboardClock,
                 onExportTaskCountChart: widget.onExportTaskCountChart,
+                onImportAppData: widget.onImportAppData,
+                onExportAppData: widget.onExportAppData,
               ),
             ),
           ),
@@ -329,6 +337,8 @@ class _InitialLaunchGate extends StatelessWidget {
     required this.displayNameStore,
     required this.dashboardClock,
     this.onExportTaskCountChart,
+    this.onImportAppData,
+    this.onExportAppData,
   });
 
   final OnboardingStatusStore onboardingStatusStore;
@@ -336,6 +346,10 @@ class _InitialLaunchGate extends StatelessWidget {
   final DashboardClock dashboardClock;
   final Future<void> Function(DashboardTaskCountChartData data)?
   onExportTaskCountChart;
+  final Future<AppDataImportResult> Function(PlatformFile file)?
+  onImportAppData;
+  final Future<void> Function(AppDataExportSelection selection)?
+  onExportAppData;
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +367,8 @@ class _InitialLaunchGate extends StatelessWidget {
             displayNameStore: displayNameStore,
             clock: dashboardClock,
             onExportTaskCountChart: onExportTaskCountChart,
+            onImportAppData: onImportAppData,
+            onExportAppData: onExportAppData,
           );
         }
 

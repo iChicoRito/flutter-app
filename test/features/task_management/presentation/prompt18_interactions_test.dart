@@ -17,6 +17,7 @@ import 'package:flutter_app/features/task_management/domain/task_item.dart';
 import 'package:flutter_app/features/task_management/presentation/task_editor_screen.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_controller.dart';
 import 'package:flutter_app/features/task_management/presentation/task_management_screen.dart';
+import 'package:tabler_icons/tabler_icons.dart';
 
 void main() {
   Future<void> pumpTaskManagement(
@@ -166,9 +167,11 @@ void main() {
 
     await pumpEditor(tester, repository: repository, taskId: 'editor-task');
 
+    await tester.tap(find.byIcon(TablerIcons.plus));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(TaskEditorScreen.attachImageButtonKey), findsOneWidget);
     expect(find.byKey(TaskEditorScreen.attachFileButtonKey), findsOneWidget);
-    expect(find.byKey(TaskEditorScreen.highlightButtonKey), findsOneWidget);
   });
 }
 

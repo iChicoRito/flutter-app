@@ -542,13 +542,6 @@ class _SpacesPageState extends State<SpacesPage> {
                                 space.categoryId,
                               ),
                               taskCount: _controller.taskCountFor(space.id),
-                              previewProtected: isPreviewProtected(
-                                vaultService: VaultServiceScope.of(context),
-                                ownVault: space.vaultConfig,
-                                ownEntityKey: spaceVaultEntityKey(space.id),
-                                inheritedVault: null,
-                                inheritedEntityKey: null,
-                              ),
                               onTap: () => _openSpace(space),
                               onLongPress: () => _showSpaceActions(space),
                               onMenuSelected: (action) =>
@@ -573,13 +566,6 @@ class _SpacesPageState extends State<SpacesPage> {
                             space: space,
                             category: _controller.categoryFor(space.categoryId),
                             taskCount: _controller.taskCountFor(space.id),
-                            previewProtected: isPreviewProtected(
-                              vaultService: VaultServiceScope.of(context),
-                              ownVault: space.vaultConfig,
-                              ownEntityKey: spaceVaultEntityKey(space.id),
-                              inheritedVault: null,
-                              inheritedEntityKey: null,
-                            ),
                             onTap: () => _openSpace(space),
                             onLongPress: () => _showSpaceActions(space),
                             onMenuSelected: (action) =>
@@ -591,7 +577,7 @@ class _SpacesPageState extends State<SpacesPage> {
                               crossAxisCount: 2,
                               mainAxisSpacing: 12,
                               crossAxisSpacing: 12,
-                              childAspectRatio: 0.56,
+                              childAspectRatio: 0.82,
                             ),
                       ),
                     ),
@@ -856,7 +842,6 @@ class _SpaceListCard extends StatelessWidget {
     required this.space,
     required this.category,
     required this.taskCount,
-    required this.previewProtected,
     required this.onTap,
     required this.onLongPress,
     required this.onMenuSelected,
@@ -865,7 +850,6 @@ class _SpaceListCard extends StatelessWidget {
   final TaskSpace space;
   final TaskCategory? category;
   final int taskCount;
-  final bool previewProtected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Future<void> Function(_SpaceAction action) onMenuSelected;
@@ -887,7 +871,11 @@ class _SpaceListCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _FolderAccent(color: space.color, count: taskCount),
+              _FolderAccent(
+                color: space.color,
+                count: taskCount,
+                isLocked: space.vaultConfig?.isEnabled == true,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -910,33 +898,48 @@ class _SpaceListCard extends StatelessWidget {
                         ),
                         if (space.vaultConfig?.isEnabled == true) ...[
                           const SizedBox(width: 6),
-                          const Icon(
-                            TablerIcons.lock,
-                            size: 14,
-                            color: taskMutedText,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.neutral100,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  TablerIcons.lock,
+                                  size: 12,
+                                  color: taskMutedText,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Locked',
+                                  style: TextStyle(
+                                    color: taskMutedText,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                        const SizedBox(width: 8),
-                        if (category != null)
-                          _CategoryPill(
-                            label: category!.name,
-                            color: space.color,
-                          ),
                       ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      previewProtected
-                          ? 'Protected content'
-                          : space.description.isEmpty
-                          ? 'Folder short description'
-                          : space.description,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: taskMutedText),
-                    ),
+                    const SizedBox(height: 4),
+                    if (category != null)
+                      Text(
+                        category!.name,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: space.color,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -983,7 +986,6 @@ class _SpaceGridCard extends StatelessWidget {
     required this.space,
     required this.category,
     required this.taskCount,
-    required this.previewProtected,
     required this.onTap,
     required this.onLongPress,
     required this.onMenuSelected,
@@ -992,7 +994,6 @@ class _SpaceGridCard extends StatelessWidget {
   final TaskSpace space;
   final TaskCategory? category;
   final int taskCount;
-  final bool previewProtected;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final Future<void> Function(_SpaceAction action) onMenuSelected;
@@ -1006,7 +1007,7 @@ class _SpaceGridCard extends StatelessWidget {
         onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
@@ -1075,53 +1076,32 @@ class _SpaceGridCard extends StatelessWidget {
                 thickness: 1,
                 color: taskMutedBorderColor,
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 90,
+              Expanded(
                 child: Center(
-                  child: _FolderAccent(
-                    color: space.color,
-                    count: taskCount,
-                    large: true,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _FolderAccent(
+                        color: space.color,
+                        count: taskCount,
+                        isLocked: space.vaultConfig?.isEnabled == true,
+                        large: true,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        space.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: taskDarkText,
+                              fontWeight: FontWeight.w700,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (space.vaultConfig?.isEnabled == true) ...[
-                const _SpaceLockBadge(),
-                const SizedBox(height: 4),
-              ],
-              SizedBox(
-                height: 24,
-                child: Center(
-                  child: Text(
-                    space.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: taskDarkText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              SizedBox(
-                height: 26,
-                child: Text(
-                  previewProtected
-                      ? 'Protected content'
-                      : space.description.isEmpty
-                      ? 'Folder short description'
-                      : space.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: taskMutedText,
-                    height: 1.15,
-                  ),
-                  textAlign: TextAlign.center,
                 ),
               ),
             ],
@@ -1136,11 +1116,13 @@ class _FolderAccent extends StatelessWidget {
   const _FolderAccent({
     required this.color,
     required this.count,
+    this.isLocked = false,
     this.large = false,
   });
 
   final Color color;
   final int count;
+  final bool isLocked;
   final bool large;
 
   @override
@@ -1161,9 +1143,13 @@ class _FolderAccent extends StatelessWidget {
             height: folderSize,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(TablerIcons.folder, size: iconSize, color: color),
+            child: Icon(
+              isLocked ? TablerIcons.lock : TablerIcons.folder,
+              size: iconSize,
+              color: color,
+            ),
           ),
           if (count > 0)
             Positioned(
@@ -1204,37 +1190,6 @@ class _SpaceTaskCountBadge extends StatelessWidget {
           fontWeight: FontWeight.w700,
           fontSize: large ? 11 : 9,
           height: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class _SpaceLockBadge extends StatelessWidget {
-  const _SpaceLockBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: taskSurface,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(TablerIcons.lock, size: 12, color: taskSecondaryText),
-            const SizedBox(width: 6),
-            Text(
-              'Locked',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: taskSecondaryText,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
         ),
       ),
     );

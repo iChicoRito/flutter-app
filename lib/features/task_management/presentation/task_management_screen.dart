@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:tabler_icons/tabler_icons.dart';
 
@@ -40,7 +42,6 @@ class TaskManagementScreen extends StatefulWidget {
   });
 
   static const Key markerKey = Key('task-management-screen');
-  static const Key searchFieldKey = Key('task-management-search');
   static const Key addTaskFabKey = Key('task-management-add-task');
   static const Key emptyStateKey = Key('task-management-empty');
   static const Key retryButtonKey = Key('task-management-retry');
@@ -66,6 +67,8 @@ class TaskManagementScreen extends StatefulWidget {
   static const Key tasksSegmentKey = Key('task-view-segment-tasks');
   static const Key calendarSegmentKey = Key('task-view-segment-calendar');
   static const Key calendarViewKey = Key('task-calendar-view');
+  static const Key paginationPreviousKey = Key('task-pagination-previous');
+  static const Key paginationNextKey = Key('task-pagination-next');
   static const Key calendarMonthDropdownKey = Key(
     'task-calendar-month-dropdown',
   );
@@ -118,6 +121,7 @@ class TaskManagementScreen extends StatefulWidget {
   static Key statusFilterKey(String value) => Key('task-status-filter-$value');
 
   static Key categoryFilterKey(String id) => Key('task-category-filter-$id');
+  static Key paginationPageKey(int page) => Key('task-pagination-page-$page');
 
   static Key taskTileKey(String taskId) => Key('task-tile-$taskId');
 
@@ -162,12 +166,14 @@ class TaskManagementScreen extends StatefulWidget {
 }
 
 class _TaskManagementScreenState extends State<TaskManagementScreen> {
-  final TextEditingController _searchController = TextEditingController();
+  static const int _tasksPerPage = 10;
+
   TaskDataRefreshController? _taskDataRefreshController;
   _TaskManagementContentTab _activeTab = _TaskManagementContentTab.tasks;
   DateTime _selectedCalendarMonth = DateTime.now();
   DateTime _selectedCalendarDate = DateTime.now();
   TaskStatusFilter _calendarStatusFilter = TaskStatusFilter.all;
+  int _currentTasksPage = 1;
 
   TaskManagementController get _controller => widget.controller;
 
@@ -198,7 +204,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   @override
   void dispose() {
     _taskDataRefreshController?.removeListener(_handleTaskDataRefresh);
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -1409,6 +1414,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     final listTopPadding = widget.useInlineBackHeader
         ? AppSpacing.three
         : AppSpacing.six;
+    final pageCount = _tasksPageCount(filteredTasks.length);
+    final currentPage = _effectiveTasksPage(pageCount);
+    final pagedTasks = _pagedTasks(filteredTasks, currentPage);
+
+    _scheduleTasksPageSync(currentPage);
 
     return RefreshIndicator(
       color: AppColors.blue500,
@@ -1440,14 +1450,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                 AppSpacing.four,
                 listTopPadding,
                 AppSpacing.four,
-                120,
+                pageCount > 1 ? AppSpacing.six : 120,
               ),
               sliver: SliverReorderableList(
-                itemCount: filteredTasks.length,
+                itemCount: pagedTasks.length,
                 onReorder: (oldIndex, newIndex) =>
-                    _reorderFilteredTasks(filteredTasks, oldIndex, newIndex),
+                    _reorderFilteredTasks(
+                      filteredTasks,
+                      currentPage,
+                      oldIndex,
+                      newIndex,
+                    ),
                 itemBuilder: (context, index) {
-                  final task = filteredTasks[index];
+                  final task = pagedTasks[index];
                   final category = _controller.categoryFor(task.categoryId);
                   final space = _controller.spaceFor(task.spaceId);
                   final previewProtected = isPreviewProtected(
@@ -1462,7 +1477,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   return Padding(
                     key: ValueKey(task.id),
                     padding: EdgeInsets.only(
-                      bottom: index == filteredTasks.length - 1
+                      bottom: index == pagedTasks.length - 1
                           ? AppSpacing.zero
                           : AppSpacing.four,
                     ),
@@ -1503,6 +1518,22 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                     ),
                   );
                 },
+              ),
+            ),
+          if (pageCount > 1)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.four,
+                AppSpacing.zero,
+                AppSpacing.four,
+                120,
+              ),
+              sliver: SliverToBoxAdapter(
+                child: _TaskPaginationControls(
+                  currentPage: currentPage,
+                  pageCount: pageCount,
+                  onPageSelected: _setTasksPage,
+                ),
               ),
             ),
           if (filteredTasks.isEmpty)
@@ -1549,15 +1580,77 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
           _CategoryFilterRow(
             categories: _controller.categories,
             selectedCategoryId: _controller.categoryFilterId,
-            onSelected: _controller.updateCategoryFilter,
+            onSelected: (value) {
+              _resetTasksPage();
+              _controller.updateCategoryFilter(value);
+            },
           ),
         ],
       ],
     );
   }
 
+  int _tasksPageCount(int totalTasks) {
+    if (totalTasks <= 0) {
+      return 1;
+    }
+    return ((totalTasks - 1) ~/ _tasksPerPage) + 1;
+  }
+
+  int _effectiveTasksPage(int pageCount) {
+    if (_currentTasksPage < 1) {
+      return 1;
+    }
+    if (_currentTasksPage > pageCount) {
+      return pageCount;
+    }
+    return _currentTasksPage;
+  }
+
+  List<TaskItem> _pagedTasks(List<TaskItem> filteredTasks, int currentPage) {
+    final start = (currentPage - 1) * _tasksPerPage;
+    if (start >= filteredTasks.length) {
+      return const [];
+    }
+    final end = math.min(start + _tasksPerPage, filteredTasks.length);
+    return filteredTasks.sublist(start, end);
+  }
+
+  void _scheduleTasksPageSync(int currentPage) {
+    if (_currentTasksPage == currentPage) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentTasksPage == currentPage) {
+        return;
+      }
+      setState(() {
+        _currentTasksPage = currentPage;
+      });
+    });
+  }
+
+  void _setTasksPage(int page) {
+    if (_currentTasksPage == page) {
+      return;
+    }
+    setState(() {
+      _currentTasksPage = page;
+    });
+  }
+
+  void _resetTasksPage() {
+    if (_currentTasksPage == 1) {
+      return;
+    }
+    setState(() {
+      _currentTasksPage = 1;
+    });
+  }
+
   Future<void> _reorderFilteredTasks(
     List<TaskItem> filteredTasks,
+    int currentPage,
     int oldIndex,
     int newIndex,
   ) async {
@@ -1569,8 +1662,11 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     }
 
     final reorderedTasks = [...filteredTasks];
-    final movedTask = reorderedTasks.removeAt(oldIndex);
-    reorderedTasks.insert(newIndex, movedTask);
+    final pageStart = (currentPage - 1) * _tasksPerPage;
+    final sourceIndex = pageStart + oldIndex;
+    final destinationIndex = pageStart + newIndex;
+    final movedTask = reorderedTasks.removeAt(sourceIndex);
+    reorderedTasks.insert(destinationIndex, movedTask);
 
     await _controller.reorderTasks(
       reorderedTasks.map((task) => task.id).toList(),
@@ -1579,6 +1675,117 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       return;
     }
     showTaskToast(context, message: 'Task order updated.');
+  }
+}
+
+class _TaskPaginationControls extends StatelessWidget {
+  const _TaskPaginationControls({
+    required this.currentPage,
+    required this.pageCount,
+    required this.onPageSelected,
+  });
+
+  final int currentPage;
+  final int pageCount;
+  final ValueChanged<int> onPageSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PaginationButton(
+            key: TaskManagementScreen.paginationPreviousKey,
+            label: 'Prev',
+            isActive: false,
+            isEnabled: currentPage > 1,
+            onTap: currentPage > 1
+                ? () => onPageSelected(currentPage - 1)
+                : null,
+          ),
+          const SizedBox(width: AppSpacing.two),
+          _PaginationButton(
+            key: TaskManagementScreen.paginationPageKey(currentPage),
+            label: '$currentPage',
+            isActive: true,
+            isEnabled: true,
+            onTap: null,
+          ),
+          const SizedBox(width: AppSpacing.two),
+          _PaginationButton(
+            key: TaskManagementScreen.paginationNextKey,
+            label: 'Next',
+            isActive: false,
+            isEnabled: currentPage < pageCount,
+            onTap: currentPage < pageCount
+                ? () => onPageSelected(currentPage + 1)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaginationButton extends StatelessWidget {
+  const _PaginationButton({
+    super.key,
+    required this.label,
+    required this.isActive,
+    required this.isEnabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final bool isEnabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = isActive
+        ? AppColors.primaryButtonFill
+        : AppColors.cardFill;
+    final foregroundColor = isActive
+        ? AppColors.primaryButtonText
+        : isEnabled
+        ? AppColors.titleText
+        : AppColors.subHeaderText;
+    final borderColor = isActive
+        ? AppColors.primaryButtonFill
+        : AppColors.cardBorder;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        constraints: BoxConstraints(
+          minWidth: isActive ? 46 : 72,
+          minHeight: 40,
+        ),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.two,
+        ),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          border: Border.all(color: borderColor),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: foregroundColor,
+            fontSize: AppTypography.sizeBase,
+            fontWeight: AppTypography.weightMedium,
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -2205,15 +2412,6 @@ class _TaskPageHeader extends StatelessWidget {
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
-          const SizedBox(height: AppSpacing.one),
-          Text(
-            'Organize and manage your tasks',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.subHeaderText,
-              fontSize: AppTypography.sizeBase,
-              fontWeight: AppTypography.weightNormal,
-            ),
-          ),
         ],
       ),
     );
@@ -2453,22 +2651,36 @@ class _TaskCard extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    task.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          color: AppColors.titleText,
-                                          fontSize: AppTypography.sizeLg,
-                                          fontWeight:
-                                              AppTypography.weightSemibold,
-                                          decoration: task.isCompleted
-                                              ? TextDecoration.lineThrough
-                                              : null,
+                                  child: Row(
+                                    children: [
+                                      if (task.isPinned) ...[
+                                        const Icon(
+                                          TablerIcons.pin,
+                                          size: 16,
+                                          color: AppColors.rose500,
                                         ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          task.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: AppColors.titleText,
+                                                fontSize: AppTypography.sizeLg,
+                                                fontWeight:
+                                                    AppTypography.weightSemibold,
+                                                decoration: task.isCompleted
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.three),

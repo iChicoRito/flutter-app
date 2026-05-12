@@ -684,15 +684,6 @@ class _SpacesPageHeader extends StatelessWidget {
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
-          const SizedBox(height: AppSpacing.one),
-          Text(
-            'Organize and manage your task spaces',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.subHeaderText,
-              fontSize: AppTypography.sizeBase,
-              fontWeight: AppTypography.weightNormal,
-            ),
-          ),
         ],
       ),
     );

@@ -167,7 +167,7 @@ void main() {
 
     expect(find.text('Calendar'), findsWidgets);
     expect(find.byKey(TaskManagementScreen.calendarViewKey), findsOneWidget);
-    expect(find.text('View and manage your scheduled tasks'), findsOneWidget);
+    expect(find.text('View and manage your scheduled tasks'), findsNothing);
   });
 
   testWidgets('calendar view renders filters date rail timeline and CTA', (

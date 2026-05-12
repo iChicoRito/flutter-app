@@ -69,6 +69,12 @@ class DashboardScreen extends StatefulWidget {
   );
   static const Key taskCountChartScrollKey = Key('dashboard-task-count-scroll');
   static const Key taskStatusMenuButtonKey = Key('dashboard-task-status-menu');
+  static const Key taskOverviewPaginationPreviousKey = Key(
+    'dashboard-task-overview-pagination-previous',
+  );
+  static const Key taskOverviewPaginationNextKey = Key(
+    'dashboard-task-overview-pagination-next',
+  );
   static const Key profileTabKey = Key('dashboard-profile-tab');
   static const Key profileIdentityKey = Key('dashboard-profile-identity');
   static const Key profileAvatarImageKey = Key('dashboard-profile-avatar');
@@ -121,6 +127,8 @@ class DashboardScreen extends StatefulWidget {
       Key('dashboard-task-count-menu-$value');
   static Key taskCountChartBarKey(String value) =>
       Key('dashboard-task-count-bar-$value');
+  static Key taskOverviewPaginationPageKey(int page) =>
+      Key('dashboard-task-overview-pagination-page-$page');
 
   final DisplayNameStore displayNameStore;
   final DashboardClock clock;
@@ -648,7 +656,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     final shouldDelete = await showDialog<bool>(
       context: context,
-      builder: (context) => _DashboardDeleteTaskDialog(taskTitle: task.title),
+      builder: (context) => AppDecisionDialog(
+        tone: AppDecisionTone.danger,
+        icon: TablerIcons.alert_triangle,
+        title: 'Delete Task?',
+        message:
+            'Are you sure you want to delete this task? This action cannot be undone.',
+        secondaryLabel: 'Cancel',
+        primaryLabel: 'Yes, Delete',
+        onSecondaryPressed: () => Navigator.of(context).pop(false),
+        onPrimaryPressed: () => Navigator.of(context).pop(true),
+      ),
     );
     if (shouldDelete != true) {
       return;
@@ -945,7 +963,7 @@ class _DashboardTab {
   final String description;
 }
 
-class _DashboardHomeTab extends StatelessWidget {
+class _DashboardHomeTab extends StatefulWidget {
   const _DashboardHomeTab({
     required this.theme,
     required this.displayName,
@@ -991,28 +1009,113 @@ class _DashboardHomeTab extends StatelessWidget {
   final ValueChanged<String?> onTaskCountBarSelected;
 
   @override
+  State<_DashboardHomeTab> createState() => _DashboardHomeTabState();
+}
+
+class _DashboardHomeTabState extends State<_DashboardHomeTab> {
+  static const int _tasksPerPage = 10;
+
+  int _taskOverviewPage = 1;
+  bool _taskOverviewPageSyncScheduled = false;
+
+  @override
+  void didUpdateWidget(covariant _DashboardHomeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.taskStatusFilter != widget.taskStatusFilter) {
+      _resetTaskOverviewPage();
+    }
+  }
+
+  int _taskOverviewPageCount(int totalTasks) {
+    if (totalTasks == 0) {
+      return 1;
+    }
+    return ((totalTasks - 1) ~/ _tasksPerPage) + 1;
+  }
+
+  int _effectiveTaskOverviewPage(int pageCount) {
+    return _taskOverviewPage.clamp(1, pageCount).toInt();
+  }
+
+  List<TaskItem> _pagedTaskOverviewTasks(
+    List<TaskItem> tasks,
+    int currentPage,
+  ) {
+    final start = (currentPage - 1) * _tasksPerPage;
+    if (start >= tasks.length) {
+      return const [];
+    }
+    final end = math.min(start + _tasksPerPage, tasks.length);
+    return tasks.sublist(start, end);
+  }
+
+  void _resetTaskOverviewPage() {
+    if (_taskOverviewPage == 1) {
+      return;
+    }
+    setState(() {
+      _taskOverviewPage = 1;
+    });
+  }
+
+  void _setTaskOverviewPage(int page) {
+    if (_taskOverviewPage == page) {
+      return;
+    }
+    setState(() {
+      _taskOverviewPage = page;
+    });
+  }
+
+  void _scheduleTaskOverviewPageSync(int page) {
+    if (_taskOverviewPageSyncScheduled || _taskOverviewPage == page) {
+      return;
+    }
+    _taskOverviewPageSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _taskOverviewPageSyncScheduled = false;
+      if (!mounted || _taskOverviewPage == page) {
+        return;
+      }
+      setState(() {
+        _taskOverviewPage = page;
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final now = clock();
-    final tasks = controller.tasks;
+    final now = widget.clock();
+    final tasks = widget.controller.tasks;
     final completedTasks = tasks.where((task) => task.isCompleted).toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     final progressValue = tasks.isEmpty
         ? 0.0
         : completedTasks.length / tasks.length;
     final chartTasks = tasks
-        .where((task) => _isInChartScope(task, chartScope, now))
+        .where((task) => _isInChartScope(task, widget.chartScope, now))
         .toList();
     final chartData = _DashboardChartData.fromTasks(chartTasks, now);
     final taskCountChartData = DashboardTaskCountChartData.fromTasks(
       tasks: tasks,
-      scope: taskCountScope,
+      scope: widget.taskCountScope,
       now: now,
     );
     final listTasks =
         tasks
-            .where((task) => _matchesListFilter(task, taskStatusFilter, now))
+            .where(
+              (task) => _matchesListFilter(
+                task,
+                widget.taskStatusFilter,
+                now,
+              ),
+            )
             .toList()
           ..sort((a, b) => _sortByTimeline(a, b));
+    final pageCount = _taskOverviewPageCount(listTasks.length);
+    final currentPage = _effectiveTaskOverviewPage(pageCount);
+    _scheduleTaskOverviewPageSync(currentPage);
+    final pagedListTasks = _pagedTaskOverviewTasks(listTasks, currentPage);
 
     return ColoredBox(
       color: AppColors.background,
@@ -1025,9 +1128,9 @@ class _DashboardHomeTab extends StatelessWidget {
         ),
         children: [
           _HeaderRow(
-            theme: theme,
+            theme: widget.theme,
             greeting: _buildDashboardGreeting(
-              displayName: displayName,
+              displayName: widget.displayName,
               now: now,
             ),
             dateLabel: _formatDate(now),
@@ -1042,32 +1145,35 @@ class _DashboardHomeTab extends StatelessWidget {
           _DashboardChartStatusCard(
             dateLabel: _formatCompactDate(now),
             data: chartData,
-            selectedSegment: selectedChartSegment,
-            chartScope: chartScope,
-            onScopeChanged: onChartScopeChanged,
-            onSegmentChanged: onChartSegmentChanged,
+            selectedSegment: widget.selectedChartSegment,
+            chartScope: widget.chartScope,
+            onScopeChanged: widget.onChartScopeChanged,
+            onSegmentChanged: widget.onChartSegmentChanged,
           ),
           const SizedBox(height: AppSpacing.two),
           _DashboardTaskCountChartCard(
             tasks: tasks,
             now: now,
             data: taskCountChartData,
-            isExporting: isExportingTaskCount,
-            selectedBarKey: selectedTaskCountBarKey,
-            onScopeChanged: onTaskCountScopeChanged,
-            onExportRequested: onExportTaskCountChart,
-            onBarSelected: onTaskCountBarSelected,
+            isExporting: widget.isExportingTaskCount,
+            selectedBarKey: widget.selectedTaskCountBarKey,
+            onScopeChanged: widget.onTaskCountScopeChanged,
+            onExportRequested: widget.onExportTaskCountChart,
+            onBarSelected: widget.onTaskCountBarSelected,
           ),
           const SizedBox(height: AppSpacing.two),
           _DashboardTaskStatusCard(
-            tasks: listTasks,
-            controller: controller,
-            filter: taskStatusFilter,
+            tasks: pagedListTasks,
+            controller: widget.controller,
+            filter: widget.taskStatusFilter,
             now: now,
-            onFilterChanged: onTaskStatusFilterChanged,
-            onTaskOpened: onTaskOpened,
-            onTaskToggled: onTaskToggled,
-            onTaskLongPressed: onTaskLongPressed,
+            currentPage: currentPage,
+            pageCount: pageCount,
+            onPageSelected: _setTaskOverviewPage,
+            onFilterChanged: widget.onTaskStatusFilterChanged,
+            onTaskOpened: widget.onTaskOpened,
+            onTaskToggled: widget.onTaskToggled,
+            onTaskLongPressed: widget.onTaskLongPressed,
           ),
         ],
       ),
@@ -1319,7 +1425,7 @@ class _DashboardChartData {
     if (task.statusAt(now) == TaskStatus.overdue) {
       return _DashboardChartSegment.overdue;
     }
-    if (_DashboardHomeTab._isUpcomingBucket(task, now)) {
+    if (_DashboardHomeTabState._isUpcomingBucket(task, now)) {
       return _DashboardChartSegment.upcoming;
     }
     return _DashboardChartSegment.today;
@@ -2199,6 +2305,9 @@ class _DashboardTaskStatusCard extends StatelessWidget {
     required this.controller,
     required this.filter,
     required this.now,
+    required this.currentPage,
+    required this.pageCount,
+    required this.onPageSelected,
     required this.onFilterChanged,
     required this.onTaskOpened,
     required this.onTaskToggled,
@@ -2209,6 +2318,9 @@ class _DashboardTaskStatusCard extends StatelessWidget {
   final TaskManagementController controller;
   final _DashboardTaskStatusFilter filter;
   final DateTime now;
+  final int currentPage;
+  final int pageCount;
+  final ValueChanged<int> onPageSelected;
   final ValueChanged<_DashboardTaskStatusFilter> onFilterChanged;
   final Future<void> Function(TaskItem task) onTaskOpened;
   final Future<void> Function(TaskItem task) onTaskToggled;
@@ -2248,8 +2360,125 @@ class _DashboardTaskStatusCard extends StatelessWidget {
                       color: AppColors.cardBorder,
                     ),
                 ],
+                if (pageCount > 1) ...[
+                  const SizedBox(height: AppSpacing.four),
+                  _DashboardTaskOverviewPaginationControls(
+                    currentPage: currentPage,
+                    pageCount: pageCount,
+                    onPageSelected: onPageSelected,
+                  ),
+                ],
               ],
             ),
+    );
+  }
+}
+
+class _DashboardTaskOverviewPaginationControls extends StatelessWidget {
+  const _DashboardTaskOverviewPaginationControls({
+    required this.currentPage,
+    required this.pageCount,
+    required this.onPageSelected,
+  });
+
+  final int currentPage;
+  final int pageCount;
+  final ValueChanged<int> onPageSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _DashboardTaskOverviewPaginationButton(
+            key: DashboardScreen.taskOverviewPaginationPreviousKey,
+            label: 'Prev',
+            isActive: false,
+            isEnabled: currentPage > 1,
+            onTap: currentPage > 1 ? () => onPageSelected(currentPage - 1) : null,
+          ),
+          const SizedBox(width: AppSpacing.two),
+          _DashboardTaskOverviewPaginationButton(
+            key: DashboardScreen.taskOverviewPaginationPageKey(currentPage),
+            label: '$currentPage',
+            isActive: true,
+            isEnabled: true,
+            onTap: null,
+          ),
+          const SizedBox(width: AppSpacing.two),
+          _DashboardTaskOverviewPaginationButton(
+            key: DashboardScreen.taskOverviewPaginationNextKey,
+            label: 'Next',
+            isActive: false,
+            isEnabled: currentPage < pageCount,
+            onTap: currentPage < pageCount
+                ? () => onPageSelected(currentPage + 1)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardTaskOverviewPaginationButton extends StatelessWidget {
+  const _DashboardTaskOverviewPaginationButton({
+    super.key,
+    required this.label,
+    required this.isActive,
+    required this.isEnabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final bool isEnabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = isActive
+        ? AppColors.primaryButtonFill
+        : AppColors.cardFill;
+    final foregroundColor = isActive
+        ? AppColors.primaryButtonText
+        : isEnabled
+        ? AppColors.titleText
+        : AppColors.subHeaderText;
+    final borderColor = isActive
+        ? AppColors.primaryButtonFill
+        : AppColors.cardBorder;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.xl),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        constraints: BoxConstraints(
+          minWidth: isActive ? 46 : 72,
+          minHeight: 40,
+        ),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.three,
+          vertical: AppSpacing.two,
+        ),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+          border: Border.all(color: borderColor),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: foregroundColor,
+            fontSize: AppTypography.sizeBase,
+            fontWeight: AppTypography.weightMedium,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2509,18 +2738,35 @@ class _DashboardTaskStatusRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.titleText,
-                        fontSize: AppTypography.sizeBase,
-                        fontWeight: AppTypography.weightSemibold,
-                        decoration: task.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
+                    Row(
+                      children: [
+                        if (task.isPinned) ...[
+                          const Icon(
+                            TablerIcons.pin,
+                            size: 14,
+                            color: AppColors.rose500,
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: AppColors.titleText,
+                                  fontSize: AppTypography.sizeBase,
+                                  fontWeight: AppTypography.weightSemibold,
+                                  decoration: task.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.one),
                     Text(
@@ -2929,7 +3175,7 @@ String _taskStatusLabel(TaskItem task, DateTime now) {
   if (task.statusAt(now) == TaskStatus.overdue) {
     return 'Overdue';
   }
-  if (_DashboardHomeTab._isUpcomingBucket(task, now)) {
+  if (_DashboardHomeTabState._isUpcomingBucket(task, now)) {
     return 'Upcoming';
   }
   return 'Today';
@@ -3058,52 +3304,7 @@ class _DashboardEmptyState extends StatelessWidget {
   }
 }
 
-class _DashboardDeleteTaskDialog extends StatelessWidget {
-  const _DashboardDeleteTaskDialog({required this.taskTitle});
 
-  final String taskTitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.cardFill,
-      surfaceTintColor: AppColors.cardFill,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.threeXl),
-        side: const BorderSide(color: AppColors.cardBorder),
-      ),
-      title: Text(
-        'Delete Task?',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: AppColors.titleText,
-          fontSize: AppTypography.sizeLg,
-          fontWeight: AppTypography.weightSemibold,
-        ),
-      ),
-      content: Text(
-        'Are you sure you want to delete "$taskTitle"? This cannot be undone.',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: AppColors.subHeaderText,
-          fontSize: AppTypography.sizeBase,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.dangerButtonFill,
-            foregroundColor: AppColors.dangerButtonText,
-          ),
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Delete'),
-        ),
-      ],
-    );
-  }
-}
 
 class _ProfileStats {
   const _ProfileStats({

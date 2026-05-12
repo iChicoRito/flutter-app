@@ -196,15 +196,6 @@ class _CalendarHeader extends StatelessWidget {
               fontWeight: AppTypography.weightSemibold,
             ),
           ),
-          const SizedBox(height: AppSpacing.one),
-          Text(
-            'View and manage your scheduled tasks',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.subHeaderText,
-              fontSize: AppTypography.sizeBase,
-              fontWeight: AppTypography.weightNormal,
-            ),
-          ),
         ],
       ),
     );

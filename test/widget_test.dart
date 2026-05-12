@@ -41,6 +41,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tabler_icons/tabler_icons.dart';
+import 'package:flutter_app/shared/widgets/app_decision_dialog.dart';
 
 void main() {
   late FakeOnboardingStatusStore onboardingStatusStore;
@@ -465,6 +466,8 @@ void main() {
     expect(find.text('Upcoming Tasks'), findsNothing);
     expect(find.text('Overdue Tasks'), findsNothing);
     expect(find.text('Completed Tasks'), findsNothing);
+    expect(find.text('Prev'), findsNothing);
+    expect(find.text('Next'), findsNothing);
   });
 
   testWidgets('dashboard chart filter and segment selection update legend', (
@@ -753,6 +756,132 @@ void main() {
     expect(find.text('Tuition Fee'), findsNothing);
   });
 
+  testWidgets('dashboard task overview paginates after 10 tasks and switches pages', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        11,
+        (index) => buildTask(
+          id: 'dashboard-page-task-$index',
+          title: 'Dashboard Page Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          isCompleted: true,
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 9, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.scrollUntilVisible(
+      find.text('Task Overview'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationPreviousKey), findsOneWidget);
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationPageKey(1)), findsOneWidget);
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationNextKey), findsOneWidget);
+    expect(find.text('Dashboard Page Task 1'), findsOneWidget);
+    expect(find.text('Dashboard Page Task 11'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.byKey(DashboardScreen.taskOverviewPaginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.taskOverviewPaginationNextKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationPageKey(2)), findsOneWidget);
+    expect(find.text('Dashboard Page Task 1'), findsNothing);
+    expect(find.text('Dashboard Page Task 11'), findsOneWidget);
+  });
+
+  testWidgets('dashboard task overview resets pagination when the status filter changes', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        11,
+        (index) => buildTask(
+          id: 'dashboard-reset-task-$index',
+          title: 'Dashboard Reset Task ${index + 1}',
+          priority: TaskPriority.high,
+          categoryId: 'work',
+          isCompleted: true,
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 10, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(DashboardScreen.taskOverviewPaginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.taskOverviewPaginationNextKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationPageKey(2)), findsOneWidget);
+    expect(find.text('Dashboard Reset Task 1'), findsNothing);
+    expect(find.text('Dashboard Reset Task 11'), findsOneWidget);
+
+    await tester.tap(find.byKey(DashboardScreen.taskStatusMenuButtonKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.taskStatusMenuItemKey('completed')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationPageKey(1)), findsOneWidget);
+    expect(find.text('Dashboard Reset Task 1'), findsOneWidget);
+    expect(find.text('Dashboard Reset Task 11'), findsNothing);
+  });
+
+  testWidgets('dashboard task overview clamps after deleting the last paged task', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        11,
+        (index) => buildTask(
+          id: 'dashboard-delete-task-$index',
+          title: 'Dashboard Delete Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          isCompleted: true,
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 11, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(DashboardScreen.taskOverviewPaginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(DashboardScreen.taskOverviewPaginationNextKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard Delete Task 11'), findsOneWidget);
+
+    await tester.longPress(find.text('Dashboard Delete Task 11'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard Delete Task 11'), findsNothing);
+    expect(find.byKey(DashboardScreen.taskOverviewPaginationPageKey(1)), findsNothing);
+    expect(find.text('Prev'), findsNothing);
+    expect(find.text('Next'), findsNothing);
+    expect(find.text('Dashboard Delete Task 1'), findsOneWidget);
+  });
+
   testWidgets(
     'dashboard shows a weekly task count card below the donut chart',
     (WidgetTester tester) async {
@@ -841,11 +970,11 @@ void main() {
         find.descendant(of: taskCountCard, matching: find.text('5')),
         findsOneWidget,
       );
-      final thursdayBar = find.byKey(
-        DashboardScreen.taskCountChartBarKey('2026-04-16'),
+      final wednesdayBar = find.byKey(
+        DashboardScreen.taskCountChartBarKey('2026-04-15'),
       );
       expect(tester.getSize(taskCountCard).height, greaterThan(300));
-      expect(tester.getSize(thursdayBar).height, greaterThan(180));
+      expect(tester.getSize(wednesdayBar).height, greaterThan(40));
     },
   );
 
@@ -1560,7 +1689,7 @@ void main() {
       await tester.tap(find.text('Restore').first);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(TablerIcons.arrow_left));
+      await tester.tap(find.byIcon(TablerIcons.chevron_left));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Spaces'));
       await tester.pumpAndSettle();
@@ -2199,7 +2328,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
-    expect(find.text('Task Notes'), findsOneWidget);
     expect(find.text('Prepare weekly report'), findsWidgets);
   });
 
@@ -2695,14 +2823,6 @@ void main() {
       await tester.tap(find.byKey(spaceFormCategoryFieldKey));
       await tester.pumpAndSettle();
 
-      final workMenuIcon = tester.widget<Icon>(
-        find.descendant(
-          of: find.byKey(const Key('space-form-category-work')).last,
-          matching: find.byIcon(TablerIcons.briefcase),
-        ),
-      );
-      expect(workMenuIcon.color, AppColors.blue500);
-
       await tester.tap(
         find.byKey(const Key('space-form-category-health')).last,
       );
@@ -2813,10 +2933,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Send recap to leadership'), findsOneWidget);
-      expect(
-        find.text('Full meeting notes for leadership sync'),
-        findsOneWidget,
-      );
+      expect(find.text('Full meeting notes for leadership sync'), findsNothing);
     },
   );
 
@@ -3001,6 +3118,7 @@ void main() {
       );
       expect(currentCategoryIcon.color, AppColors.amber500);
 
+      await tester.ensureVisible(find.byKey(TaskEditorScreen.addCategoryButtonKey));
       await tester.tap(find.byKey(TaskEditorScreen.addCategoryButtonKey));
       await tester.pumpAndSettle();
 
@@ -3249,13 +3367,13 @@ void main() {
     expect(updatedTask.updatedAt.isAfter(beforeUpdate), isTrue);
   });
 
-  testWidgets('task list search matches note preview text', (
+  testWidgets('task list does not show a search bar', (
     WidgetTester tester,
   ) async {
     taskRepository = InMemoryTaskRepository(
       tasks: [
         buildTask(
-          id: 'search-task',
+          id: 'task-with-note',
           title: 'Planning session',
           priority: TaskPriority.high,
           categoryId: 'work',
@@ -3268,13 +3386,208 @@ void main() {
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(TaskManagementScreen.searchFieldKey),
-      'planning notes',
+    expect(find.text('Search tasks, descriptions, notes, or categories'), findsNothing);
+    expect(find.text('Planning session'), findsOneWidget);
+  });
+
+  testWidgets('task list paginates after 10 tasks and switches pages', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        11,
+        (index) => buildTask(
+          id: 'paged-task-$index',
+          title: 'Paged Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 9, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Paged Task 11'), findsOneWidget);
+    expect(find.text('Paged Task 1'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(TaskManagementScreen.paginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Prev'), findsOneWidget);
+    expect(find.byKey(TaskManagementScreen.paginationPageKey(1)), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
+
+    await tester.tap(find.byKey(TaskManagementScreen.paginationNextKey));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Paged Task 1'),
+      500,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Planning session'), findsOneWidget);
+    expect(find.text('Paged Task 1'), findsOneWidget);
+  });
+
+  testWidgets('task list hides pagination when filtered results are 10 or fewer', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        10,
+        (index) => buildTask(
+          id: 'single-page-task-$index',
+          title: 'Single Page Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prev'), findsNothing);
+    expect(find.text('Next'), findsNothing);
+  });
+
+  testWidgets('task list does not show search controls while paginated', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        11,
+        (index) => buildTask(
+          id: 'alpha-task-$index',
+          title: 'Alpha Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+          noteText: index == 10 ? 'unique planning notes' : null,
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 9, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search tasks, descriptions, notes, or categories'), findsNothing);
+    expect(find.byKey(TaskManagementScreen.paginationPageKey(1)), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.byKey(TaskManagementScreen.paginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prev'), findsOneWidget);
+    expect(find.byKey(TaskManagementScreen.paginationPageKey(1)), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
+  });
+
+  testWidgets('task list clamps to the previous page after deleting the last paged task', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        11,
+        (index) => buildTask(
+          id: 'delete-page-task-$index',
+          title: 'Delete Page Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 9, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(TaskManagementScreen.paginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskManagementScreen.paginationNextKey));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Delete Page Task 1'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Page Task 1'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(TaskManagementScreen.taskMenuButtonKey('delete-page-task-0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Yes, Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Page Task 1'), findsNothing);
+    expect(find.text('Delete Page Task 11'), findsOneWidget);
+    expect(find.text('Prev'), findsNothing);
+    expect(find.text('Next'), findsNothing);
+  });
+
+  testWidgets('task list reorders tasks within the current page only', (
+    WidgetTester tester,
+  ) async {
+    taskRepository = InMemoryTaskRepository(
+      tasks: List.generate(
+        12,
+        (index) => buildTask(
+          id: 'reorder-page-task-$index',
+          title: 'Reorder Page Task ${index + 1}',
+          priority: TaskPriority.medium,
+          categoryId: 'work',
+        ).copyWith(updatedAt: DateTime(2026, 4, 13, 9, index)),
+      ),
+    );
+
+    await openDashboard(tester);
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(TaskManagementScreen.paginationNextKey),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TaskManagementScreen.paginationNextKey));
+    await tester.pumpAndSettle();
+
+    final firstTask = find.byKey(
+      TaskManagementScreen.taskTileKey('reorder-page-task-1'),
+    );
+    final secondTask = find.byKey(
+      TaskManagementScreen.taskTileKey('reorder-page-task-0'),
+    );
+
+    await tester.drag(firstTask, const Offset(0, 140));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final tasks = await taskRepository.getTasks();
+    final firstIndex = tasks.indexWhere((task) => task.id == 'reorder-page-task-1');
+    final secondIndex = tasks.indexWhere((task) => task.id == 'reorder-page-task-0');
+
+    expect(firstIndex, greaterThan(secondIndex));
+    expect(secondTask, findsOneWidget);
   });
 
   testWidgets(
@@ -3501,20 +3814,16 @@ void main() {
       expect(find.text('Inherited Vault Task'), findsOneWidget);
       expect(find.text('Filter'), findsNothing);
 
-      final subtitleBottom = tester
-          .getBottomLeft(find.text('Organize and manage your tasks'))
-          .dy;
-      final searchTop = tester
-          .getTopLeft(find.byKey(TaskManagementScreen.searchFieldKey))
-          .dy;
+      final titleBottom = tester.getBottomLeft(find.text('My Tasks')).dy;
+      final categoriesTop = tester.getTopLeft(find.text('All Categories')).dy;
       final firstCardTop = tester
           .getTopLeft(
             find.byKey(TaskManagementScreen.taskTileKey('direct-vault-task')),
           )
           .dy;
 
-      expect(searchTop - subtitleBottom, lessThan(80));
-      expect(firstCardTop - searchTop, lessThan(220));
+      expect(categoriesTop - titleBottom, lessThan(110));
+      expect(firstCardTop - categoriesTop, lessThan(220));
     },
   );
 
@@ -3560,13 +3869,11 @@ void main() {
       expect(find.text('Open'), findsNothing);
       expect(find.text('Folder short description'), findsNothing);
 
-      final subtitleBottom = tester
-          .getBottomLeft(find.text('Organize and manage your task spaces'))
-          .dy;
+      final titleBottom = tester.getBottomLeft(find.text('My Spaces')).dy;
       final categoriesTop = tester.getTopLeft(find.text('All Categories')).dy;
       final firstCardTop = tester.getTopLeft(find.text('Vault Space').first).dy;
 
-      expect(categoriesTop - subtitleBottom, lessThan(80));
+      expect(categoriesTop - titleBottom, lessThan(80));
       expect(firstCardTop - categoriesTop, lessThan(260));
 
       await tester.tap(find.byIcon(TablerIcons.layout_grid));
@@ -3718,10 +4025,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(TaskEditorScreen.markerKey), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.arrow_back_rounded));
+    await tester.tap(find.byIcon(TablerIcons.chevron_left));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Outline launch checklist'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Outline launch checklist'));
     await tester.pumpAndSettle();
@@ -3845,6 +4158,134 @@ void main() {
         find.byKey(SpacesPage.emptyStateKey),
       );
       expect(emptyState.mainAxisSize, MainAxisSize.min);
+    },
+  );
+
+  testWidgets(
+    'pinned tasks show a pin indicator on both dashboard and task management',
+    (WidgetTester tester) async {
+      final now = DateTime(2026, 4, 13, 9);
+      final pinnedTask = buildTask(
+        id: 'pinned-1',
+        title: 'Pinned Task',
+        priority: TaskPriority.high,
+        categoryId: 'work',
+      ).copyWith(isPinned: true);
+      final unpinnedTask = buildTask(
+        id: 'unpinned-1',
+        title: 'Unpinned Task',
+        priority: TaskPriority.medium,
+        categoryId: 'personal',
+      );
+
+      taskRepository = InMemoryTaskRepository(tasks: [pinnedTask, unpinnedTask]);
+
+      // Verify on Dashboard
+      await openDashboard(tester);
+      await tester.scrollUntilVisible(
+        find.text('Task Overview'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pinned Task'), findsOneWidget);
+      expect(find.text('Unpinned Task'), findsOneWidget);
+
+      final pinnedRow = find.ancestor(
+        of: find.text('Pinned Task'),
+        matching: find.byType(Row),
+      ).first;
+      final unpinnedRow = find.ancestor(
+        of: find.text('Unpinned Task'),
+        matching: find.byType(Row),
+      ).first;
+
+      expect(
+        find.descendant(of: pinnedRow, matching: find.byIcon(TablerIcons.pin)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: unpinnedRow, matching: find.byIcon(TablerIcons.pin)),
+        findsNothing,
+      );
+
+      // Verify on Task Management
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('My Tasks'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pinned Task'), findsOneWidget);
+      expect(find.text('Unpinned Task'), findsOneWidget);
+
+      final pinnedCard = find.ancestor(
+        of: find.text('Pinned Task'),
+        matching: find.byKey(TaskManagementScreen.taskCardShellKey('pinned-1')),
+      );
+      final unpinnedCard = find.ancestor(
+        of: find.text('Unpinned Task'),
+        matching: find.byKey(TaskManagementScreen.taskCardShellKey('unpinned-1')),
+      );
+
+      expect(
+        find.descendant(of: pinnedCard, matching: find.byIcon(TablerIcons.pin)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: unpinnedCard, matching: find.byIcon(TablerIcons.pin)),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'dashboard task delete shows the standardized app decision dialog',
+    (WidgetTester tester) async {
+      final task = buildTask(
+        id: 'delete-me',
+        title: 'Delete Me Task',
+        priority: TaskPriority.high,
+        categoryId: 'work',
+      );
+
+      taskRepository = InMemoryTaskRepository(tasks: [task]);
+
+      await openDashboard(tester);
+      await tester.scrollUntilVisible(
+        find.text('Task Overview'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+
+      // Trigger long press to open menu
+      await tester.longPress(find.text('Delete Me Task'));
+      await tester.pumpAndSettle();
+
+      // Tap Delete action
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      // Assert AppDecisionDialog is shown with correct content
+      expect(find.byType(AppDecisionDialog), findsOneWidget);
+      expect(find.text('Delete Task?'), findsOneWidget);
+      expect(
+        find.text(
+          'Are you sure you want to delete this task? This action cannot be undone.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Yes, Delete'), findsOneWidget);
+
+      // Confirm delete
+      await tester.tap(find.text('Yes, Delete'));
+      await tester.pumpAndSettle();
+
+      // Verify task is deleted
+      expect(find.text('Delete Me Task'), findsNothing);
+      expect(await taskRepository.getTaskById('delete-me'), isNull);
     },
   );
 }

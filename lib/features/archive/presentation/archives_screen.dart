@@ -261,10 +261,6 @@ class _ArchivesScreenState extends State<ArchivesScreen> {
   }
 
   static String _taskSubtitle(TaskItem task) {
-    final description = task.description?.trim();
-    if (description != null && description.isNotEmpty) {
-      return description;
-    }
     return 'Restore to use this task';
   }
 
@@ -532,33 +528,7 @@ class _ArchiveRestoreCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.four),
           Row(
             children: [
-              if (isVaultProtected)
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        TablerIcons.lock,
-                        color: taskMutedText,
-                        size: AppTypography.sizeLg,
-                      ),
-                      const SizedBox(width: AppSpacing.two),
-                      Flexible(
-                        child: Text(
-                          'Locked Content',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: taskMutedText,
-                            fontSize: AppTypography.sizeSm,
-                            fontWeight: AppTypography.weightNormal,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                const Spacer(),
+              const Spacer(),
               const SizedBox(width: AppSpacing.three),
               FilledButton.icon(
                 onPressed: onRestore,

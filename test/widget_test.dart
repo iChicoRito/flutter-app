@@ -1646,7 +1646,7 @@ void main() {
       );
       expect(find.text('Archived space'), findsOneWidget);
       expect(find.text('Archived task'), findsOneWidget);
-      expect(find.text('Locked Content'), findsNWidgets(2));
+      expect(find.text('Locked Content'), findsNothing);
 
       await tester.tap(find.text('Restore').first);
       await tester.pumpAndSettle();
@@ -2891,7 +2891,7 @@ void main() {
     },
   );
 
-  testWidgets('task card shows the short creation description', (
+  testWidgets('task card hides the short creation description', (
     WidgetTester tester,
   ) async {
     taskRepository = InMemoryTaskRepository(
@@ -2910,11 +2910,12 @@ void main() {
     await tester.tap(find.text('Tasks'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Send recap to leadership'), findsOneWidget);
+    expect(find.text('Send recap to leadership'), findsNothing);
+    expect(find.text('Prepare weekly report'), findsOneWidget);
   });
 
   testWidgets(
-    'task card shows description and actual note preview separately',
+    'task card keeps note preview out of the task list',
     (WidgetTester tester) async {
       taskRepository = InMemoryTaskRepository(
         tasks: [
@@ -2932,8 +2933,9 @@ void main() {
       await tester.tap(find.text('Tasks'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Send recap to leadership'), findsOneWidget);
+      expect(find.text('Send recap to leadership'), findsNothing);
       expect(find.text('Full meeting notes for leadership sync'), findsNothing);
+      expect(find.text('Prepare weekly report'), findsOneWidget);
     },
   );
 
@@ -3709,14 +3711,22 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.byKey(TaskManagementScreen.taskLockKey('locked-task')),
+        findsOneWidget,
+      );
+      expect(
         find.byKey(TaskManagementScreen.taskBadgeKey('high-task')),
         findsOneWidget,
       );
 
-      expect(find.text('Locked Content'), findsOneWidget);
-      expect(find.text('Check blockers before standup'), findsOneWidget);
-      expect(find.text('Buy another bottle tonight'), findsOneWidget);
-      expect(find.text('Attach the April receipts'), findsOneWidget);
+      expect(find.text('Locked Content'), findsNothing);
+      expect(find.text('Review sprint board'), findsOneWidget);
+      expect(find.text('Refill vitamins'), findsOneWidget);
+      expect(find.text('Private planning note'), findsOneWidget);
+      expect(find.text('Submit travel reimbursement'), findsOneWidget);
+      expect(find.text('Check blockers before standup'), findsNothing);
+      expect(find.text('Buy another bottle tonight'), findsNothing);
+      expect(find.text('Attach the April receipts'), findsNothing);
       expect(find.text('Space - Gaming'), findsOneWidget);
       expect(find.text('Apr 26 • 10:39 AM'), findsOneWidget);
       expect(find.text('Not Set Yet'), findsNWidgets(3));
@@ -3775,10 +3785,10 @@ void main() {
       final lockedCardSize = tester.getSize(
         find.byKey(TaskManagementScreen.taskTileKey('locked-task')),
       );
-      expect(mediumCardSize.height, greaterThanOrEqualTo(120));
-      expect(mediumCardSize.height, lessThan(128));
-      expect(lockedCardSize.height, greaterThanOrEqualTo(120));
-      expect(lockedCardSize.height, lessThan(126));
+      expect(mediumCardSize.height, greaterThanOrEqualTo(88));
+      expect(mediumCardSize.height, lessThan(112));
+      expect(lockedCardSize.height, greaterThanOrEqualTo(88));
+      expect(lockedCardSize.height, lessThan(112));
     },
   );
 
@@ -3815,6 +3825,9 @@ void main() {
       expect(find.text('Filter'), findsNothing);
 
       final titleBottom = tester.getBottomLeft(find.text('My Tasks')).dy;
+      final segmentTop = tester.getTopLeft(
+        find.byKey(TaskManagementScreen.taskListSegmentKey('all')),
+      ).dy;
       final categoriesTop = tester.getTopLeft(find.text('All Categories')).dy;
       final firstCardTop = tester
           .getTopLeft(
@@ -3822,7 +3835,10 @@ void main() {
           )
           .dy;
 
-      expect(categoriesTop - titleBottom, lessThan(110));
+      expect(titleBottom, lessThan(segmentTop));
+      expect(titleBottom, lessThan(categoriesTop));
+      expect(categoriesTop, lessThan(segmentTop));
+      expect(segmentTop - categoriesTop, lessThan(120));
       expect(firstCardTop - categoriesTop, lessThan(220));
     },
   );

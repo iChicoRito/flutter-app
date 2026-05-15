@@ -129,11 +129,18 @@ class TaskManagementScreen extends StatefulWidget {
 
   static Key taskAccentKey(String taskId) => Key('task-card-accent-$taskId');
 
+  static Key taskShakeKey(String taskId) => Key('task-card-shake-$taskId');
+
   static Key taskBadgeKey(String taskId) => Key('task-card-badge-$taskId');
+
+  static Key taskLockKey(String taskId) => Key('task-card-lock-$taskId');
 
   static Key taskToggleKey(String taskId) => Key('task-toggle-$taskId');
 
   static Key taskMenuButtonKey(String taskId) => Key('task-menu-$taskId');
+
+  static Key taskListSegmentKey(String value) =>
+      Key('task-list-segment-$value');
 
   static Key taskMenuActionKey(String taskId, String action) =>
       Key('task-menu-$taskId-$action');
@@ -170,6 +177,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
 
   TaskDataRefreshController? _taskDataRefreshController;
   _TaskManagementContentTab _activeTab = _TaskManagementContentTab.tasks;
+  _TaskListFilter _taskListFilter = _TaskListFilter.all;
   DateTime _selectedCalendarMonth = DateTime.now();
   DateTime _selectedCalendarDate = DateTime.now();
   TaskStatusFilter _calendarStatusFilter = TaskStatusFilter.all;
@@ -1408,15 +1416,21 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
   }
 
   Widget _buildTasksView(List<TaskItem> filteredTasks) {
-    final topHeaderPadding = widget.useInlineBackHeader
-        ? AppSpacing.zero
-        : AppSpacing.six;
-    final listTopPadding = widget.useInlineBackHeader
-        ? AppSpacing.three
-        : AppSpacing.six;
-    final pageCount = _tasksPageCount(filteredTasks.length);
+    final pendingTasks = filteredTasks
+        .where((task) => !task.isCompleted)
+        .toList();
+    final finishedTasks = filteredTasks
+        .where((task) => task.isCompleted)
+        .toList();
+    final paginationTasks = switch (_taskListFilter) {
+      _TaskListFilter.finished => finishedTasks,
+      _TaskListFilter.all || _TaskListFilter.pending => pendingTasks,
+    };
+    const topHeaderPadding = AppSpacing.zero;
+    const listTopPadding = AppSpacing.two;
+    final pageCount = _tasksPageCount(paginationTasks.length);
     final currentPage = _effectiveTasksPage(pageCount);
-    final pagedTasks = _pagedTasks(filteredTasks, currentPage);
+    final pagedTasks = _pagedTasks(paginationTasks, currentPage);
 
     _scheduleTasksPageSync(currentPage);
 
@@ -1434,109 +1448,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             ),
             sliver: SliverToBoxAdapter(child: _buildTasksHeader()),
           ),
-          if (filteredTasks.isEmpty)
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.four,
-                listTopPadding,
-                AppSpacing.four,
-                AppSpacing.zero,
-              ),
-              sliver: SliverToBoxAdapter(child: const SizedBox.shrink()),
-            )
-          else
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.four,
-                listTopPadding,
-                AppSpacing.four,
-                pageCount > 1 ? AppSpacing.six : 120,
-              ),
-              sliver: SliverReorderableList(
-                itemCount: pagedTasks.length,
-                onReorder: (oldIndex, newIndex) =>
-                    _reorderFilteredTasks(
-                      filteredTasks,
-                      currentPage,
-                      oldIndex,
-                      newIndex,
-                    ),
-                itemBuilder: (context, index) {
-                  final task = pagedTasks[index];
-                  final category = _controller.categoryFor(task.categoryId);
-                  final space = _controller.spaceFor(task.spaceId);
-                  final previewProtected = isPreviewProtected(
-                    vaultService: VaultServiceScope.of(context),
-                    ownVault: task.vaultConfig,
-                    ownEntityKey: taskVaultEntityKey(task.id),
-                    inheritedVault: space?.vaultConfig,
-                    inheritedEntityKey: space == null
-                        ? null
-                        : spaceVaultEntityKey(space.id),
-                  );
-                  return Padding(
-                    key: ValueKey(task.id),
-                    padding: EdgeInsets.only(
-                      bottom: index == pagedTasks.length - 1
-                          ? AppSpacing.zero
-                          : AppSpacing.four,
-                    ),
-                    child: ReorderableDelayedDragStartListener(
-                      index: index,
-                      child: _TaskCard(
-                        task: task,
-                        category: category,
-                        space: space,
-                        previewProtected: previewProtected,
-                        onTap: () => _openEditor(task.id),
-                        onMenuSelected: (action) async {
-                          switch (action) {
-                            case _TaskMenuAction.markComplete:
-                              await _controller.toggleTaskCompletion(task);
-                              if (!mounted) {
-                                return;
-                              }
-                              showTaskToast(
-                                context,
-                                message: task.isCompleted
-                                    ? 'Task marked as pending.'
-                                    : 'Task completed successfully.',
-                              );
-                            case _TaskMenuAction.moveToSpace:
-                              await _moveTaskToSpace(task);
-                            case _TaskMenuAction.pin:
-                              await _toggleTaskPin(task);
-                            case _TaskMenuAction.export:
-                              await _exportTask(task);
-                            case _TaskMenuAction.archive:
-                              await _archiveTask(task);
-                            case _TaskMenuAction.delete:
-                              await _confirmDelete(task);
-                          }
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          if (pageCount > 1)
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.four,
-                AppSpacing.zero,
-                AppSpacing.four,
-                120,
-              ),
-              sliver: SliverToBoxAdapter(
-                child: _TaskPaginationControls(
-                  currentPage: currentPage,
-                  pageCount: pageCount,
-                  onPageSelected: _setTasksPage,
-                ),
-              ),
-            ),
-          if (filteredTasks.isEmpty)
+          if (pendingTasks.isEmpty && finishedTasks.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: Padding(
@@ -1553,7 +1465,129 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
                   ),
                 ),
               ),
-            ),
+            )
+          else ...[
+            if (_taskListFilter != _TaskListFilter.finished &&
+                pendingTasks.isNotEmpty) ...[
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.four,
+                  listTopPadding,
+                  AppSpacing.four,
+                  pageCount > 1 ? AppSpacing.three : AppSpacing.six,
+                ),
+                sliver: SliverReorderableList(
+                  itemCount: pagedTasks.length,
+                  proxyDecorator: (child, index, animation) {
+                    final taskId = pagedTasks[index].id;
+                    return TaskCardShake(
+                      taskId: taskId,
+                      isShaking: true,
+                      child: child,
+                    );
+                  },
+                    onReorder: (oldIndex, newIndex) =>
+                        _reorderPendingTasks(
+                          pendingTasks,
+                          currentPage,
+                          oldIndex,
+                          newIndex,
+                        ),
+                  itemBuilder: (context, index) {
+                    final task = pagedTasks[index];
+                    return Padding(
+                      key: ValueKey(task.id),
+                      padding: EdgeInsets.only(
+                        bottom: index == pagedTasks.length - 1
+                            ? AppSpacing.zero
+                            : AppSpacing.four,
+                      ),
+                      child: _buildTaskCardForList(
+                        task: task,
+                        allowReorder: true,
+                        index: index,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (pageCount > 1)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.four,
+                    AppSpacing.zero,
+                    AppSpacing.four,
+                    120,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: _TaskPaginationControls(
+                      currentPage: currentPage,
+                      pageCount: pageCount,
+                      onPageSelected: _setTasksPage,
+                    ),
+                  ),
+                ),
+            ],
+            if (_taskListFilter != _TaskListFilter.pending &&
+                finishedTasks.isNotEmpty) ...[
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.four,
+                  listTopPadding,
+                  AppSpacing.four,
+                  120,
+                ),
+                sliver: _TaskListFilter.finished == _taskListFilter
+                    ? SliverReorderableList(
+                        itemCount: pagedTasks.length,
+                        proxyDecorator: (child, index, animation) {
+                          final taskId = pagedTasks[index].id;
+                          return TaskCardShake(
+                            taskId: taskId,
+                            isShaking: true,
+                            child: child,
+                          );
+                        },
+                        onReorder: (oldIndex, newIndex) {},
+                        itemBuilder: (context, index) {
+                          final task = pagedTasks[index];
+                          return Padding(
+                            key: ValueKey(task.id),
+                            padding: EdgeInsets.only(
+                              bottom: index == pagedTasks.length - 1
+                                  ? AppSpacing.zero
+                                  : AppSpacing.four,
+                            ),
+                            child: _buildTaskCardForList(
+                              task: task,
+                              allowReorder: false,
+                            ),
+                          );
+                        },
+                      )
+                    : SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final task = finishedTasks[index];
+                            return Padding(
+                              key: ValueKey(task.id),
+                              padding: EdgeInsets.only(
+                                bottom: index == finishedTasks.length - 1
+                                    ? AppSpacing.zero
+                                    : AppSpacing.four,
+                              ),
+                              child: _buildTaskCardForList(
+                                task: task,
+                                allowReorder: false,
+                              ),
+                            );
+                          },
+                          childCount: finishedTasks.length,
+                        ),
+                      ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -1565,7 +1599,6 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       children: [
         if (!widget.useInlineBackHeader) const _TaskPageHeader(),
         if (!widget.tasksOnlyMode) ...[
-          const SizedBox(height: AppSpacing.three),
           _TaskViewSegmentedControl(
             activeTab: _activeTab,
             onChanged: (value) {
@@ -1575,6 +1608,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             },
           ),
         ],
+        const SizedBox(height: AppSpacing.three),
         if (_effectiveLockedCategoryId == null) ...[
           const SizedBox(height: AppSpacing.three),
           _CategoryFilterRow(
@@ -1586,6 +1620,19 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
             },
           ),
         ],
+        const SizedBox(height: AppSpacing.three),
+        _TaskListSegmentedControl(
+          value: _taskListFilter,
+          onChanged: (value) {
+            if (_taskListFilter == value) {
+              return;
+            }
+            setState(() {
+              _taskListFilter = value;
+              _currentTasksPage = 1;
+            });
+          },
+        ),
       ],
     );
   }
@@ -1648,8 +1695,66 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
     });
   }
 
-  Future<void> _reorderFilteredTasks(
-    List<TaskItem> filteredTasks,
+  Widget _buildTaskCardForList({
+    required TaskItem task,
+    required bool allowReorder,
+    int? index,
+  }) {
+    final category = _controller.categoryFor(task.categoryId);
+    final space = _controller.spaceFor(task.spaceId);
+    final previewProtected = isPreviewProtected(
+      vaultService: VaultServiceScope.of(context),
+      ownVault: task.vaultConfig,
+      ownEntityKey: taskVaultEntityKey(task.id),
+      inheritedVault: space?.vaultConfig,
+      inheritedEntityKey: space == null ? null : spaceVaultEntityKey(space.id),
+    );
+
+    final card = _TaskCard(
+      task: task,
+      category: category,
+      space: space,
+      previewProtected: previewProtected,
+      onTap: () => _openEditor(task.id),
+      onMenuSelected: (action) async {
+        switch (action) {
+          case _TaskMenuAction.markComplete:
+            await _controller.toggleTaskCompletion(task);
+            if (!mounted) {
+              return;
+            }
+            showTaskToast(
+              context,
+              message: task.isCompleted
+                  ? 'Task marked as pending.'
+                  : 'Task completed successfully.',
+            );
+          case _TaskMenuAction.moveToSpace:
+            await _moveTaskToSpace(task);
+          case _TaskMenuAction.pin:
+            await _toggleTaskPin(task);
+          case _TaskMenuAction.export:
+            await _exportTask(task);
+          case _TaskMenuAction.archive:
+            await _archiveTask(task);
+          case _TaskMenuAction.delete:
+            await _confirmDelete(task);
+        }
+      },
+    );
+
+    if (!allowReorder || index == null) {
+      return card;
+    }
+
+    return ReorderableDelayedDragStartListener(
+      index: index,
+      child: card,
+    );
+  }
+
+  Future<void> _reorderPendingTasks(
+    List<TaskItem> pendingTasks,
     int currentPage,
     int oldIndex,
     int newIndex,
@@ -1661,7 +1766,7 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       return;
     }
 
-    final reorderedTasks = [...filteredTasks];
+    final reorderedTasks = [...pendingTasks];
     final pageStart = (currentPage - 1) * _tasksPerPage;
     final sourceIndex = pageStart + oldIndex;
     final destinationIndex = pageStart + newIndex;
@@ -2078,6 +2183,8 @@ enum _CalendarTaskContextAction { markComplete, archive, delete }
 
 enum _TaskManagementContentTab { tasks, calendar }
 
+enum _TaskListFilter { all, pending, finished }
+
 class _TaskViewSegmentedControl extends StatelessWidget {
   const _TaskViewSegmentedControl({
     required this.activeTab,
@@ -2184,6 +2291,97 @@ class _TaskViewSegmentButton extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskListSegmentedControl extends StatelessWidget {
+  const _TaskListSegmentedControl({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final _TaskListFilter value;
+  final ValueChanged<_TaskListFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.one),
+      decoration: BoxDecoration(
+        color: AppColors.cardFill,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: Border.all(color: AppColors.neutral200),
+      ),
+      child: Row(
+        children: [
+          for (final option in _TaskListFilter.values)
+            Expanded(
+              child: _TaskListSegmentOption(
+                segmentKey: TaskManagementScreen.taskListSegmentKey(
+                  option.name,
+                ),
+                label: switch (option) {
+                  _TaskListFilter.all => 'All',
+                  _TaskListFilter.pending => 'Pending',
+                  _TaskListFilter.finished => 'Finished',
+                },
+                selected: option == value,
+                onTap: () => onChanged(option),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskListSegmentOption extends StatelessWidget {
+  const _TaskListSegmentOption({
+    required this.segmentKey,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Key segmentKey;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: segmentKey,
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadii.lg),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.twoAndHalf,
+          vertical: AppSpacing.oneAndHalf,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.blue100 : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadii.xl),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: selected ? AppColors.blue500 : AppColors.subHeaderText,
+              fontSize: AppTypography.sizeBase,
+              fontWeight: selected
+                  ? AppTypography.weightMedium
+                  : AppTypography.weightNormal,
+            ),
           ),
         ),
       ),
@@ -2600,14 +2798,6 @@ class _TaskCard extends StatelessWidget {
       previewProtected: previewProtected,
     );
     final scheduleLabel = _taskScheduleLabel(task);
-    final descriptionText = previewProtected
-        ? 'Locked Content'
-        : taskDescriptionPreview(task);
-    final previewText = descriptionText.isEmpty
-        ? (previewProtected
-              ? 'Locked Content'
-              : 'Open this task to start writing rich notes.')
-        : descriptionText;
 
     return Material(
       color: Colors.transparent,
@@ -2786,21 +2976,7 @@ class _TaskCard extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            SizedBox(
-                              height: previewProtected
-                                  ? AppSpacing.one
-                                  : AppSpacing.oneAndHalf,
-                            ),
-                            _TaskPreviewLine(
-                              text: previewText,
-                              appearance: appearance,
-                              isLocked: previewProtected,
-                            ),
-                            SizedBox(
-                              height: previewProtected
-                                  ? AppSpacing.two
-                                  : AppSpacing.two,
-                            ),
+                            const SizedBox(height: AppSpacing.one),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
@@ -2822,6 +2998,10 @@ class _TaskCard extends StatelessWidget {
                                         : const SizedBox.shrink(),
                                   ),
                                 ),
+                                if (previewProtected) ...[
+                                  const SizedBox(width: AppSpacing.two),
+                                  _TaskLockBadge(taskId: task.id),
+                                ],
                                 const SizedBox(width: AppSpacing.three),
                                 Text(
                                   scheduleLabel,
@@ -2847,6 +3027,98 @@ class _TaskCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TaskSectionLabel extends StatelessWidget {
+  const _TaskSectionLabel({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        color: AppColors.titleText,
+        fontSize: AppTypography.sizeLg,
+        fontWeight: AppTypography.weightSemibold,
+      ),
+    );
+  }
+}
+
+class TaskCardShake extends StatefulWidget {
+  const TaskCardShake({
+    required this.taskId,
+    required this.isShaking,
+    required this.child,
+  });
+
+  final String taskId;
+  final bool isShaking;
+  final Widget child;
+
+  @override
+  State<TaskCardShake> createState() => _TaskCardShakeState();
+}
+
+class _TaskCardShakeState extends State<TaskCardShake>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 140),
+  );
+  late final Animation<double> _offset = Tween<double>(
+    begin: -1.4,
+    end: 1.4,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskCardShake oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncAnimation();
+  }
+
+  void _syncAnimation() {
+    if (widget.isShaking) {
+      if (!_controller.isAnimating) {
+        _controller.repeat(reverse: true);
+      }
+      return;
+    }
+
+    if (_controller.isAnimating) {
+      _controller.stop();
+    }
+    _controller.value = 0;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        return Transform.translate(
+          key: TaskManagementScreen.taskShakeKey(widget.taskId),
+          offset: Offset(widget.isShaking ? _offset.value : 0, 0),
+          child: child,
+        );
+      },
     );
   }
 }
@@ -3156,6 +3428,30 @@ class _CategoryBadge extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TaskLockBadge extends StatelessWidget {
+  const _TaskLockBadge({required this.taskId});
+
+  final String taskId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: TaskManagementScreen.taskLockKey(taskId),
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: AppColors.neutral100,
+        borderRadius: BorderRadius.circular(AppRadii.full),
+      ),
+      child: const Icon(
+        TablerIcons.lock,
+        size: 12,
+        color: AppColors.subHeaderText,
       ),
     );
   }

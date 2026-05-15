@@ -95,14 +95,13 @@ class _TaskCalendarViewState extends State<TaskCalendarView> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.four,
-                  AppSpacing.six,
+                  AppSpacing.zero,
                   AppSpacing.four,
                   120,
                 ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     const _CalendarHeader(),
-                    const SizedBox(height: AppSpacing.three),
                     widget.segmentControl,
                     const SizedBox(height: AppSpacing.three),
                     _CalendarStatusRow(
